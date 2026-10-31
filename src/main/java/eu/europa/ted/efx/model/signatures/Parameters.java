@@ -39,10 +39,17 @@ public final class Parameters {
 
   private final List<Parameter> fixed;
   private final Parameter variadic;
+  private final boolean generic;
+  private final int typeVariablePosition;
 
   Parameters(final List<Parameter> fixed, final Parameter variadic) {
     this.fixed = List.copyOf(fixed);
     this.variadic = variadic;
+    this.generic = this.all().anyMatch(parameter -> parameter.getType().isTypeVariable());
+    this.typeVariablePosition = IntStream.range(0, this.fixed.size())
+        .filter(position -> this.fixed.get(position).getType().isTypeVariable())
+        .findFirst()
+        .orElse(this.fixed.size());
   }
 
   /**
@@ -106,7 +113,7 @@ public final class Parameters {
     }
     Optional<Parameters> bound = this.boundTo(arguments);
     if (bound.isEmpty()) {
-      int position = this.typeVariablePosition();
+      int position = this.typeVariablePosition;
       return Match.rejected(position, this.parameterAt(position).getType(), arguments.get(position));
     }
     return bound.get().matchBound(arguments);
@@ -130,7 +137,7 @@ public final class Parameters {
    * @return {@code true} if a fixed parameter or the variadic tail is a type variable
    */
   boolean isGeneric() {
-    return this.all().anyMatch(parameter -> parameter.getType().isTypeVariable());
+    return this.generic;
   }
 
   private Match matchBound(final List<? extends TypedExpression> arguments) {
@@ -149,18 +156,11 @@ public final class Parameters {
   }
 
   private Optional<Parameters> boundTo(final List<? extends TypedExpression> arguments) {
-    if (!this.isGeneric()) {
+    if (!this.generic) {
       return Optional.of(this);
     }
-    return TypeVariableParameterType.bindingOf(arguments.get(this.typeVariablePosition()))
+    return TypeVariableParameterType.bindingOf(arguments.get(this.typeVariablePosition))
         .map(this::bind);
-  }
-
-  private int typeVariablePosition() {
-    return IntStream.range(0, this.fixed.size())
-        .filter(position -> this.fixed.get(position).getType().isTypeVariable())
-        .findFirst()
-        .orElse(this.fixed.size());
   }
 
   private Stream<Parameter> all() {

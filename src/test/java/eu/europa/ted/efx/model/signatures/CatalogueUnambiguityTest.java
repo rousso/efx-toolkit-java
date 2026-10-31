@@ -121,13 +121,13 @@ class CatalogueUnambiguityTest {
   private static Stream<Integer> arities(final BuiltIn builtIn) {
     return IntStream.rangeClosed(0, longestSignature(builtIn) + LONGEST_VARIADIC_TAIL)
         .filter(count -> builtIn.getOverloads().stream()
-            .anyMatch(overload -> overload.getSignature().takes(count)))
+            .anyMatch(overload -> overload.getSignature().getParameters().takes(count)))
         .boxed();
   }
 
   private static int longestSignature(final BuiltIn builtIn) {
     return builtIn.getOverloads().stream()
-        .mapToInt(overload -> overload.getSignature().getParameters().size())
+        .mapToInt(overload -> overload.getSignature().getParameters().getFixed().size())
         .max().orElse(0);
   }
 
@@ -143,14 +143,13 @@ class CatalogueUnambiguityTest {
   }
 
   private static String describe(final List<TypedExpression> arguments) {
-    return arguments.stream().map(argument -> argument.getClass().getSimpleName())
-        .collect(Collectors.joining(", ", "(", ")"));
+    return "(" + Mismatch.describe(arguments) + ")";
   }
 
   private static List<Overload> applicable(final BuiltIn builtIn,
       final List<TypedExpression> arguments) {
     return builtIn.getOverloads().stream()
-        .filter(overload -> overload.getSignature().match(arguments).isMatched())
+        .filter(overload -> overload.getSignature().getParameters().match(arguments).isMatched())
         .collect(Collectors.toList());
   }
 }

@@ -57,24 +57,24 @@ class CatalogueResultTypesTest {
   void testOverload_ComposesItsResultType(final String name, final Signature bound,
       final Overload overload) {
     List<TypedExpression> arguments = IntStream.range(0, arity(bound))
-        .mapToObj(position -> placeholder(bound.parameterAt(position).getType()))
+        .mapToObj(position -> placeholder(bound.getParameters().parameterAt(position).getType()))
         .collect(Collectors.toList());
     TypedExpression result = overload.compose(SCRIPT,
-        overload.getSignature().match(arguments).getArguments());
+        overload.getSignature().getParameters().match(arguments).getArguments());
     assertTrue(bound.getResult().getExpressionType().isInstance(result),
         () -> name + " " + bound + " returned " + result.getClass().getSimpleName());
   }
 
   private static Stream<Signature> bindings(final Signature signature) {
-    if (!signature.isGeneric()) {
+    if (!signature.getParameters().isGeneric()) {
       return Stream.of(signature);
     }
     return TypeVariableParameterType.valuePrimitives().stream().map(signature::bind);
   }
 
   private static int arity(final Signature signature) {
-    return signature.getParameters().size()
-        + (signature.getVariadic().isPresent() ? VARIADIC_TAIL : 0);
+    Parameters parameters = signature.getParameters();
+    return parameters.getFixed().size() + (parameters.getVariadic().isPresent() ? VARIADIC_TAIL : 0);
   }
 
   private static TypedExpression placeholder(final ParameterType type) {

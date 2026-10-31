@@ -586,7 +586,7 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
   @Override
   public void exitLinkedExpressionBlock(LinkedExpressionBlockContext ctx) {
-    var url = this.popOperand(ctx.linkBlock().getRuleContext(ParserRuleContext.class, 0), StringExpression.class);
+    var url = this.popOperandOf(ctx.linkBlock(), StringExpression.class);
     var value = this.stack.pop(FormatContentTemplateFragment.class);
     this.stack.push(new HyperlinkContentTemplateFragment(value, url));
   }
@@ -1196,7 +1196,7 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
    */
   @Override
   public void exitDictionaryKeyClause(DictionaryKeyClauseContext ctx) {
-    this.stack.push(this.popOperand(ctx.getRuleContext(ParserRuleContext.class, 0), StringExpression.class));
+    this.stack.push(this.popOperandOf(ctx, StringExpression.class));
     this.efxContext.pop();
   }
 
@@ -1356,14 +1356,14 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
   @Override
   public void exitWhenDisplayTemplate(WhenDisplayTemplateContext ctx) {
     var template = this.stack.pop(DisplayContentTemplate.class);
-    template.setCondition(this.popOperand(ctx.getRuleContext(ParserRuleContext.class, 0), BooleanExpression.class));
+    template.setCondition(this.popOperandOf(ctx, BooleanExpression.class));
     this.stack.push(template);
   }
 
   @Override
   public void exitWhenInvokeTemplate(WhenInvokeTemplateContext ctx) {
     var template = this.stack.pop(InvokeContentTemplate.class);
-    template.setCondition(this.popOperand(ctx.getRuleContext(ParserRuleContext.class, 0), BooleanExpression.class));
+    template.setCondition(this.popOperandOf(ctx, BooleanExpression.class));
     this.stack.push(template);
   }
 
@@ -1414,7 +1414,7 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
   private void exitVariableInitializer(ParserRuleContext initializer,
       String variableName, Class<? extends ScalarExpression> expressionType) {
-    var expression = this.popOperand(initializer.getRuleContext(ParserRuleContext.class, 0), expressionType);
+    var expression = this.popOperandOf(initializer, expressionType);
     var variable = new Variable(variableName,
         this.script.composeVariableDeclaration(variableName, expression.getClass()),
         expression,
@@ -1477,13 +1477,13 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
   @Override
   public void exitLinkedTextBlock(LinkedTextBlockContext ctx) {
-    var url = this.popOperand(ctx.linkBlock().getRuleContext(ParserRuleContext.class, 0), StringExpression.class);
+    var url = this.popOperandOf(ctx.linkBlock(), StringExpression.class);
     this.stack.push(new HyperlinkContentTemplateFragment(new TextContentTemplateFragment(ctx.textBlock().getText()), url));
   }
 
   @Override
   public void exitLinkedLabelBlock(LinkedLabelBlockContext ctx) {
-    var url = this.popOperand(ctx.linkBlock().getRuleContext(ParserRuleContext.class, 0), StringExpression.class);
+    var url = this.popOperandOf(ctx.linkBlock(), StringExpression.class);
     var label = this.stack.pop(ContentTemplateFragment.class);
     this.stack.push(new HyperlinkContentTemplateFragment(label, url));
   }

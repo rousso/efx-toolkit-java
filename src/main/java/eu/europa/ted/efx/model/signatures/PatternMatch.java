@@ -34,11 +34,11 @@ import eu.europa.ted.efx.util.EfxRegexValidator;
 public final class PatternMatch implements BuiltIn {
 
   private final String name;
-  private final Overload overload;
+  private final List<Overload> overloads;
 
   private PatternMatch(final String name, final Overload overload) {
     this.name = name;
-    this.overload = overload;
+    this.overloads = List.of(overload);
   }
 
   /**
@@ -65,7 +65,7 @@ public final class PatternMatch implements BuiltIn {
    *         expression construct EFX does not support
    */
   public static PatternMatch notLike(final String pattern) {
-    return new PatternMatch("not like", like(pattern).overload.negated());
+    return new PatternMatch("not like", like(pattern).overloads.get(0).negated());
   }
 
   @Override
@@ -75,6 +75,6 @@ public final class PatternMatch implements BuiltIn {
 
   @Override
   public List<Overload> getOverloads() {
-    return List.of(this.overload);
+    return this.overloads;
   }
 }
