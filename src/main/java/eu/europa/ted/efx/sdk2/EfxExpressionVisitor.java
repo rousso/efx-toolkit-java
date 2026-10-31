@@ -125,12 +125,25 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   private final IteratorDeclarations iteratorDeclarations = new IteratorDeclarations();
 
   /**
+   * The context of each context variable, by its declaration. The call stack finds the declaration
+   * that a name refers to where it is read, and that declaration is a context variable if it has a
+   * context here.
+   */
+  private final Map<Variable, Context> contextsOfVariables = new IdentityHashMap<>();
+
+  /**
    * How many references have been resolved from each context, so that a bracket can tell whether
    * its content reads the context it is translated in. A reference is resolved from the current
    * context only through {@link #relativePathOfField}, {@link #relativePathOfNode} and
    * {@link #absolutePathOfCurrentContext}, which count it.
    */
   private final Map<Context, Integer> readsOfContexts = new IdentityHashMap<>();
+
+  /**
+   * How many references have been resolved from the root: absolute references, and references
+   * read where no context is declared.
+   */
+  private int readsOfRoot;
 
   EfxExpressionVisitor(final TranslationContext translation) {
     this.symbols = translation.symbols();
@@ -400,6 +413,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   @Override
   public Operand<?> visitAbsoluteFieldReference(final AbsoluteFieldReferenceContext ctx) {
     final String fieldId = this.fieldIdOf(ctx.linkedFieldReference());
+    this.readsOfRoot++;
     return new Operand<>(this.symbols.getRelativePathOfField(fieldId, NO_CONTEXT),
         new FieldOrigin(this, ctx, fieldId));
   }
@@ -418,6 +432,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   @Override
   public Operand<?> visitAbsoluteNodeReference(final AbsoluteNodeReferenceContext ctx) {
     final String nodeId = ctx.simpleNodeReference().NodeId().getText();
+    this.readsOfRoot++;
     return new Operand<>(this.symbols.getRelativePathOfNode(nodeId, NO_CONTEXT),
         new NodeOrigin(this, nodeId));
   }
@@ -455,27 +470,43 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   @Override
   public Operand<?> visitVariableReference(final VariableReferenceContext ctx) {
     final String name = ctx.variableName.getText();
-    final Context context = this.efxContext.getContextFromVariable(name);
-    if (context != null) {
-      return new Operand<>(this.contextVariableReference(name),
-          new ContextVariableOrigin(this, ctx, name, context));
+    final Optional<TypedExpression> parameter = this.stack.getParameter(name);
+    if (parameter.isPresent()) {
+      return new Operand<>(parameter.get(), new VariableOrigin(this, ctx, name));
     }
-    final Optional<TypedExpression> reference = this.stack.getParameter(name)
-        .or(() -> this.stack.getVariable(name).map(variable -> variable.referenceExpression));
-    if (reference.isPresent()) {
-      return new Operand<>(reference.get(), new VariableOrigin(this, ctx, name));
+    final Optional<Variable> variable = this.stack.getVariable(name);
+    if (variable.isPresent()) {
+      return this.variableReference(ctx, variable.get());
     }
     return new Operand<>(Expression.empty(StringExpression.class),
         new DictionaryNameOrigin(this, ctx, name));
   }
 
   /**
-   * @param name the name of a context variable
-   * @return the reference to the variable, which holds one element of its context
+   * A variable, or a context variable, whose reference is a path to the one element of its context
+   * that it holds.
    */
-  private PathExpression contextVariableReference(final String name) {
-    this.stack.pushIdentifierReference(name);
-    return this.stack.pop(PathExpression.class);
+  private Operand<?> variableReference(final VariableReferenceContext ctx,
+      final Variable variable) {
+    final Context context = this.contextsOfVariables.get(variable);
+    if (context == null) {
+      return new Operand<>(variable.referenceExpression,
+          new VariableOrigin(this, ctx, variable.name));
+    }
+    return new Operand<>((PathExpression) variable.referenceExpression,
+        new ContextVariableOrigin(this, ctx, variable.name, context));
+  }
+
+  /**
+   * Declares a context variable: a variable that holds one element of its context, and names the
+   * context where it is read.
+   *
+   * @param variable the variable, whose reference is a path
+   * @param context the context
+   */
+  void declareContextVariable(final Variable variable, final Context context) {
+    this.stack.declareIdentifier(variable);
+    this.contextsOfVariables.put(variable, context);
   }
 
   @Override
@@ -679,7 +710,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
       selected = origin.filter(path,
           this.converted(selector, value, BooleanExpression.class, content));
     } else if (value.is(EfxDataType.Number.class)) {
-      this.rejectIndexReadingContext(content, readsBefore);
+      rejectIndexReadingContext(content, readsBefore, this.readsOfCurrentContext());
       selected = this.elementAt(path,
           this.converted(selector, value, NumericExpression.class, content));
     } else {
@@ -705,18 +736,20 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
 
   /**
    * A bracket after a value: a position in the sequence of its values. A single value is a
-   * sequence of one. The position is computed once, so it must not read the context.
+   * sequence of one. The position is computed once, so it must read neither the context nor a
+   * path from the root: the target language reads the content for each value, which has no
+   * element that a path could start from.
    *
    * @param sequence the value
    * @param content the content of the bracket
    * @return the value at that position
-   * @throws InvalidUsageException if the position reads the context
+   * @throws InvalidUsageException if the position reads the context or a path from the root
    */
   Operand<?> positionInValue(final Operand<?> sequence, final ExpressionContext content) {
     final TypedExpression value = sequence.value();
-    final int readsBefore = this.readsOfCurrentContext();
+    final int readsBefore = this.readsOfCurrentContextAndRoot();
     final NumericExpression index = this.valueAs(content, NumericExpression.class);
-    this.rejectIndexReadingContext(content, readsBefore);
+    rejectIndexReadingContext(content, readsBefore, this.readsOfCurrentContextAndRoot());
     final Class<? extends SequenceExpression> listType = this.sequenceTypeOf(value);
     final SequenceExpression list = value instanceof PathExpression
         ? this.inParentheses(value, listType)
@@ -748,11 +781,13 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * different number for each element; it is rejected.
    *
    * @param content the content of the bracket, translated in the current context
-   * @param readsBefore the reads of the current context before the content was translated
-   * @throws InvalidUsageException if translating the content read the current context
+   * @param readsBefore the reads the content must not make, counted before it was translated
+   * @param readsAfter the same reads, counted after
+   * @throws InvalidUsageException if translating the content made such a read
    */
-  private void rejectIndexReadingContext(final ExpressionContext content, final int readsBefore) {
-    if (this.readsOfCurrentContext() > readsBefore) {
+  private static void rejectIndexReadingContext(final ExpressionContext content,
+      final int readsBefore, final int readsAfter) {
+    if (readsAfter > readsBefore) {
       throw InvalidUsageException.indexReadsContext(content);
     }
   }
@@ -787,7 +822,9 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * Counts a read of the current context: a reference is resolved from it.
    */
   private void countReadOfCurrentContext() {
-    if (!this.efxContext.isEmpty()) {
+    if (this.efxContext.isEmpty()) {
+      this.readsOfRoot++;
+    } else {
       this.readsOfContexts.merge(this.efxContext.peek(), 1, Integer::sum);
     }
   }
@@ -795,6 +832,10 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   private int readsOfCurrentContext() {
     return this.efxContext.isEmpty() ? 0
         : this.readsOfContexts.getOrDefault(this.efxContext.peek(), 0);
+  }
+
+  private int readsOfCurrentContextAndRoot() {
+    return this.readsOfCurrentContext() + this.readsOfRoot;
   }
 
   private <T extends TypedExpression> T inParentheses(final TypedExpression expression,
@@ -1046,8 +1087,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
       final Variable variable = new Variable(name,
           script.composeVariableDeclaration(name, variableType), Expression.empty(variableType),
           script.composeVariableReference(name, variableType));
-      EfxExpressionVisitor.this.stack.declareIdentifier(variable);
-      EfxExpressionVisitor.this.efxContext.declareContextVariable(name, context);
+      EfxExpressionVisitor.this.declareContextVariable(variable, context);
       return script.composeIteratorExpression(variable.declarationExpression, path.asSequence());
     }
   }
