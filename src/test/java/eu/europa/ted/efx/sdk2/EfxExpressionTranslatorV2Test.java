@@ -1371,6 +1371,14 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
         "string-length(BT-00-Text-Multilingual) <= 400");
   }
 
+  @Test
+  void testMultilingualTextFieldReference_InOwnPredicate() {
+    testExpressionTranslationWithContext(
+        "'test' = PathNode/TextMultilingualField[./normalize-space(text()) != '']/normalize-space(text())",
+        "ND-Root",
+        "'test' in BT-00-Text-Multilingual[BT-00-Text-Multilingual != '']");
+  }
+
   // #endregion: References
 
   // #region: Boolean functions -----------------------------------------------

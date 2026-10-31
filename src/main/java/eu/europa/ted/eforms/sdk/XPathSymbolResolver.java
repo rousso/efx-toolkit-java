@@ -588,46 +588,8 @@ public abstract class XPathSymbolResolver implements SymbolResolver {
       return false;
     }
 
-    // If the field itself is repeatable, it returns multiple values
-    if (sdkField.isRepeatable()) {
-      return true;
-    }
-
-    // Multilingual fields have multiple XML elements (one per language)
-    if (FieldTypes.TEXT_MULTILINGUAL.getName().equals(sdkField.getType())) {
-      return true;
-    }
-
-    // Use cached ancestry from node
-    List<String> contextAncestry = context != null
-        ? this.ancestryOf(this.parentNodeOf(context))
-        : Collections.emptyList();
-
-    // Walk up from the field's parent node toward root, looking for a repeatable
-    // node
-    String currentNodeId = sdkField.getParentNodeId();
-    while (currentNodeId != null) {
-      // Context boundary reached - the context node (even if repeatable) doesn't
-      // count because we're positioned inside one instance of it. No repeatable node exists
-      // between the field and context, so the field doesn't repeat from this context.
-      if (contextAncestry.contains(currentNodeId)) {
-        return false;
-      }
-
-      SdkNode node = this.nodeById(currentNodeId);
-      if (node == null) {
-        break;
-      }
-
-      // If this node is repeatable, the field returns multiple values from context
-      if (node.isRepeatable()) {
-        return true;
-      }
-
-      currentNodeId = node.getParentId();
-    }
-
-    return false;
+    // Any other field repeats from a field context as it does from the parent node of that field
+    return this.isFieldRepeatableFromContext(sdkField, this.parentNodeOf(context));
   }
 
   private boolean isFieldRepeatableFromContext(final SdkField sdkField, final SdkNode context) {
@@ -644,12 +606,10 @@ public abstract class XPathSymbolResolver implements SymbolResolver {
     // Use cached ancestry from node
     List<String> contextAncestry = this.ancestryOf(context);
 
-    // Walk up from the field's parent node toward root, looking for a repeatable
-    // node
+    // Walk up from the field's parent node toward root, looking for a repeatable node
     String currentNodeId = sdkField.getParentNodeId();
     while (currentNodeId != null) {
-      // Context boundary reached - the context node (even if repeatable) doesn't
-      // count
+      // Context boundary reached - the context node (even if repeatable) doesn't count
       // because we're positioned inside one instance of it. No repeatable node exists
       // between the field and context, so the field doesn't repeat from this context.
       if (contextAncestry.contains(currentNodeId)) {
