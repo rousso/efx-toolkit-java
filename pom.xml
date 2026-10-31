@@ -338,6 +338,7 @@
             </goals>
             <configuration>
               <sourceDirectory>${sdk.antlr4.dir}</sourceDirectory>
+              <visitor>true</visitor>
             </configuration>
           </execution>
           <execution>

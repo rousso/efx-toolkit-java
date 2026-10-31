@@ -63,6 +63,15 @@ public final class EfxTypeTokenLookup {
       entry(EfxDataType.Date.class, DATE),
       entry(EfxDataType.Time.class, TIME));
 
+  private static final Map<String, Class<? extends EfxDataType.Primitive>> TO_JAVA_TYPE =
+      Map.ofEntries(
+          entry(TEXT, EfxDataType.String.class),
+          entry(INDICATOR, EfxDataType.Boolean.class),
+          entry(NUMERIC, EfxDataType.Number.class),
+          entry(DURATION, EfxDataType.Duration.class),
+          entry(DATE, EfxDataType.Date.class),
+          entry(TIME, EfxDataType.Time.class));
+
   /**
    * Resolves an eForms SDK field type name to the corresponding EFX type name.
    *
@@ -85,6 +94,20 @@ public final class EfxTypeTokenLookup {
     String result = FROM_JAVA_TYPE.get(javaType);
     if (result == null) {
       throw TranslatorConfigurationException.missingTypeMapping(javaType, "EfxTypeTokenLookup.FROM_JAVA_TYPE");
+    }
+    return result;
+  }
+
+  /**
+   * Resolves an EFX type name, as a type declaration writes it, to the corresponding primitive
+   * EfxDataType class.
+   *
+   * @throws TranslatorConfigurationException if the type name is not mapped
+   */
+  public static Class<? extends EfxDataType.Primitive> toJavaType(String typeName) {
+    Class<? extends EfxDataType.Primitive> result = TO_JAVA_TYPE.get(typeName);
+    if (result == null) {
+      throw TranslatorConfigurationException.missingTypeMapping(typeName, "EfxTypeTokenLookup.TO_JAVA_TYPE");
     }
     return result;
   }

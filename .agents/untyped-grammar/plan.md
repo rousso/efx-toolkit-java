@@ -44,6 +44,12 @@ One `expression` rule carries every operator with standard precedence, and types
 expression
     : OpenParenthesis expression CloseParenthesis                      # parenthesizedExpression
     | expression OpenBracket expression CloseBracket                   # indexedExpression
+    | expression Slash AtPrefix attributeName=Identifier               # attributeExpression
+    | expression ColonColon linkedFieldReference                       # fieldFromContextExpression
+    | expression ColonColon simpleNodeReference                        # nodeFromContextExpression
+    | expression Colon RawValue                                        # rawValueExpression
+    | expression Colon PreferredLanguage                               # preferredLanguageExpression
+    | expression Colon PreferredLanguageText                           # preferredLanguageTextExpression
     | expression operator=(Star | Slash | Percent) expression          # multiplicativeExpression
     | expression operator=(Plus | Minus) expression                    # additiveExpression
     | expression operator=Comparison expression                        # comparisonExpression
@@ -71,18 +77,21 @@ ANTLR gives earlier alternatives higher precedence, so the order above is the pr
 
 The late-bound rules go: every reference is simply a `reference`, and the toolkit learns its type when it resolves it. The six typed expression rules, the six typed sequence rules and the `lateBoundExpression`, `lateBoundScalar` and `lateBoundSequence` rules (290 alternatives together) collapse into the rule above and the `list` alternative. The cast rules and their twelve `*TypeCast` helpers are deleted.
 
+The steps that may follow a reference (`/@attribute`, `::` to a field or a node, `:rawValue`, `:preferredLanguage`, `:preferredLanguageText`) are postfix alternatives of `expression`, placed right after the bracket, so that the parser never reads past a `]` to tell a context's predicate from an index (P3.1 design, 31 October; measured by the implementing thread: a lookahead of 5 tokens at most against an unbounded one, and the corpus parses in about 2.3 s against 255 s with the typed grammar). The toolkit rejects a step in the wrong place, such as `'a':rawValue`, as a type error. Consequences: a node read through an override, `ND-1::ND-2` or `$n::ND-Root`, is a node reference like any other, countable and testable with `is present` (a fifth language change); the selector takes a field, a node or a field's attribute, each with its predicates and no override, so `&{ND-1::BT-2/@a}`, which no corpus file or test uses, leaves the language (a sixth); a context (`fieldContext`, `nodeContext`) keeps its predicates, any number of them. Dictionary lookups have no rule of their own: `$d['key']` is the bracket form, and the toolkit tells a lookup from an index by the symbol.
+
 ### References, brackets and contexts
 
-A field, attribute or node reference is a reference and nothing more: the `(OpenBracket predicate CloseBracket)?` tail moves out of the reference rules into the single `indexedExpression` form, so the parser never has to choose between "predicate of the reference" and "index of the expression" at a `[`. A bracket after a reference is one thing, an XPath predicate on the node path, whatever its content: the content is translated in the referenced field's or node's context, as `enterPredicate` does for filters today; a boolean filters, a number selects a position, anything else is a type error; and the value step follows the predicate, so `BT-00-Repeatable-Text[2]` becomes `PathNode/RepeatableTextField[2]/normalize-space(text())` and `BT-00-Repeatable-Text[BT-00-Number]` becomes `PathNode/RepeatableTextField[../NumberField/number()]/normalize-space(text())`. A bracket after anything that is not a reference, such as a list, a variable or a parenthesised expression, stays a positional index on that sequence, `('a','b','c')[1]`, and must be numeric. The bracket content needs no rule of its own: `visitIndexedExpression` visits its left child as a path, pushes that field or node as the context, visits the content, pops the context, and decides by the content's type.
+A field, attribute or node reference is a reference and nothing more: the `(OpenBracket predicate CloseBracket)?` tail moves out of the reference rules into the single `indexedExpression` form, so the parser never has to choose between "predicate of the reference" and "index of the expression" at a `[`. A bracket after a reference is one thing, an XPath predicate on the node path, whatever its content: the content is translated in the referenced field's or node's context, as `enterPredicate` does for filters today; a boolean filters, a number selects a position, anything else is a type error; and the value step follows the predicate. An index means the nth element of the sequence the reference denotes from its context, the same in every position (Yannis, 31 October), which in XPath is a position on the whole sequence, `(path)[n]`, not the bare step predicate `path[n]`, which picks the nth element under each parent and gives one value per repeating ancestor: `BT-00-Repeatable-Text[2]` becomes `(PathNode/RepeatableTextField)[2]/normalize-space(text())` and `BT-00-Repeatable-Text[BT-00-Number]` becomes `(PathNode/RepeatableTextField)[../NumberField/number()]/normalize-space(text())`; a boolean filter alone stays `path[filter]/value`, as today. Today's toolkit writes `(path/value)[n]` in a value position but the per-parent `path[n]` before a step (`:rawValue`, `::`, `:preferredLanguage`) and in a context; the rule ends that split (found by the implementing thread in P3.2, 31 October: `BT-191-Tender` sits under the repeating `efac:Origin`, so `path[filter][1]/value` would have given one value per origin where today's output gives one). A bracket after anything that is not a reference, such as a list, a variable or a parenthesised expression, stays a positional index on that sequence, `('a','b','c')[1]`, and must be numeric. The bracket content needs no rule of its own: `visitIndexedExpression` visits its left child as a path, pushes that field or node as the context, visits the content, pops the context, and decides by the content's type.
 
-Two consequences, both confirmed by Yannis on 31 October. For authors: inside the brackets the indexed field means the element being tested, as in a filter, so an index that refers to fields now means what it means in XPath. Today such an index is translated in the enclosing context and produces XPath that fails at run time, because the context item inside a predicate is the value being tested; only literal and variable indexes ever worked. The corpus has 7,603 boolean predicates on references and exactly 3 numeric indexes, all literal. For the output: those 3 lines, `BT-191-Tender[OPT-321-Tender == $tenderid][1]` in templates 28 and 30, change from `(path[filter]/value)[1]` to `path[filter][1]/value`, and the 4 indexer tests on fields change their expectation the same way. These are the only permitted output changes of the whole work.
+Two consequences, both confirmed by Yannis on 31 October. For authors: inside the brackets the indexed field means the element being tested, as in a filter, so an index that refers to fields now means what it means in XPath. Today such an index is translated in the enclosing context and produces XPath that fails at run time, because the context item inside a predicate is the value being tested; only literal and variable indexes ever worked. The corpus has 7,603 boolean predicates on references and exactly 3 numeric indexes, all literal. For the output: those 3 lines, `BT-191-Tender[OPT-321-Tender == $tenderid][1]` in templates 28 and 30, change from `(path[filter]/value)[1]` to `(path[filter])[1]/value`, the same values at run time, and the 34 tests that index a field change their expected XPath text the same way: 7 in value positions, and 27 before a step or in a context, where today's per-parent `path[n]` becomes `(path)[n]`; their values are the same wherever no node between the context and the field repeats, which is every case the tests and the corpus have. These are the only permitted output changes of the whole work.
 
 ### Iterators, declarations and parameters
 
 Declared types stay in the language; they are declarations, not expressions, and the toolkit checks the initializer against them. The thirteen per-type rules for each declaration kind become one rule with a type token:
 
 ```
-typeDeclaration: typeName=(Text | Indicator | Number | Date | Time | Duration) Star?;
+typeDeclaration: primitiveType Star?;
+primitiveType: Text | Indicator | Number | Date | Time | Duration;
 
 variableInitializer
     : typeDeclaration Colon VariablePrefix variableName=Identifier Assignment expression   # typedVariableInitializer
@@ -92,7 +101,7 @@ variableInitializer
 parameterDeclaration: typeDeclaration Colon VariablePrefix parameterName=Identifier;
 
 iteratorExpression
-    : typeDeclaration Colon VariablePrefix variableName=Identifier In expression   # valueIterator
+    : primitiveType Colon VariablePrefix variableName=Identifier In expression     # valueIterator
     | ContextType Colon VariablePrefix variableName=Identifier In (fieldContext | nodeContext) # contextIterator
     ;
 
@@ -102,7 +111,7 @@ functionDeclaration
     ;
 ```
 
-`EfxTypeTokenLookup` already maps these tokens to `EfxDataType`, so the toolkit reads the declared type from `typeDeclaration` and converts the initializer to it, promoting a scalar to a sequence where the declaration asks for one and rejecting anything else. The `contextVariableInitializer`, the `dictionaryDeclaration` and the template definitions are unchanged.
+`EfxTypeTokenLookup` already maps these tokens to `EfxDataType`, so the toolkit reads the declared type from `primitiveType` and converts the initializer to it, promoting a scalar to a sequence where the declaration asks for one and rejecting anything else. An iterator variable holds one item, so it takes a `primitiveType` without `*`, as today. The `contextVariableInitializer`, the `dictionaryDeclaration` and the template definitions are unchanged.
 
 ### Built-in functions
 
@@ -151,7 +160,7 @@ A reference is pushed as a path, and the two positions that consume a path as su
 - **List** `[a, b, c]`: all elements must share a primitive; the result is the sequence of that primitive. Mixed primitives are a type error naming the first offending element.
 - **Iteration** `for ... return body`: a scalar body gives a sequence of its primitive, a sequence body gives the same sequence type (concatenation), matching the two `composeForExpression` overloads.
 - **Conditional** `if c then a else b`: `c` must be boolean; `a` and `b` must share a primitive; the result is their join under promotion (both scalar gives a scalar, otherwise a sequence).
-- **Bracket** `x[i]`: `x` a path and `i` boolean gives the filtered path (same type); `x` a path and `i` numeric gives the scalar path of `x`'s primitive, the predicate applied before the value step; `x` a value sequence and `i` numeric gives the scalar of its primitive; anything else is a type error.
+- **Bracket** `x[i]`: `x` a path and `i` boolean gives the filtered path (same type); `x` a path and `i` numeric gives the scalar path of `x`'s primitive, the position taken on the whole sequence the path selects, `(path)[i]`, before the value step; `x` a value sequence and `i` numeric gives the scalar of its primitive; anything else is a type error.
 - **Field properties** (`:isWithheld` and friends) are boolean, `:privacyCode`, `:preferredLanguage` and `:rawValue` are strings, as today.
 - **Operators and built-ins** go through the catalogue below.
 
@@ -184,7 +193,7 @@ The choice does not change what the toolkit can check. The only type information
 
 |  | A: listener everywhere | B: visitor for expressions, composed |
 |---|---|---|
-| Shape | `EfxExpressionTranslatorV2 extends EfxBaseListener`; template and rules translators extend it, as today | `EfxExpressionVisitor extends EfxBaseVisitor<TypedExpression>`; template and rules translators stay listeners and hold a visitor |
+| Shape | `EfxExpressionTranslatorV2 extends EfxBaseListener`; template and rules translators extend it, as today | `EfxExpressionVisitor extends EfxBaseVisitor<Operand>`, an `Operand` being the translated expression with its origin (the reference it is written as, if any), so that the bracket, `::` and the error codes do not read the parse tree again (P3.2 design, 31 October); template and rules translators stay listeners and hold a visitor |
 | Data flow | Operands are popped from `CallStack`, results pushed; push and pop pairs must match across methods | Each `visitX` returns the typed expression of its node; no stack for expressions |
 | Paths versus values | `exitReferenceExpression` reads its parent node to decide | The consumer asks for a path or a value: `visitIndexedExpression` visits its left child as a path |
 | Context switch inside brackets | An `enterIndexer` hook that reads its left sibling in the parse tree | Push the context between visiting the two children |
@@ -209,7 +218,7 @@ Eleven files in the toolkit depend on the generated parser; the test tree does n
 | `CallStack`, `ContextStack`, `TypeCheckerV2`, `TypeChecker.V1` | Scopes, contexts, pop-time conversion | API unchanged. The three translators share one instance of each through a translation-context object |
 | `TypeMismatchException` | Nine factories and eight error codes | `identifierIsScalar` and `IDENTIFIER_IS_SCALAR` go; messages reworded to name the operator and both operand types |
 | `autocomplete` package | `EfxBuiltInFunction` (113 entries), its own `EfxDataType` and `EfxFunctionParameter`, no parser coupling | Derived from the signature catalogue in phase 5; `EfxKeyword` and `EfxLinkedProperty` unchanged |
-| Tests (1,550) | Written in EFX against expected XPath | All survive the grammar change. Expectations change for the three promotion tests, the one cast test, the 4 indexer tests on fields, and in phase 4 the 13 tests that assert a bare `ParseCancellationException` for what becomes a type error |
+| Tests (1,550) | Written in EFX against expected XPath | All survive the grammar change. Expectations change for the three promotion tests, the one cast test, the 34 tests that index a field, and in phase 4 the 13 tests that assert a bare `ParseCancellationException` for what becomes a type error |
 | `pom.xml` | ANTLR plugin generates listeners for both SDK grammars | Add `<visitor>true</visitor>`. Nothing else |
 | `sdk1` package | EFX-1 translators on the SDK 1.16 grammar | Untouched |
 
@@ -257,7 +266,7 @@ Phases 1, 2, 4 and 5 touch only the toolkit; phase 3 changes the grammar in the 
 ### Phase 3: the untyped grammar (SDK) and the rewiring (toolkit)
 
 - **P3.1** Write the new `Efx.g4` described in the grammar section above; `EfxLexer.g4` unchanged; update `efx-grammar/README.md`; install the SDK branch locally.
-- **P3.2** Toolkit: one method per new grammar label, as a visitor (option B, chosen by Yannis on 31 October), with the composition refactor: a translation-context object shared by the three translators, a walker that stops at expression nodes, and the template and rules translators calling the visitor at their expression sites; one exit method per declaration kind in the template and rules translators; the `EfxErrorStrategy` table; removal of the cast handling and the cast test; translation tests for what the typed grammar rejects and the decisions of 31 October allow: `count` of a node reference (repeatable, with a predicate, and non-repeatable), `date + duration`, `duration + date`, `date - duration`, and `ND-SubNode[1] is present`.
+- **P3.2** Toolkit: one method per new grammar label, as a visitor (option B, chosen by Yannis on 31 October), with the composition refactor: a translation-context object shared by the three translators, a walker that stops at expression nodes, and the template and rules translators calling the visitor at their expression sites; one exit method per declaration kind in the template and rules translators; the `EfxErrorStrategy` table; removal of the cast handling and the cast test; translation tests for what the typed grammar rejects and the decisions of 31 October allow: `count` of a node reference (repeatable, with a predicate, and non-repeatable), `date + duration`, `duration + date`, `date - duration`, `ND-SubNode[1] is present`, and a node through an override (`ND-1::ND-2`, `$n::ND-Root`) counted and tested with `is present`.
 - **P3.3** Profiler run over the corpus with `EfxProfilerReportGenerator`: record decisions with full-context fallbacks and ambiguities; the target is none inside expressions.
 - **P3.4** Benchmark: corpus timing against the phase-0 numbers.
 
@@ -313,7 +322,7 @@ Yannis answered all four questions on 30 and 31 October. The last one is recorde
 - **Repository coupling.** The toolkit branch does not build in CI until the SDK grammar is published; the pull requests must say so, and upstream the SDK merges first. `progress.md` names the matching commits at every gate.
 - **Performance.** The parser is the suspected bottleneck, not the proven one. The phase-0 baseline (301 s for the 52 templates) and the phase-3 benchmark decide; if the gain is small, the profiler report shows where the time goes, and the cleaner grammar stands on its own.
 - **Multilingual fields.** `MultilingualString` widens to `String` in the resolver; outputs that depend on the distinction, such as `preferred-language-text`, are covered by the corpus and by the 5 tests on `FIELD_IS_MULTILINGUAL`.
-- **Behaviour changes by design.** Casts go, three promotion cases become valid, a bracket after a reference becomes an XPath predicate whatever its content, and `count` accepts a node reference. All four are language changes and belong in the EFX documentation site, which is outside these repositories and is Yannis's.
+- **Behaviour changes by design.** Casts go, three promotion cases become valid, a bracket after a reference becomes an XPath predicate whatever its content, `count` accepts a node reference, a node read through an override (`ND-1::ND-2`) is a node reference, and the selector's override form `&{ND-1::BT-2/@a}` goes. All six are language changes and belong in the EFX documentation site, which is outside these repositories and is Yannis's.
 - **Several sessions.** Phases 2 and 3 are too long for one session of the implementing thread. The plan and progress files are the only state that survives between sessions, which is why rule 8 above is strict.
 
 ## Allowed changes to output and test expectations
@@ -322,10 +331,10 @@ These are the only output differences and test-expectation changes this plan per
 
 | What | Where | Why |
 |---|---|---|
-| 3 corpus lines change from `(path[filter]/value)[1]` to `path[filter][1]/value` | `view-templates/28.efx` line 175; `view-templates/30.efx` lines 213 and 249 (`BT-191-Tender[OPT-321-Tender == $tenderid][1]`) | A bracket after a reference becomes an XPath predicate on the node path (grammar section). Phase 3 |
-| 4 indexer tests on fields change their expected XPath the same way | `EfxExpressionTranslatorV2Test`: `testIndexer_WithNonRepeatableField`, `testIndexer_WithNonRepeatableFieldAndPredicate`, `testIndexer_WithRepeatableField`, `testIndexer_WithRepeatableFieldAndPredicate` | Same rule. Phase 3 |
+| 3 corpus lines change from `(path[filter]/value)[1]` to `(path[filter])[1]/value` | `view-templates/28.efx` line 175; `view-templates/30.efx` lines 213 and 249 (`BT-191-Tender[OPT-321-Tender == $tenderid][1]`) | A bracket after a reference becomes an XPath predicate on the node path (grammar section). Phase 3 |
+| 34 tests that index a field change their expected XPath text | 7 in value positions, among them `EfxExpressionTranslatorV2Test`: `testIndexer_WithNonRepeatableField`, `testIndexer_WithNonRepeatableFieldAndPredicate`, `testIndexer_WithRepeatableField`, `testIndexer_WithRepeatableFieldAndPredicate`, from `(path[filter]/value)[n]` to `(path[filter])[n]/value`; 27 before a step or in a context, from the per-parent `path[n]` to `(path)[n]`; the full list goes in progress.md | An index is the nth element of the sequence the reference denotes, everywhere (Yannis, 31 October); today's output takes the nth under each parent in those 27 positions. Same values wherever no node between the context and the field repeats. Phase 3 |
 | 3 promotion tests invert: the expressions become valid | `LateBoundTypeResolutionTest`: `count($x)` with a scalar variable, `count(?f())` with a scalar function, `'test' in $f` with a context variable; today they expect `IDENTIFIER_IS_SCALAR` | Uniform scalar-to-sequence promotion. Phase 1 (inverted) and phase 2 (code removed) |
-| 1 cast test is removed | The single test that uses `(type) expression` cast syntax | Casts leave the language. Phase 3 |
+| 1 cast test is removed, and 2 tests lose a cast from their EFX and keep their expected XPath | `EfxTemplateTranslatorV2Test.testExpressionBlock_RepeatableFieldWithExplicitCast` (`(text*)BT-00-Repeatable-Text`) is removed; `testNegativeDuration_ViaMultiplicationWithField` (`2 * (duration)BT-00-Duration * -3`) and `testDurationMultiplication_LateBoundDurationTimesCastNumber` (`BT-00-Duration * (number)BT-00-Number`, renamed `..._LateBoundDurationTimesLateBoundNumber`) lose the cast | Casts leave the language; both parse without the cast to the tree the cast gave (P3.1 check, 31 October), and P3.2's run proves the XPath. Phase 3 |
 | 13 tests that assert a bare `ParseCancellationException` keep passing in phase 3 and are tightened to the specific exception | `EfxExpressionTranslatorV2Test` and neighbours | Rejections move from the parser to the toolkit. Phase 4 |
 | 2 rows leave the invalid-operation table: `count(ND-SubNode)` and `count(ND-RepeatableNode)` become valid | `EfxInvalidOperationV2Test`, rule "A node has no value" | Node counting added to the language (Yannis, 31 October). Table in phase 2, positive tests in phase 3 |
 | 2 tests change their expected code from `CANNOT_CONVERT` to `INCOMPATIBLE_OPERANDS` | `LateBoundTypeResolutionTest.testLateBoundComparison_MismatchedFieldTypes_Throws` (`BT-00-Text == BT-00-Number`) and `EfxRulesTranslatorV2Test.testApiCall_TypeMismatch_InArithmeticExpression` (`1 + ?check(BT-00-Identifier)` in a rule) | A mismatched primitive under an operator gives `INCOMPATIBLE_OPERANDS` (Errors section); today the code depends on which grammar alternative matched. Yannis chose this over keeping today's codes until phase 3 (31 October). Phase 2 (P2.3) |
@@ -349,5 +358,5 @@ These are the only output differences and test-expectation changes this plan per
 
 ## Notes for Yannis, outside this plan
 
-- Four language changes belong in the EFX documentation site: casts are removed, scalar-to-sequence promotion is uniform, a bracket after a reference is an XPath predicate whatever its content, and `count` accepts a node reference (decided 31 October; no public interface of the toolkit changes).
+- Six language changes belong in the EFX documentation site: casts are removed, scalar-to-sequence promotion is uniform, a bracket after a reference is an XPath predicate whatever its content, `count` accepts a node reference, a node read through an override (`ND-1::ND-2`, `$n::ND-Root`) is a node reference, and the selector's override form `&{ND-1::BT-2/@a}` is removed (decided 31 October; no public interface of the toolkit changes). Two precedence notes for authors: the comparison family binds in the order written (`a == b in c` is `(a == b) in c`), and the expression after `else`, `return` or `satisfies` extends as far right as it can, so `if c then 1 else 2 == 3` needs parentheses to compare the conditional.
 - Upstream pull requests to OP-TED are opened by Yannis himself, SDK first, after he has reviewed and merged the branches into his forks.

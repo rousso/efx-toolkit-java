@@ -2282,7 +2282,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
   void testPreferredLanguageFunction_RepeatableFieldWithIndexer() {
     assertEquals(
         lines("TEMPLATES:",
-            "let body01() -> { eval(efx:preferred-language(SubNode/RepeatableInSubNode/TextMultilingual[1])) }",
+            "let body01() -> { eval(efx:preferred-language((SubNode/RepeatableInSubNode/TextMultilingual)[1])) }",
             "MAIN:", "for-each(/*).call(body01())"),
         translateTemplate("{/} ${preferred-language(BT-13-TextMultilingual[1])}"));
   }
@@ -2291,7 +2291,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
   void testPreferredLanguageTextFunction_RepeatableFieldWithIndexer() {
     assertEquals(
         lines("TEMPLATES:",
-            "let body01() -> { eval(efx:preferred-language-text(SubNode/RepeatableInSubNode/TextMultilingual[1])) }",
+            "let body01() -> { eval(efx:preferred-language-text((SubNode/RepeatableInSubNode/TextMultilingual)[1])) }",
             "MAIN:", "for-each(/*).call(body01())"),
         translateTemplate("{/} ${preferred-language-text(BT-13-TextMultilingual[1])}"));
   }
@@ -2300,7 +2300,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
   void testPreferredLanguageTextFunction_RepeatableFieldWithPredicateAndIndexer() {
     assertEquals(
         lines("TEMPLATES:",
-            "let body01() -> { eval(efx:preferred-language-text(SubNode/RepeatableInSubNode/TextMultilingual['a' = 'a'][1])) }",
+            "let body01() -> { eval(efx:preferred-language-text((SubNode/RepeatableInSubNode/TextMultilingual['a' = 'a'])[1])) }",
             "MAIN:", "for-each(/*).call(body01())"),
         translateTemplate("{/} ${preferred-language-text(BT-13-TextMultilingual['a' == 'a'][1])}"));
   }
@@ -2377,7 +2377,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
   void testPreferredLanguageProperty_RepeatableFieldWithIndexer() {
     assertEquals(
         lines("TEMPLATES:",
-            "let body01() -> { eval(efx:preferred-language(SubNode/RepeatableInSubNode/TextMultilingual[1])) }",
+            "let body01() -> { eval(efx:preferred-language((SubNode/RepeatableInSubNode/TextMultilingual)[1])) }",
             "MAIN:", "for-each(/*).call(body01())"),
         translateTemplate("{/} ${BT-13-TextMultilingual[1]:preferredLanguage}"));
   }
@@ -2386,7 +2386,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
   void testPreferredLanguageTextProperty_RepeatableFieldWithIndexer() {
     assertEquals(
         lines("TEMPLATES:",
-            "let body01() -> { eval(efx:preferred-language-text(SubNode/RepeatableInSubNode/TextMultilingual[1])) }",
+            "let body01() -> { eval(efx:preferred-language-text((SubNode/RepeatableInSubNode/TextMultilingual)[1])) }",
             "MAIN:", "for-each(/*).call(body01())"),
         translateTemplate("{/} ${BT-13-TextMultilingual[1]:preferredLanguageText}"));
   }
@@ -2395,7 +2395,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
   void testPreferredLanguageTextProperty_RepeatableFieldWithPredicateAndIndexer() {
     assertEquals(
         lines("TEMPLATES:",
-            "let body01() -> { eval(efx:preferred-language-text(SubNode/RepeatableInSubNode/TextMultilingual['a' = 'a'][1])) }",
+            "let body01() -> { eval(efx:preferred-language-text((SubNode/RepeatableInSubNode/TextMultilingual['a' = 'a'])[1])) }",
             "MAIN:", "for-each(/*).call(body01())"),
         translateTemplate("{/} ${BT-13-TextMultilingual['a' == 'a'][1]:preferredLanguageText}"));
   }
@@ -2764,6 +2764,28 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
     assertThrows(InvalidArgumentException.class, () -> translateTemplate(template));
   }
 
+  @Test
+  void testDictionaryLookup_NumericKey_Throws() {
+    var template = lines(
+        "let $dic index BT-00-Number by BT-00-Text;",
+        "display ${$dic[1]};");
+    assertThrows(TypeMismatchException.class, () -> translateTemplate(template));
+  }
+
+  @Test
+  void testChooseTemplate_NumericCondition_Throws() {
+    assertThrows(TypeMismatchException.class,
+        () -> translateTemplate("when 1 display this is one;"));
+  }
+
+  @Test
+  void testVariableDeclaration_ValueOfAnotherType_Throws() {
+    var template = lines(
+        "let text:$x = 1;",
+        "display ${$x};");
+    assertThrows(TypeMismatchException.class, () -> translateTemplate(template));
+  }
+
   // #endregion TypeMismatchException ------------------------------------------
 
   // #region Repeatable Fields in Expression Blocks ----------------------------
@@ -2788,17 +2810,6 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
             "MAIN:",
             "for-each(/*).call(body01())"),
         translateTemplate("{ND-Root} Value: ${for text:$x in BT-00-Repeatable-Text return $x}"));
-  }
-
-  @Test
-  void testExpressionBlock_RepeatableFieldWithExplicitCast() {
-    assertEquals(
-        lines(
-            "TEMPLATES:",
-            "let body01() -> { text('Value: ')eval(PathNode/RepeatableTextField/normalize-space(text())) }",
-            "MAIN:",
-            "for-each(/*).call(body01())"),
-        translateTemplate("{ND-Root} Value: ${(text*)BT-00-Repeatable-Text}"));
   }
 
   @Test
@@ -2970,7 +2981,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
             "TEMPLATES:",
             "let body01() -> { eval(./normalize-space(text())) }",
             "MAIN:",
-            "for-each(/*/PathNode/RepeatableTextField[1]).call(body01())"),
+            "for-each((/*/PathNode/RepeatableTextField)[1]).call(body01())"),
         translateTemplate("{BT-00-Repeatable-Text[1]} ${BT-00-Repeatable-Text}"));
   }
 
@@ -2992,7 +3003,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
             "TEMPLATES:",
             "let body01() -> { eval(./normalize-space(text())) }",
             "MAIN:",
-            "for-each(/*/PathNode/RepeatableTextField['a' = 'a'][1]).call(body01())"),
+            "for-each((/*/PathNode/RepeatableTextField['a' = 'a'])[1]).call(body01())"),
         translateTemplate("{BT-00-Repeatable-Text['a' == 'a'][1]} ${BT-00-Repeatable-Text}"));
   }
 
@@ -3014,7 +3025,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
             "TEMPLATES:",
             "let body01() -> { eval(./normalize-space(text())) }",
             "MAIN:",
-            "for-each(/*/PathNode/RepeatableTextField[1]).call(body01())"),
+            "for-each((/*/PathNode/RepeatableTextField)[1]).call(body01())"),
         translateTemplate("{/BT-00-Repeatable-Text[1]} ${BT-00-Repeatable-Text}"));
   }
 

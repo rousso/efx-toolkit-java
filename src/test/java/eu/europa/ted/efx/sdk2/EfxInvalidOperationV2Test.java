@@ -42,6 +42,9 @@ import eu.europa.ted.efx.exceptions.TypeMismatchException;
  * <p>
  * Template-only functions are rejected outside templates whatever their arguments, so their rows
  * are translated inside a template, where only the arguments can be wrong.
+ * <p>
+ * Some references can be written only since the grammar stopped checking types, and only the
+ * translator rejects them, so their rows expect a type error.
  */
 class EfxInvalidOperationV2Test extends EfxTestsBase {
 
@@ -64,6 +67,13 @@ class EfxInvalidOperationV2Test extends EfxTestsBase {
     ParseCancellationException exception = assertThrows(ParseCancellationException.class,
         () -> translateTemplate("{ND-Root} ${" + expression + "}"));
     assertTrue(isSyntaxOrTypeError(exception), exception::toString);
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("invalidReferences")
+  void testInvalidReference_IsTypeMismatch(final String expression) {
+    assertThrows(TypeMismatchException.class,
+        () -> translateExpressionWithContext("ND-Root", expression));
   }
 
   private static boolean isSyntaxOrTypeError(final ParseCancellationException exception) {
@@ -452,6 +462,22 @@ class EfxInvalidOperationV2Test extends EfxTestsBase {
         "current-date() + 1",
         "year(current-date()) == 'a'",
         "contains('a', 'b') + 1");
+  }
+
+  static Stream<String> invalidReferences() {
+    return Stream.of(
+        // The left side of :: is a context: a field, a node or a context variable
+        "'a'::BT-00-Text",
+        "(BT-00-Text)::BT-00-Number",
+
+        // An attribute and the language properties are read from a field
+        "ND-SubNode/@listName",
+        "'a'/@listName",
+        "1:preferredLanguage",
+        "1:preferredLanguageText",
+
+        // A node has no value, so it cannot stand in parentheses
+        "(ND-SubNode) is present");
   }
 
   static Stream<String> invalidTemplateOperations() {
