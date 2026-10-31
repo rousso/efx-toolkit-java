@@ -3,7 +3,7 @@
 Single record of the work described in `plan.md`. Update it at the end of every session: item status, gate results with their numbers, the commit ids of both repositories, decisions taken, open questions for Yannis.
 
 **Last updated:** 2026-10-31, by the implementing thread (session 1).
-**Current phase:** 1. **Next item:** P1.3.
+**Current phase:** 1. **Next item:** the phase 1 review, then gate 1.
 
 ## Work items
 
@@ -16,7 +16,7 @@ Single record of the work described in `plan.md`. Update it at the end of every 
 | P0.5 Fix the `rules.efx` failure (symbol resolver) and add the test | done 2026-10-31 | 8f73f51, bef9092 | | `XPathSymbolResolver.isFieldRepeatableFromContext(SdkField, SdkField)` now answers "single value" first when the field is the context, before the repeatable and multilingual checks. Two tests: `testMultilingualTextFieldReference_FromOwnContext_InScalarContext` (translation) and `fieldToField_multilingualFieldItself_shouldReturnScalarPath` (resolver contract, runs in both resolver test classes); both failed before the fix. 1,553 tests green. Real SDK, compared with `develop`: the 52 templates and the 3 stage files byte-identical, `rules.efx` now translates (575 outputs) where `develop` fails at line 6522:9. Second commit from the phase 0 review: the field-context overload now delegates to the node-context overload (it had become a line-for-line copy, which is how the two drifted apart), plus a third test, a multilingual field in its own predicate (`testMultilingualTextFieldReference_InOwnPredicate`, fails on `develop`); 1,554 tests green, corpus unchanged |
 | P1.1 Translation tests for untested features | done 2026-10-31 | (this commit) | | 152 new tests, each placed in the region of its feature. `EfxExpressionTranslatorV2Test`, 144: `is unique in` and `in` per type with a reference on either side, comparisons with the reference on the right, duration addition and subtraction, date minus date, duration multiplication with a late-bound operand, conditionals per type (typed and with a reference in either branch), concatenated iterations per type, multiplication of references, a list of references only, an attribute reference as a sequence, `count` per type, `number('…')`, `subtract-duration`, indexers per type, `count-duplicates` and `get-duplicates` per type, `value-union`, `value-intersect`, `value-except`, `index-of` and `sequence-equal` with a reference on either side per type, `subsequence` per type, and `format-short`, `format-medium` and `format-long` of a time, a date and time, and a reference, rejected outside templates. `EfxTemplateTranslatorV2Test`, 4: number, date, time and duration function declarations. `EfxRulesTranslatorV2Test`, 4, with fixtures: number, date, time and duration global variables. Each expected XPath was read, and the doubtful ones evaluated with Saxon, before it was written down; the fixtures' expected files were generated, checked, and reproduce an existing fixture byte for byte. 1,706 tests green. JaCoCo: every enter/exit method of the three V2 translators runs except 9 that are not language features: the six `exit*FunctionInvocation` handlers of the expression translator and `exitBooleanFunctionInvocation` of the rules translator (a cast on a function call, removed in phase 3), `exitIncludeDirective` (a guard: both translators expand includes before parsing), and `exitShorthandFieldValueReferenceFromContextField` of the template translator (unreachable, see Observations) |
 | P1.2 Invalid-operation table | done 2026-10-31 | (this commit) | | `EfxInvalidOperationV2Test`: one parameterised test over 236 expressions, in 22 groups each headed by a comment naming the rule its rows break: comparison, `+`, `-`, `*`, `/` and `%`, `and`/`or`/`not()`, `like`, `in`, `is unique in`, the condition and the branches of `if`, the body of `every`/`some`, mixed lists, iterator declarations, a sequence where a single value is required, a node used as a value, `is present` on a non-reference, predicates and indexes, raw values, built-in argument types, arity and result types. Every operator meets each wrong operand primitive at least once, binary rows come in both orders and with literals as well as references. Each row asserts `ParseCancellationException`; all 236 pass today. Left out on purpose: `date + duration` and `date - duration` (open question), and anything scalar-to-sequence promotion makes valid (`sort(1)`, `1 is empty`). A search for invalid expressions accepted today found none: the pop-time checks catch every reference case tried. 1,942 tests green |
-| P1.3 Record which rows are syntax errors today | todo | | | |
+| P1.3 Record which rows are syntax errors today | done 2026-10-31 | (this commit) | | 147 of the 236 rows are syntax errors today, 89 type mismatches; see the section Invalid-operation table |
 | P2.1 `model.signatures` package and catalogue test | todo | | | |
 | P2.2 Leaf rule for references, path versus value | todo | | | |
 | P2.3 Rewire the expression translator to the resolver | todo | | | |
@@ -116,6 +116,42 @@ Digest per corpus file: the first 16 hex digits of the SHA-256 of a template's o
 
 </details>
 
+## Invalid-operation table: how each row fails today
+
+Recorded for P1.3 on 2026-10-31 at the P1.2 commit, by translating every row on its own. Of the 236 rows, 147 are syntax errors today (`ParseCancellationException` itself, raised by the parser) and 89 are compilation errors (all `TypeMismatchException`). In phase 3 the 147 become type errors; in phase 4 every row is tightened to the error it should raise.
+
+The split follows the kind of operand, not the rule: a row is a syntax error when the operand in the wrong place has a type the grammar can see (a literal, a list, a function call or an operator expression), and a type error when it is a field reference or a variable, which the grammar leaves late-bound and the translator checks when it pops it. Nodes, `is present`, raw values and arity are syntax errors in every row.
+
+<details><summary>Syntax-error rows per rule</summary>
+
+| Rule | Rows | Syntax errors today | Type errors today |
+|---|---|---|---|
+| A comparison needs two operands of the same type | 22 | `'a' == 1`, `1 == 'a'`, `'a' < TRUE`, `'a' <= 2020-01-01Z`, `'a' >= P1D`, `1 == TRUE`, `10:00:00Z > 1`, `TRUE == 2020-01-01Z`, `2020-01-01Z == 10:00:00Z`, `P1D > 10:00:00Z` | 12 |
+| + adds two numbers or two durations | 12 | `'a' + 'b'`, `'a' + 1`, `1 + 'a'`, `TRUE + 1`, `2020-01-01Z + 2020-01-02Z`, `10:00:00Z + P1D`, `1 + P1D` | 5 |
+| - subtracts two numbers, two durations, or two dates | 12 | `'a' - 'b'`, `TRUE - FALSE`, `1 - 2020-01-01Z`, `2020-01-01Z - 1`, `11:00:00Z - 10:00:00Z`, `P1D - 2020-01-01Z` | 6 |
+| * multiplies two numbers, or a number and a duration | 9 | `'a' * 2`, `TRUE * 2`, `2020-01-01Z * 2`, `10:00:00Z * 2`, `P1D * P2D` | 4 |
+| / and % divide numbers only | 13 | `'a' / 2`, `TRUE / 2`, `2 / 2020-01-01Z`, `P2D / 2`, `2 / P1D`, `5 % 'a'`, `TRUE % 2`, `2020-01-01Z % 2` | 5 |
+| and, or and not() take booleans | 10 | `1 and TRUE`, `TRUE or 'a'`, `2020-01-01Z or TRUE`, `P1D and BT-00-StartTime`, `not(1)` | 5 |
+| like matches text | 6 | `1 like '[0-9]'`, `TRUE like 'true'`, `10:00:00Z like '10'` | 3 |
+| in looks for a value in a sequence of the same type | 9 | `1 in ['a', 'b']`, `'a' in [1, 2]`, `TRUE in [1, 2]`, `2020-01-01Z not in [10:00:00Z]`, `P1D in [1, 2]` | 4 |
+| is unique in looks for a value in a sequence of the same type | 6 | `'a' is unique in [1, 2]`, `2020-01-01Z is unique in [P1D]`, `TRUE is not unique in [10:00:00Z]` | 3 |
+| The condition of if ... then ... else is a boolean | 5 | `if 1 then 'a' else 'b'`, `if 'a' then 1 else 2`, `if 2020-01-01Z then TRUE else FALSE` | 2 |
+| The two branches of if ... then ... else have the same type | 6 | `if TRUE then 1 else 'a'`, `if TRUE then 2020-01-01Z else P1D` | 4 |
+| The body of every ... satisfies and some ... satisfies is a boolean | 4 | `some number:$n in [1, 2] satisfies $n + 1`, `every text:$x in ['a'] satisfies 'a'` | 2 |
+| The values of a list have one type | 8 | `[1, 'a']`, `['a', TRUE]`, `[2020-01-01Z, 10:00:00Z]`, `[P1D, 1]`, `count([1, 'a'])` | 3 |
+| An iterator variable has the type of the sequence it iterates over | 7 | `for number:$n in ['a'] return $n`, `for text:$t in [1, 2] return $t`, `for indicator:$i in [1] return $i`, `every time:$t in [2020-01-01Z] satisfies TRUE` | 3 |
+| A sequence cannot stand where a single value is required | 15 | `['a', 'b'] == 'a'`, `['a', 'b'] like 'a'`, `[1, 2] in [1, 2, 3]`, `upper-case(['a'])`, `[1, [2, 3]]` | 10 |
+| A node has no value | 5 | `ND-SubNode == 'a'`, `'a' == ND-Root`, `ND-SubNode + 1`, `ND-SubNode in ['a']`, `string-length(ND-SubNode)` | 0 |
+| is present applies to a field or node reference | 6 | `1 is present`, `'a' is present`, `(1 + 1) is present`, `upper-case(BT-00-Text) is present`, `some text:$x in ['a'] satisfies $x is present`, `for text:$x in ['a'] return $x is present` | 0 |
+| A predicate is a boolean or a number, and an index on a sequence is a number | 9 | `BT-00-Text['x']`, `BT-00-Repeatable-Text[2020-01-01Z]`, `BT-00-Repeatable-Text[P1D]`, `ND-SubNode['x'] is present`, `['a', 'b']['x']`, `['a', 'b'][TRUE]`, `[1, 2][2020-01-01Z]` | 2 |
+| A raw value is read from a field | 2 | `ND-SubNode:rawValue`, `'a':rawValue` | 0 |
+| Each argument of a built-in function has the type its parameter declares | 52 | `string-length(1)`, `upper-case(TRUE)`, `substring(1, 2)`, `substring('abc', 'x')`, `contains(1, 2)`, `starts-with('a', 1)`, `concat('a', 1)`, `string-join([1, 2], ',')`, `string-join(['a'], 1)`, `replace('a', 1, 'b')`, `pad-left('a', 'b', 'c')`, `split(1, ',')`, `empty(1)`, `sum(['a', 'b'])`, `min([2020-01-01Z])`, `absolute('a')`, `round(TRUE)`, `year('2020')`, `day(10:00:00Z)`, `hours(2020-01-01Z)`, `years(1)`, `date(1)`, `time(TRUE)`, `day-time-duration(1)`, `indicator('x')`, `number(2020-01-01Z)`, `number(P1D)`, `add-duration(10:00:00Z, P1D)`, `add-duration(2020-01-01Z, 1)`, `subtract-duration(P1D, 2020-01-01Z)`, `index-of(['a', 'b'], 1)`, `sequence-equal(['a'], [1])`, `value-union(['a'], [1])`, `value-intersect([1], [2020-01-01Z])`, `subsequence(['a', 'b'], 'x')`, `subsequence(['a', 'b'], 1, 'x')` | 16 |
+| A built-in function takes the number of arguments it declares | 12 | `upper-case()`, `concat()`, `count()`, `count([1], [2])`, `string-length('a', 'b')`, `contains('a')`, `substring('a')`, `current-date(1)`, `add-duration(2020-01-01Z)`, `not(TRUE, FALSE)`, `value-union(['a'])`, `sequence-equal(['a'], ['b'], ['c'])` | 0 |
+| The result of a built-in function has the type the function declares | 6 | `count(['a']) like 'a'`, `string-length('a') and TRUE`, `upper-case('a') + 1`, `current-date() + 1`, `year(current-date()) == 'a'`, `contains('a', 'b') + 1` | 0 |
+| All rules | 236 | 147 | 89 |
+
+</details>
+
 ## Decisions taken during implementation
 
 - 2026-10-31: P0.5 before P0.4, so that the baseline includes `rules.efx` from the start.
@@ -149,4 +185,4 @@ Answered: 2026-10-31, Yannis approved both pom.xml additions for P0.4.
 ## Session log
 
 - 2026-10-31, design thread: plan approved by Yannis; branches created in both forks; `plan.md` and `progress.md` committed.
-- 2026-10-31, implementing thread, session 1: P0.2 and P0.5 done and pushed; phase 0 review applied; Yannis approved the two pom.xml additions; P0.4 committed; baseline captured; gate 0 passed. Scratch comparison with `develop` (same harness, real SDK): outputs identical, except that `rules.efx` now translates. Phase 1 started: P1.1 and P1.2 done and pushed.
+- 2026-10-31, implementing thread, session 1: P0.2 and P0.5 done and pushed; phase 0 review applied; Yannis approved the two pom.xml additions; P0.4 committed; baseline captured; gate 0 passed. Scratch comparison with `develop` (same harness, real SDK): outputs identical, except that `rules.efx` now translates. Phase 1 started: P1.1, P1.2 and P1.3 done and pushed.
