@@ -205,6 +205,18 @@ class EfxRulesTranslatorV2Test extends EfxTestsBase {
         + " or change the context.", exception.getMessage());
   }
 
+  @Test
+  void testAssert_TextCondition_Throws() {
+    String rules = lines(
+        "---- STAGE 1a ----",
+        "",
+        "WITH ND-Root",
+        "    ASSERT 'a'",
+        "    AS ERROR R-K7P-M2Q",
+        "    FOR BT-00-Text IN 1");
+    assertThrows(TypeMismatchException.class, () -> translator.translateRules(rules));
+  }
+
   //#endregion ASSERT and REPORT tests
 
   //#region WHEN/OTHERWISE tests

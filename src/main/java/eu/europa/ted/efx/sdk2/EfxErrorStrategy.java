@@ -34,29 +34,12 @@ public class EfxErrorStrategy extends DefaultErrorStrategy {
             // Expression entry points
             Map.entry(RULE_singleExpression, "expression"),
             Map.entry(RULE_expression, "expression"),
-            Map.entry(RULE_scalarExpression, "expression"),
             Map.entry(RULE_standardExpressionBlock, "expression block"),
             Map.entry(RULE_expressionBlock, "expression block"),
             Map.entry(RULE_shorthandFieldValueReferenceFromContextField, "field value shorthand"),
 
-            // Typed expressions
-            Map.entry(RULE_booleanExpression, "boolean expression"),
-            Map.entry(RULE_stringExpression, "text expression"),
-            Map.entry(RULE_numericExpression, "numeric expression"),
-            Map.entry(RULE_dateExpression, "date expression"),
-            Map.entry(RULE_timeExpression, "time expression"),
-            Map.entry(RULE_durationExpression, "duration expression"),
-            Map.entry(RULE_sequenceExpression, "sequence expression"),
-
-            // Sequences
-            Map.entry(RULE_stringSequence, "text sequence"),
-            Map.entry(RULE_booleanSequence, "boolean sequence"),
-            Map.entry(RULE_numericSequence, "numeric sequence"),
-            Map.entry(RULE_dateSequence, "date sequence"),
-            Map.entry(RULE_timeSequence, "time sequence"),
-            Map.entry(RULE_durationSequence, "duration sequence"),
-
             // Literals
+            Map.entry(RULE_literal, "literal"),
             Map.entry(RULE_stringLiteral, "text literal"),
             Map.entry(RULE_numericLiteral, "number"),
             Map.entry(RULE_booleanLiteral, "boolean value"),
@@ -65,33 +48,36 @@ public class EfxErrorStrategy extends DefaultErrorStrategy {
             Map.entry(RULE_durationLiteral, "duration"),
 
             // Functions and arguments
+            Map.entry(RULE_builtInFunction, "function call"),
             Map.entry(RULE_functionInvocation, "function call"),
             Map.entry(RULE_argumentList, "argument list"),
             Map.entry(RULE_argument, "argument"),
             Map.entry(RULE_parameterList, "parameter list"),
             Map.entry(RULE_parameterDeclaration, "parameter declaration"),
             Map.entry(RULE_parameterValue, "parameter value"),
+            Map.entry(RULE_typeDeclaration, "type"),
+            Map.entry(RULE_primitiveType, "type"),
 
             // Iterators
             Map.entry(RULE_predicate, "condition"),
             Map.entry(RULE_iteratorList, "iterator list"),
             Map.entry(RULE_iteratorExpression, "iterator"),
-            Map.entry(RULE_indexer, "indexer"),
 
             // References
+            Map.entry(RULE_reference, "reference"),
             Map.entry(RULE_fieldReference, "field reference"),
             Map.entry(RULE_simpleFieldReference, "field reference"),
             Map.entry(RULE_absoluteFieldReference, "field reference"),
             Map.entry(RULE_linkedFieldReference, "field reference"),
-            Map.entry(RULE_fieldReferenceWithPredicate, "field reference"),
             Map.entry(RULE_fieldContext, "field reference"),
             Map.entry(RULE_nodeReference, "node reference"),
             Map.entry(RULE_simpleNodeReference, "node reference"),
             Map.entry(RULE_absoluteNodeReference, "node reference"),
-            Map.entry(RULE_nodeReferenceWithPredicate, "node reference"),
             Map.entry(RULE_nodeContext, "node reference"),
             Map.entry(RULE_codelistReference, "codelist reference"),
             Map.entry(RULE_variableReference, "variable reference"),
+            Map.entry(RULE_fieldProperty, "field property"),
+            Map.entry(RULE_linkedFieldProperty, "field property"),
 
             // Variables
             Map.entry(RULE_variableDeclaration, "variable declaration"),
@@ -125,7 +111,6 @@ public class EfxErrorStrategy extends DefaultErrorStrategy {
             Map.entry(RULE_globalDeclaration, "global declaration"),
             Map.entry(RULE_functionDeclaration, "function declaration"),
             Map.entry(RULE_dictionaryDeclaration, "dictionary declaration"),
-            Map.entry(RULE_dictionaryLookup, "dictionary lookup"),
 
             // Rules (validation)
             Map.entry(RULE_rulesFile, "rules file"),

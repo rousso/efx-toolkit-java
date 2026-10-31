@@ -128,6 +128,23 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   }
 
   @Test
+  void testPresenceCondition_WithIndexedNodeReference() {
+    testExpressionTranslationWithContext("(SubNode)[1]", "ND-Root", "ND-SubNode[1] is present");
+  }
+
+  @Test
+  void testPresenceCondition_WithRawValue() {
+    testExpressionTranslationWithContext("PathNode/TextField/text()", "ND-Root",
+        "BT-00-Text:rawValue is present");
+  }
+
+  @Test
+  void testPresenceCondition_WithNodeContextVariable() {
+    testExpressionTranslationWithContext("some $c in RepeatableNode satisfies $c", "ND-Root",
+        "some context:$c in ND-RepeatableNode satisfies $c is present");
+  }
+
+  @Test
   void testUniqueValueCondition() {
     testExpressionTranslationWithContext(
         "count(for $n in PathNode/TextField/normalize-space(text()), $x in /*/PathNode/TextField/normalize-space(text())[. = $n] return $x) = 1",
@@ -568,7 +585,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   void testNegativeDuration_ViaMultiplicationWithField() {
     assertEquals(
         "(-3 * (2 * (for $F in PathNode/DurationField return (if ($F/@unitCode='WEEK') then xs:dayTimeDuration(concat('P', $F/number() * 7, 'D')) else if ($F/@unitCode='DAY') then xs:dayTimeDuration(concat('P', $F/number(), 'D')) else if ($F/@unitCode='YEAR') then xs:yearMonthDuration(concat('P', $F/number(), 'Y')) else if ($F/@unitCode='MONTH') then xs:yearMonthDuration(concat('P', $F/number(), 'M')) else ()))))",
-        translateExpressionWithContext("ND-Root", "2 * (duration)BT-00-Duration * -3"));
+        translateExpressionWithContext("ND-Root", "2 * BT-00-Duration * -3"));
   }
 
   @Test
@@ -709,10 +726,10 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   }
 
   @Test
-  void testDurationMultiplication_LateBoundDurationTimesCastNumber() {
+  void testDurationMultiplication_LateBoundDurationTimesLateBoundNumber() {
     testExpressionTranslationWithContext(
         "(PathNode/NumberField/number() * (for $F in PathNode/DurationField return (if ($F/@unitCode='WEEK') then xs:dayTimeDuration(concat('P', $F/number() * 7, 'D')) else if ($F/@unitCode='DAY') then xs:dayTimeDuration(concat('P', $F/number(), 'D')) else if ($F/@unitCode='YEAR') then xs:yearMonthDuration(concat('P', $F/number(), 'Y')) else if ($F/@unitCode='MONTH') then xs:yearMonthDuration(concat('P', $F/number(), 'M')) else ())))",
-        "ND-Root", "BT-00-Duration * (number)BT-00-Number");
+        "ND-Root", "BT-00-Duration * BT-00-Number");
   }
 
   @Test
@@ -1665,6 +1682,18 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   }
 
   @Test
+  void testAttributeReference_AfterIndexer() {
+    testExpressionTranslationWithContext("(PathNode/CodeField)[1]/@listName", "ND-Root",
+        "BT-00-Code[1]/@listName");
+  }
+
+  @Test
+  void testAttributeReference_WithIndexer() {
+    testExpressionTranslationWithContext("(PathNode/CodeField/@listName)[1]", "ND-Root",
+        "BT-00-Code/@listName[1]");
+  }
+
+  @Test
   void testFieldReferenceWithPredicate() {
     testExpressionTranslationWithContext("PathNode/IndicatorField['a' = 'a']", "ND-Root",
         "BT-00-Indicator['a' == 'a']");
@@ -1723,6 +1752,26 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   void testFieldReferenceWithNodeContextOverride_WithPredicate() {
     testExpressionTranslationWithContext("../..[PathNode/IndicatorField = true()]/PathNode/IntegerField/number()", "BT-00-Text",
         "ND-Root[BT-00-Indicator == TRUE]::integerField");
+  }
+
+  @Test
+  void testFieldReferenceWithFieldAndNodeContextOverrides() {
+    // Each override is read in the context of the one before it
+    testExpressionTranslationWithContext(
+        "PathNode/TextField/../../SubNode/SubTextField/normalize-space(text())", "ND-Root",
+        "BT-00-Text::ND-SubNode::BT-01-SubNode-Text");
+  }
+
+  @Test
+  void testNodeReferenceWithNodeContextOverride_InCount() {
+    testExpressionTranslationWithContext("count(RepeatableNode/NonRepeatableSubNode)", "ND-Root",
+        "count(ND-RepeatableNode::ND-NonRepeatableSubNode)");
+  }
+
+  @Test
+  void testNodeReferenceWithNodeContextOverride_InPresenceCondition() {
+    testExpressionTranslationWithContext("RepeatableNode/NonRepeatableSubNode", "ND-Root",
+        "ND-RepeatableNode::ND-NonRepeatableSubNode is present");
   }
 
   @Test
@@ -2334,6 +2383,24 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   void testCountFunction_UsingFieldReference() {
     testExpressionTranslationWithContext("count(PathNode/TextField/normalize-space(text()))", "ND-Root",
         "count(BT-00-Text)");
+  }
+
+  @Test
+  void testCountFunction_UsingRepeatableNodeReference() {
+    testExpressionTranslationWithContext("count(RepeatableNode)", "ND-Root",
+        "count(ND-RepeatableNode)");
+  }
+
+  @Test
+  void testCountFunction_UsingNodeReferenceWithPredicate() {
+    testExpressionTranslationWithContext(
+        "count(RepeatableNode[TextField/normalize-space(text()) = 'a'])", "ND-Root",
+        "count(ND-RepeatableNode[BT-00-Text-In-Repeatable-Node == 'a'])");
+  }
+
+  @Test
+  void testCountFunction_UsingNonRepeatableNodeReference() {
+    testExpressionTranslationWithContext("count(SubNode)", "ND-Root", "count(ND-SubNode)");
   }
 
   @Test
@@ -4538,7 +4605,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   @Test
   void testIndexer_WithNonRepeatableField() {
     // Indexing a non-repeatable field - currently allowed (semantically odd but syntactically valid)
-    testExpressionTranslationWithContext("(PathNode/TextField/normalize-space(text()))[1]", "ND-Root",
+    testExpressionTranslationWithContext("(PathNode/TextField)[1]/normalize-space(text())", "ND-Root",
         "BT-00-Text[1]");
   }
 
@@ -4546,7 +4613,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   void testIndexer_WithNonRepeatableFieldAndPredicate() {
     // Indexing a non-repeatable field with predicate
     testExpressionTranslationWithContext(
-        "(PathNode/TextField[./normalize-space(text()) = 'hello']/normalize-space(text()))[1]", "ND-Root",
+        "(PathNode/TextField[./normalize-space(text()) = 'hello'])[1]/normalize-space(text())", "ND-Root",
         "BT-00-Text[BT-00-Text == 'hello'][1]");
   }
 
@@ -4554,7 +4621,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   void testIndexer_WithRepeatableField() {
     // Indexing a repeatable field should work - BT-00-Repeatable-Text is repeatable
     // No explicit cast - preprocessor inserts (text*) making it stringSequence[indexer]
-    testExpressionTranslationWithContext("(PathNode/RepeatableTextField/normalize-space(text()))[1]", "ND-Root",
+    testExpressionTranslationWithContext("(PathNode/RepeatableTextField)[1]/normalize-space(text())", "ND-Root",
         "BT-00-Repeatable-Text[1]");
   }
 
@@ -4563,7 +4630,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     // Indexing a repeatable field with predicate should work
     // No explicit cast - preprocessor handles typing
     testExpressionTranslationWithContext(
-        "(PathNode/RepeatableTextField[(./normalize-space(text()))[1] = 'hello']/normalize-space(text()))[1]", "ND-Root",
+        "(PathNode/RepeatableTextField[(.)[1]/normalize-space(text()) = 'hello'])[1]/normalize-space(text())", "ND-Root",
         "BT-00-Repeatable-Text[BT-00-Repeatable-Text[1] == 'hello'][1]");
   }
 
@@ -5046,7 +5113,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     // An indexed context is kept for the same reason as a predicated one: without a first
     // SubLevelTextField there is no starting point.
     testExpressionTranslationWithContext(
-        "../ChildNode/SubLevelTextField[1]/../../TextField/normalize-space(text())",
+        "(../ChildNode/SubLevelTextField)[1]/../../TextField/normalize-space(text())",
         "BT-00-Code",
         "BT-01-SubLevel-Text[1]::BT-00-Text");
   }
@@ -5126,7 +5193,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   @Test
   void testFieldContextOverride_WithIndexer_InSequenceContext() {
     testExpressionTranslationWithContext(
-        "'test' = ../ChildNode/SubLevelTextField[1]/../../TextField/normalize-space(text())",
+        "'test' = (../ChildNode/SubLevelTextField)[1]/../../TextField/normalize-space(text())",
         "BT-00-Code",
         "'test' in BT-01-SubLevel-Text[1]::BT-00-Text");
   }
@@ -5135,7 +5202,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   @Test
   void testFieldContextOverride_WithIndexer_InPresenceCondition() {
     testExpressionTranslationWithContext(
-        "../ChildNode/SubLevelTextField[1]/../../TextField",
+        "(../ChildNode/SubLevelTextField)[1]/../../TextField",
         "BT-00-Code",
         "BT-01-SubLevel-Text[1]::BT-00-Text is present");
   }
@@ -5144,7 +5211,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   @Test
   void testFieldContextOverride_WithIndexer_InAttributeContext() {
     testExpressionTranslationWithContext(
-        "../ChildNode/SubLevelTextField[1]/../../CodeField/@listName",
+        "(../ChildNode/SubLevelTextField)[1]/../../CodeField/@listName",
         "BT-00-Code",
         "BT-01-SubLevel-Text[1]::BT-00-Code/@listName");
   }
@@ -5284,6 +5351,18 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
         "for context:$n in ND-SubNode return $n::ND-Root::BT-00-Code/@listName");
   }
 
+  @Test
+  void testVariableContextOverride_OfNodeReference_InCount() {
+    testExpressionTranslationWithContext("for $n in SubNode return count($n/..)", "ND-Root",
+        "for context:$n in ND-SubNode return count($n::ND-Root)");
+  }
+
+  @Test
+  void testVariableContextOverride_OfNodeReference_InPresenceCondition() {
+    testExpressionTranslationWithContext("every $n in SubNode satisfies $n/..", "ND-Root",
+        "every context:$n in ND-SubNode satisfies $n::ND-Root is present");
+  }
+
   // #endregion: Context override combinations
 
   // #region: Indexer interactions
@@ -5292,7 +5371,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   void testIndexer_MultilingualField_InScalarContext() {
     // Indexer narrows multilingual field to a single element, allowing scalar use
     testExpressionTranslationWithContext(
-        "(PathNode/TextMultilingualField/normalize-space(text()))[1] = 'test'",
+        "(PathNode/TextMultilingualField)[1]/normalize-space(text()) = 'test'",
         "ND-Root",
         "BT-00-Text-Multilingual[1] == 'test'");
   }
@@ -5304,7 +5383,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   @Test
   void testIndexer_MultilingualFieldWithPredicate_InScalarContext() {
     testExpressionTranslationWithContext(
-        "(PathNode/TextMultilingualField[./@languageID = 'eng']/normalize-space(text()))[1] = 'test'",
+        "(PathNode/TextMultilingualField[./@languageID = 'eng'])[1]/normalize-space(text()) = 'test'",
         "ND-Root",
         "BT-00-Text-Multilingual[BT-00-Text-Multilingual/@languageID == 'eng'][1] == 'test'");
   }
@@ -5321,9 +5400,9 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testFieldRawValue_WithIndexer() {
-    // Indexer applies at node level, then rawValue appends /text()
+    // Indexer selects from the whole sequence, then rawValue appends /text()
     testExpressionTranslationWithContext(
-        "PathNode/RepeatableTextField[1]/text() = 'test'",
+        "(PathNode/RepeatableTextField)[1]/text() = 'test'",
         "ND-Root",
         "BT-00-Repeatable-Text[1]:rawValue == 'test'");
   }
@@ -5333,7 +5412,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   void testFieldRawValue_MultilingualWithIndexer() {
     // Indexer should narrow multilingual to scalar, then rawValue appends /text()
     testExpressionTranslationWithContext(
-        "PathNode/TextMultilingualField[1]/text() = 'test'",
+        "(PathNode/TextMultilingualField)[1]/text() = 'test'",
         "ND-Root",
         "BT-00-Text-Multilingual[1]:rawValue == 'test'");
   }
@@ -5350,16 +5429,16 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   void testFieldRawValue_FieldInRepeatableNode_WithIndexer() {
     // Indexer resolves the repeatability, rawValue appends /text()
     testExpressionTranslationWithContext(
-        "RepeatableNode/TextField[1]/text() = 'test'",
+        "(RepeatableNode/TextField)[1]/text() = 'test'",
         "ND-Root",
         "BT-00-Text-In-Repeatable-Node[1]:rawValue == 'test'");
   }
 
   @Test
   void testFieldRawValue_WithPredicateAndIndexer() {
-    // Predicate + indexer at node level, then rawValue appends /text()
+    // Predicate, then indexer on the whole filtered sequence, then rawValue appends /text()
     testExpressionTranslationWithContext(
-        "PathNode/RepeatableTextField['a' = 'a'][1]/text() = 'test'",
+        "(PathNode/RepeatableTextField['a' = 'a'])[1]/text() = 'test'",
         "ND-Root",
         "BT-00-Repeatable-Text['a' == 'a'][1]:rawValue == 'test'");
   }
@@ -5367,7 +5446,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   @Test
   void testFieldRawValue_WithIndexer_InSequenceContext() {
     testExpressionTranslationWithContext(
-        "'test' = PathNode/RepeatableTextField[1]/text()",
+        "'test' = (PathNode/RepeatableTextField)[1]/text()",
         "ND-Root",
         "'test' in BT-00-Repeatable-Text[1]:rawValue");
   }
@@ -5375,7 +5454,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   @Test
   void testFieldRawValue_WithPredicateAndIndexer_InSequenceContext() {
     testExpressionTranslationWithContext(
-        "'test' = PathNode/RepeatableTextField['a' = 'a'][1]/text()",
+        "'test' = (PathNode/RepeatableTextField['a' = 'a'])[1]/text()",
         "ND-Root",
         "'test' in BT-00-Repeatable-Text['a' == 'a'][1]:rawValue");
   }
@@ -5407,7 +5486,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   @Test
   void testFieldRawValue_AbsoluteReferenceWithIndexer() {
     testExpressionTranslationWithContext(
-        "/*/PathNode/RepeatableTextField[1]/text() = 'test'",
+        "(/*/PathNode/RepeatableTextField)[1]/text() = 'test'",
         "BT-00-Repeatable-Text",
         "/BT-00-Repeatable-Text[1]:rawValue == 'test'");
   }
@@ -5415,7 +5494,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   @Test
   void testFieldRawValue_AbsoluteReferenceWithIndexer_InSequenceContext() {
     testExpressionTranslationWithContext(
-        "'test' = /*/PathNode/RepeatableTextField[1]/text()",
+        "'test' = (/*/PathNode/RepeatableTextField)[1]/text()",
         "BT-00-Repeatable-Text",
         "'test' in /BT-00-Repeatable-Text[1]:rawValue");
   }
@@ -5426,9 +5505,9 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testContextIterator_WithIndexer() {
-    // Indexer applies at node level in context iterator
+    // Indexer selects from the whole sequence in context iterator
     testExpressionTranslationWithContext(
-        "for $x in PathNode/RepeatableTextField[1] return $x = 'test'",
+        "for $x in (PathNode/RepeatableTextField)[1] return $x = 'test'",
         "ND-Root",
         "for context:$x in BT-00-Repeatable-Text[1] return $x == 'test'");
   }
@@ -5436,9 +5515,18 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   @Test
   void testContextIterator_WithPredicateAndIndexer() {
     testExpressionTranslationWithContext(
-        "for $x in PathNode/TextField['a' = 'a'][1] return $x = 'test'",
+        "for $x in (PathNode/TextField['a' = 'a'])[1] return $x = 'test'",
         "ND-Root",
         "for context:$x in BT-00-Text['a' == 'a'][1] return $x == 'test'");
+  }
+
+  @Test
+  void testContextIterator_WithIndexerOnTheVariable() {
+    // The variable holds one value, a sequence of one
+    testExpressionTranslationWithContext(
+        "for $x in PathNode/RepeatableTextField return ($x)[1] = 'test'",
+        "ND-Root",
+        "for context:$x in BT-00-Repeatable-Text return $x[1] == 'test'");
   }
 
   @Test
@@ -5460,7 +5548,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   @Test
   void testContextIterator_AbsoluteReferenceWithIndexer() {
     testExpressionTranslationWithContext(
-        "for $x in /*/PathNode/RepeatableTextField[1] return $x = 'test'",
+        "for $x in (/*/PathNode/RepeatableTextField)[1] return $x = 'test'",
         "BT-00-Repeatable-Text",
         "for context:$x in /BT-00-Repeatable-Text[1] return $x == 'test'");
   }
@@ -5575,7 +5663,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   @Test
   void testFieldRawValue_MultilingualWithIndexer_InSequenceContext() {
     testExpressionTranslationWithContext(
-        "'test' = PathNode/TextMultilingualField[1]/text()",
+        "'test' = (PathNode/TextMultilingualField)[1]/text()",
         "ND-Root",
         "'test' in BT-00-Text-Multilingual[1]:rawValue");
   }
@@ -5973,27 +6061,21 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
 
 
   /**
-   * A selector's indexer is a node-level indexer, like every other {@code fieldContext} in the
-   * language: it selects the nth occurrence within each parent, not the nth item of the sequence
-   * overall. This is why an indexed selector differs from an indexed expression, where the index
-   * applies to the sequence of values - the one case where a selector is not simply the expression
-   * without its value step.
-   *
-   * <p>Do not "correct" this into a parenthesised form. Indexing at node level is deliberate and is
-   * shared with {@code :rawValue}, context iterators and context overrides; changing it here alone
-   * would make the selector the odd one out, and changing it everywhere would redefine the language.
+   * A selector's indexer, like every indexer in the language, selects the nth item of the whole
+   * sequence the path selects, not the nth occurrence within each parent. An indexed selector is
+   * therefore the indexed expression without its value step.
    */
   @Test
-  void testSelector_IndexerAppliesAtNodeLevel() {
-    testExpressionTranslation("PathNode/TextField[1]", "WITH ND-Root SELECT BT-00-Text[1]");
-    testExpressionTranslation("(PathNode/TextField/normalize-space(text()))[1]",
+  void testSelector_IndexerSelectsFromWholeSequence() {
+    testExpressionTranslation("(PathNode/TextField)[1]", "WITH ND-Root SELECT BT-00-Text[1]");
+    testExpressionTranslation("(PathNode/TextField)[1]/normalize-space(text())",
         "WITH ND-Root COMPUTE BT-00-Text[1]");
   }
 
   @Test
   void testSelector_IndexerAfterPredicate() {
     testExpressionTranslation(
-        "/*/PathNode/TextField[../CodeField/normalize-space(text()) = 'x'][1]",
+        "(/*/PathNode/TextField[../CodeField/normalize-space(text()) = 'x'])[1]",
         "WITH ND-Root SELECT /BT-00-Text[BT-00-Code == 'x'][1]");
   }
 

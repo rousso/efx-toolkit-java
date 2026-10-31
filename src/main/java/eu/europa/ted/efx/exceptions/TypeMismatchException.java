@@ -18,6 +18,7 @@ import org.antlr.v4.runtime.ParserRuleContext;
 import eu.europa.ted.efx.model.ParsedEntity;
 import eu.europa.ted.efx.model.expressions.Expression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
+import eu.europa.ted.efx.model.types.EfxDataTypeAssociation;
 
 /**
  * Exception thrown when type mismatches are detected in EFX templates.
@@ -60,14 +61,23 @@ public class TypeMismatchException extends EfxCompilationException {
             Class<? extends ParsedEntity> actualType) {
         if (TypedExpression.class.isAssignableFrom(actualType)
                 && TypedExpression.class.isAssignableFrom(expectedType)) {
-            var actual = actualType.asSubclass(TypedExpression.class);
-            var expected = expectedType.asSubclass(TypedExpression.class);
             return new TypeMismatchException(ErrorCode.CANNOT_CONVERT, ctx, CANNOT_CONVERT,
-                    TypedExpression.getEfxDataType(expected).getSimpleName(),
-                    TypedExpression.getEfxDataType(actual).getSimpleName());
+                    nameOf(expectedType), nameOf(actualType));
         }
         return new TypeMismatchException(ErrorCode.CANNOT_CONVERT, ctx, CANNOT_CONVERT,
                 expectedType.getSimpleName(), actualType.getSimpleName());
+    }
+
+    /**
+     * Names the class of an expression by the EFX data type it is associated with. A class that
+     * stands for several data types, such as a path or a sequence of any primitive, has no
+     * association, and is named by its own name.
+     */
+    private static String nameOf(Class<? extends ParsedEntity> expressionType) {
+        final EfxDataTypeAssociation association =
+                expressionType.getAnnotation(EfxDataTypeAssociation.class);
+        return association != null ? association.dataType().getSimpleName()
+                : expressionType.getSimpleName();
     }
 
     public static TypeMismatchException cannotCompare(ParserRuleContext ctx, Expression left, Expression right) {
