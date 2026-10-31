@@ -2132,10 +2132,11 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
   }
 
   /**
-   * Resolves and pushes a variable reference, applying cardinality checks when inside a
-   * late-bound expression. Context variables (bound by {@code for context:}) are always scalar;
-   * node context variables cannot be used as values. Regular variables have explicit cardinality
-   * from their declaration.
+   * Resolves and pushes a variable reference. Inside a late-bound expression, a sequence where a
+   * single value is required is an error, and a single value where a sequence is required is
+   * promoted to one. Context variables (bound by {@code for context:}) are always scalar; node
+   * context variables cannot be used as values. Regular variables have explicit cardinality from
+   * their declaration.
    *
    * @param ctx the variable reference context
    */
@@ -2147,27 +2148,14 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
       if (variableContext.isNodeContext()) {
         throw TypeMismatchException.nodeContextUsedAsValue(ctx, variableName, variableContext.symbol());
       }
-      if (this.currentCardinalityResolutionContext() == CardinalityResolutionContext.RESOLVE_SEQUENCE) {
-        throw TypeMismatchException.identifierIsScalar(ctx, variableName);
-      }
     } else {
       Optional<TypedExpression> refExpr = this.stack.getParameter(variableName)
           .or(() -> this.stack.getVariable(variableName).map(v -> v.referenceExpression));
       boolean isSequence = EfxTypeLattice.isSequence(
           refExpr.orElseThrow(() -> InvalidIdentifierException.undeclaredIdentifier(ctx, variableName)).getDataType());
-      switch (this.currentCardinalityResolutionContext()) {
-        case RESOLVE_SEQUENCE:
-          if (!isSequence) {
-            throw TypeMismatchException.identifierIsScalar(ctx, variableName);
-          }
-          break;
-        case RESOLVE_SCALAR:
-          if (isSequence) {
-            throw TypeMismatchException.identifierIsSequence(ctx, variableName);
-          }
-          break;
-        default:
-          break;
+      if (isSequence
+          && this.currentCardinalityResolutionContext() == CardinalityResolutionContext.RESOLVE_SCALAR) {
+        throw TypeMismatchException.identifierIsSequence(ctx, variableName);
       }
     }
 
@@ -2373,10 +2361,10 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
   }
 
   /**
-   * Resolves and pushes a function invocation, applying cardinality checks when inside a
-   * late-bound expression. Scalar functions in sequence context (or vice versa) raise errors.
-   * The appropriate expression type map (scalar or sequence) is selected automatically based
-   * on the function's declared return cardinality.
+   * Resolves and pushes a function invocation. Inside a late-bound expression, a sequence function
+   * where a single value is required is an error, and a scalar function where a sequence is
+   * required is promoted to one. The appropriate expression type map (scalar or sequence) is
+   * selected automatically based on the function's declared return cardinality.
    *
    * @param ctx the function invocation context
    */
@@ -2386,19 +2374,9 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
     String functionName = ctx.functionName.getText();
     boolean isSequence = EfxTypeLattice.isSequence(function.dataType);
 
-    switch (this.currentCardinalityResolutionContext()) {
-      case RESOLVE_SEQUENCE:
-        if (!isSequence) {
-          throw TypeMismatchException.identifierIsScalar(ctx, functionName);
-        }
-        break;
-      case RESOLVE_SCALAR:
-        if (isSequence) {
-          throw TypeMismatchException.identifierIsSequence(ctx, functionName);
-        }
-        break;
-      default:
-        break;
+    if (isSequence
+        && this.currentCardinalityResolutionContext() == CardinalityResolutionContext.RESOLVE_SCALAR) {
+      throw TypeMismatchException.identifierIsSequence(ctx, functionName);
     }
 
     var baseType = EfxTypeLattice.toPrimitive(function.dataType);

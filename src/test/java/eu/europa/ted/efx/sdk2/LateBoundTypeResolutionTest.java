@@ -124,12 +124,19 @@ class LateBoundTypeResolutionTest extends EfxTestsBase {
   }
 
   @Test
-  void testResolveFunctionInvocation_Sequence_ScalarFunction_Throws() {
-    TypeMismatchException ex = assertThrows(TypeMismatchException.class,
-        () -> translateTemplate(lines(
+  void testResolveFunctionInvocation_Sequence_ScalarFunction_IsPromoted() {
+    // Promotion: a scalar function where a sequence is required gives a sequence of one value.
+    assertEquals(
+        lines(
+            "GLOBALS:",
+            "string:f() -> { 'hi' }",
+            "TEMPLATES:",
+            "let body01() -> { text('count: ')eval(for $item in count(udf:f()) return format-number($item, '# ##0,#########')) }",
+            "MAIN:",
+            "for-each(/*).call(body01())"),
+        translateTemplate(lines(
             "let text:?f() = 'hi';",
             "display count: ${count(?f())};")));
-    assertEquals(TypeMismatchException.ErrorCode.IDENTIFIER_IS_SCALAR, ex.getErrorCode());
   }
 
   @Test
@@ -184,11 +191,10 @@ class LateBoundTypeResolutionTest extends EfxTestsBase {
   }
 
   @Test
-  void testResolveContextVariable_Sequence_Throws() {
-    TypeMismatchException ex = assertThrows(TypeMismatchException.class,
-        () -> translateExpressionWithContext("ND-Root",
-            "for context:$f in BT-00-Repeatable-Text return 'test' in $f"));
-    assertEquals(TypeMismatchException.ErrorCode.IDENTIFIER_IS_SCALAR, ex.getErrorCode());
+  void testResolveContextVariable_Sequence_IsPromoted() {
+    // Promotion: a context variable where a sequence is required gives a sequence of one value.
+    testExpressionTranslationWithContext("for $f in PathNode/RepeatableTextField return 'test' = $f", "ND-Root",
+        "for context:$f in BT-00-Repeatable-Text return 'test' in $f");
   }
 
   @Test
@@ -220,12 +226,19 @@ class LateBoundTypeResolutionTest extends EfxTestsBase {
   }
 
   @Test
-  void testResolveRegularVariable_Sequence_ScalarVariable_Throws() {
-    TypeMismatchException ex = assertThrows(TypeMismatchException.class,
-        () -> translateTemplate(lines(
+  void testResolveRegularVariable_Sequence_ScalarVariable_IsPromoted() {
+    // Promotion: a scalar variable where a sequence is required gives a sequence of one value.
+    assertEquals(
+        lines(
+            "GLOBALS:",
+            "string:x='a'",
+            "TEMPLATES:",
+            "let body01() -> { text('count: ')eval(for $item in count($x) return format-number($item, '# ##0,#########')) }",
+            "MAIN:",
+            "for-each(/*).call(body01())"),
+        translateTemplate(lines(
             "let text:$x = 'a';",
             "display count: ${count($x)};")));
-    assertEquals(TypeMismatchException.ErrorCode.IDENTIFIER_IS_SCALAR, ex.getErrorCode());
   }
 
   @Test
