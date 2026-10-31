@@ -251,7 +251,7 @@ abstract class Origin<E extends TypedExpression> {
 
   /**
    * A node. It has no value: where a value is required, its path is given as it is, and the
-   * built-in or the composite that requires the value rejects it.
+   * built-in, the composite or the translation that requires the value rejects it.
    */
   static final class NodeOrigin extends PathOrigin {
 
