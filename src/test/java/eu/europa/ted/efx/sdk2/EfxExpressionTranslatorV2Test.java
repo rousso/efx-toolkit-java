@@ -4734,6 +4734,22 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     assertEquals(InvalidUsageException.ErrorCode.INDEX_READS_CONTEXT, exception.getErrorCode());
   }
 
+  @Test
+  void testIndexer_OnListReadingAnAbsoluteField_Throws() {
+    // The target language reads the index for each value, which has no root to start from
+    InvalidUsageException exception = assertThrows(InvalidUsageException.class,
+        () -> translateExpressionWithContext("ND-Root", "[1, 2, 3][/BT-00-Number]"));
+    assertEquals(InvalidUsageException.ErrorCode.INDEX_READS_CONTEXT, exception.getErrorCode());
+  }
+
+  @Test
+  void testIndexer_OnListWithFieldOfContextVariable() {
+    testExpressionTranslationWithContext(
+        "for $c in . return (1,2,3)[$c/PathNode/NumberField/number()]",
+        "ND-Root",
+        "for context:$c in ND-Root return [1, 2, 3][$c::BT-00-Number]");
+  }
+
   // #endregion: Indexers
 
   // #region: Scalar/Sequence Validation --------------------------------------
@@ -5615,6 +5631,16 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
         "for $x in (/*/PathNode/RepeatableTextField)[1] return $x = 'test'",
         "BT-00-Repeatable-Text",
         "for context:$x in /BT-00-Repeatable-Text[1] return $x == 'test'");
+  }
+
+  @Test
+  void testContextIterator_NameReusedByValueIterator() {
+    // The context variable of the first iteration is out of scope in the second, where the name
+    // is a text variable
+    testExpressionTranslationWithContext(
+        "(every $x in PathNode/RepeatableTextField satisfies $x = 'a') and (every $x in PathNode/RepeatableTextField/normalize-space(text()) satisfies $x = 'b')",
+        "ND-Root",
+        "(every context:$x in BT-00-Repeatable-Text satisfies $x == 'a') and (every text:$x in BT-00-Repeatable-Text satisfies $x == 'b')");
   }
 
   // #endregion: Context iterator with structural variations

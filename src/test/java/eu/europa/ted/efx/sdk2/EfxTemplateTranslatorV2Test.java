@@ -2428,6 +2428,22 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
   }
 
   @Test
+  void testContextDeclarationBlock_ContextVariableNameReusedOnALaterLine() {
+    // The context variable of the first line is out of scope on the second, where the name is a
+    // text variable
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01(string:ctx) -> { text('Context: ')eval($ctx) }",
+            "let body02(string:ctx) -> { text('Text: ')eval($ctx) }",
+            "MAIN:",
+            "for-each(/*/PathNode/TextField).call(body01(string:ctx=.))",
+            "for-each(/*/PathNode/TextField).call(body02(string:ctx='a'))"),
+        translateTemplate(lines("{context:$ctx = BT-00-Text} Context: ${$ctx}",
+            "{BT-00-Text, text:$ctx = 'a'} Text: ${$ctx}")));
+  }
+
+  @Test
   void testContextDeclarationBlock_ContextNodeVariable() {
     assertEquals(
         lines(
@@ -2784,6 +2800,18 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
         "let text:$x = 1;",
         "display ${$x};");
     assertThrows(TypeMismatchException.class, () -> translateTemplate(template));
+  }
+
+  @Test
+  void testVariableDeclaration_IndexOnListReadingAField_Throws() {
+    // No context is declared for a global variable: the field is read from the root, which the
+    // target language would do for each value of the list
+    var template = lines(
+        "let number:$n = [1, 2][BT-00-Number];",
+        "display ${$n};");
+    InvalidUsageException exception =
+        assertThrows(InvalidUsageException.class, () -> translateTemplate(template));
+    assertEquals(InvalidUsageException.ErrorCode.INDEX_READS_CONTEXT, exception.getErrorCode());
   }
 
   // #endregion TypeMismatchException ------------------------------------------

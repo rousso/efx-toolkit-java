@@ -218,8 +218,7 @@ abstract class TranslatorListener extends EfxBaseListener {
   void declareContext(final Context context, final Variable contextVariable) {
     this.efxContext.push(context);
     if (contextVariable != null) {
-      this.stack.declareIdentifier(contextVariable);
-      this.efxContext.declareContextVariable(contextVariable.name, context);
+      this.expressions.declareContextVariable(contextVariable, context);
     }
   }
 
