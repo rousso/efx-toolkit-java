@@ -332,6 +332,42 @@ class EfxRulesTranslatorV2Test extends EfxTestsBase {
     assertAllOutputs(testName, outputFiles);
   }
 
+  @Test
+  void testVariable_Numeric_GlobalLevel() throws IOException {
+    String testName = "testVariable_Numeric_GlobalLevel";
+    Map<String, String> outputFiles = translator.translateRules(readInput(testName));
+
+    assertEquals(7, outputFiles.size(), "Should generate exactly 7 files");
+    assertAllOutputs(testName, outputFiles);
+  }
+
+  @Test
+  void testVariable_Date_GlobalLevel() throws IOException {
+    String testName = "testVariable_Date_GlobalLevel";
+    Map<String, String> outputFiles = translator.translateRules(readInput(testName));
+
+    assertEquals(7, outputFiles.size(), "Should generate exactly 7 files");
+    assertAllOutputs(testName, outputFiles);
+  }
+
+  @Test
+  void testVariable_Time_GlobalLevel() throws IOException {
+    String testName = "testVariable_Time_GlobalLevel";
+    Map<String, String> outputFiles = translator.translateRules(readInput(testName));
+
+    assertEquals(7, outputFiles.size(), "Should generate exactly 7 files");
+    assertAllOutputs(testName, outputFiles);
+  }
+
+  @Test
+  void testVariable_Duration_GlobalLevel() throws IOException {
+    String testName = "testVariable_Duration_GlobalLevel";
+    Map<String, String> outputFiles = translator.translateRules(readInput(testName));
+
+    assertEquals(7, outputFiles.size(), "Should generate exactly 7 files");
+    assertAllOutputs(testName, outputFiles);
+  }
+
   //#endregion Variable tests (output verification)
 
   //#region Sequence variable tests
