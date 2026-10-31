@@ -13,7 +13,7 @@ Single record of the work described in `plan.md`. Update it at the end of every 
 | P0.2 Build environment | done 2026-10-31 | (this commit) | | Environment `rousso`: Java 21 compiling for 11, Maven 3.9.11. SDK branch installed locally as 2.0.0-SNAPSHOT; `eforms-core-java` 1.10.0-SNAPSHOT and `eforms-sdk` 1.16.0-SNAPSHOT resolved from central.sonatype.com. `mvn -nsu test`: 1,550 tests green, the unpacked `Efx.g4` identical to the SDK branch. `-nsu` keeps Maven from replacing the local 2.0.0-SNAPSHOT with the published one |
 | P0.3 Add `plan.md` and `progress.md` | done 2026-10-31 | (this commit) | 0c66c10 | |
 | P0.4 Opt-in corpus test and baseline | todo | | | Baseline captured after P0.5 so that it includes `rules.efx` |
-| P0.5 Fix the `rules.efx` failure (symbol resolver) and add the test | todo | | | |
+| P0.5 Fix the `rules.efx` failure (symbol resolver) and add the test | done 2026-10-31 | (this commit) | | `XPathSymbolResolver.isFieldRepeatableFromContext(SdkField, SdkField)` now answers "single value" first when the field is the context, before the repeatable and multilingual checks. Two tests: `testMultilingualTextFieldReference_FromOwnContext_InScalarContext` (translation) and `fieldToField_multilingualFieldItself_shouldReturnScalarPath` (resolver contract, runs in both resolver test classes); both failed before the fix. 1,553 tests green. Real SDK, compared with `develop`: the 52 templates and the 3 stage files byte-identical, `rules.efx` now translates (575 outputs) where `develop` fails at line 6522:9 |
 | P1.1 Translation tests for untested features | todo | | | |
 | P1.2 Invalid-operation table | todo | | | |
 | P1.3 Record which rows are syntax errors today | todo | | | |

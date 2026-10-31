@@ -582,10 +582,15 @@ public abstract class XPathSymbolResolver implements SymbolResolver {
   }
 
   private boolean isFieldRepeatableFromContext(final SdkField sdkField, final SdkField context) {
-    // If the field itself is repeatable, it returns multiple values UNLESS it IS the context
+    // A field that IS the context returns a single value, even if it is repeatable or multilingual
     // (e.g., inside a predicate on this field: BT-Repeatable[BT-Repeatable != ''])
+    if (sdkField.equals(context)) {
+      return false;
+    }
+
+    // If the field itself is repeatable, it returns multiple values
     if (sdkField.isRepeatable()) {
-      return !sdkField.equals(context);
+      return true;
     }
 
     // Multilingual fields have multiple XML elements (one per language)

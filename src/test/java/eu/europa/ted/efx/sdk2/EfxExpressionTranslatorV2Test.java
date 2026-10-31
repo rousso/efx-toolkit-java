@@ -1363,6 +1363,14 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
         "'test' in BT-00-Text-Multilingual");
   }
 
+  @Test
+  void testMultilingualTextFieldReference_FromOwnContext_InScalarContext() {
+    testExpressionTranslationWithContext(
+        "string-length(./normalize-space(text())) <= 400",
+        "BT-00-Text-Multilingual",
+        "string-length(BT-00-Text-Multilingual) <= 400");
+  }
+
   // #endregion: References
 
   // #region: Boolean functions -----------------------------------------------
