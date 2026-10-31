@@ -3,14 +3,14 @@
 Single record of the work described in `plan.md`. Update it at the end of every session: item status, gate results with their numbers, the commit ids of both repositories, decisions taken, open questions for Yannis.
 
 **Last updated:** 2026-10-31, by the design thread, when the plan was committed.
-**Current phase:** 0. **Next item:** P0.2.
+**Current phase:** 0. **Next item:** P0.5, then P0.4.
 
 ## Work items
 
 | Item | Status | Toolkit commit | SDK commit | Notes |
 |---|---|---|---|---|
 | P0.1 Create the branches | done 2026-10-31 | (this commit) | 0c66c10 | `feature/untyped-grammar` from `develop` (toolkit, `89e0821`) and from `efx-2` (SDK, `abd9d85`) |
-| P0.2 Build environment | todo | | | |
+| P0.2 Build environment | done 2026-10-31 | (this commit) | | Environment `rousso`: Java 21 compiling for 11, Maven 3.9.11. SDK branch installed locally as 2.0.0-SNAPSHOT; `eforms-core-java` 1.10.0-SNAPSHOT and `eforms-sdk` 1.16.0-SNAPSHOT resolved from central.sonatype.com. `mvn -nsu test`: 1,550 tests green, the unpacked `Efx.g4` identical to the SDK branch. `-nsu` keeps Maven from replacing the local 2.0.0-SNAPSHOT with the published one |
 | P0.3 Add `plan.md` and `progress.md` | done 2026-10-31 | (this commit) | 0c66c10 | |
 | P0.4 Opt-in corpus test and baseline | todo | | | Baseline captured after P0.5 so that it includes `rules.efx` |
 | P0.5 Fix the `rules.efx` failure (symbol resolver) and add the test | todo | | | |
