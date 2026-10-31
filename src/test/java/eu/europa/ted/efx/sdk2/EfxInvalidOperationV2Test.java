@@ -156,6 +156,11 @@ class EfxInvalidOperationV2Test extends EfxTestsBase {
         "not(1)",
         "not(BT-00-Text)",
         "not(BT-00-Duration)",
+        "TRUE and 2020-01-01Z",
+        "10:00:00Z or TRUE",
+        "TRUE or P1D",
+        "not(2020-01-01Z)",
+        "not(10:00:00Z)",
 
         // like matches text
         "1 like '[0-9]'",
@@ -190,6 +195,8 @@ class EfxInvalidOperationV2Test extends EfxTestsBase {
         "if BT-00-Text then 1 else 2",
         "if BT-00-Number then 'a' else 'b'",
         "if 2020-01-01Z then TRUE else FALSE",
+        "if 10:00:00Z then 1 else 2",
+        "if P1D then 1 else 2",
 
         // The two branches of if ... then ... else have the same type
         "if TRUE then 1 else 'a'",
@@ -198,12 +205,16 @@ class EfxInvalidOperationV2Test extends EfxTestsBase {
         "if TRUE then 2020-01-01Z else P1D",
         "if TRUE then 10:00:00Z else BT-00-StartDate",
         "if TRUE then BT-00-Indicator else 1",
+        "if TRUE then [1] else ['a']",
+        "if TRUE then 1 else ['a']",
 
         // The body of every ... satisfies and some ... satisfies is a boolean
         "every text:$x in ['a', 'b'] satisfies $x",
         "some number:$n in [1, 2] satisfies $n + 1",
         "every text:$x in ['a'] satisfies 'a'",
         "some date:$d in [2020-01-01Z] satisfies $d",
+        "some time:$t in [10:00:00Z] satisfies $t",
+        "every duration:$d in [P1D] satisfies $d",
 
         // The values of a list have one type
         "[1, 'a']",
@@ -240,6 +251,9 @@ class EfxInvalidOperationV2Test extends EfxTestsBase {
         "BT-00-Text-Multilingual == 'a'",
         "['a', BT-00-Repeatable-Text]",
         "[1, [2, 3]]",
+        "1 + BT-00-Repeatable-Number",
+        "1 + [2]",
+        "TRUE and BT-00-Repeatable-Indicator",
 
         // A node has no value
         "ND-SubNode == 'a'",
@@ -247,6 +261,10 @@ class EfxInvalidOperationV2Test extends EfxTestsBase {
         "ND-SubNode + 1",
         "ND-SubNode in ['a']",
         "string-length(ND-SubNode)",
+        "count(ND-SubNode)",
+        "count(ND-RepeatableNode)",
+        "ND-SubNode is empty",
+        "ND-SubNode has duplicates",
 
         // is present applies to a field or node reference
         "1 is present",
@@ -256,13 +274,12 @@ class EfxInvalidOperationV2Test extends EfxTestsBase {
         "some text:$x in ['a'] satisfies $x is present",
         "for text:$x in ['a'] return $x is present",
 
-        // A predicate is a boolean, and an index on a sequence is a number
+        // A predicate is a boolean or a number, and an index on a sequence is a number
         "BT-00-Text['x']",
         "BT-00-Repeatable-Text[2020-01-01Z]",
         "BT-00-Repeatable-Text[P1D]",
         "BT-00-Repeatable-Text[BT-00-Text]",
         "ND-SubNode['x'] is present",
-        "ND-SubNode[1] is present",
         "['a', 'b']['x']",
         "['a', 'b'][TRUE]",
         "['a', 'b'][BT-00-Text]",
@@ -325,6 +342,47 @@ class EfxInvalidOperationV2Test extends EfxTestsBase {
         "value-except(BT-00-Repeatable-Date, BT-00-Repeatable-Time)",
         "subsequence(['a', 'b'], 'x')",
         "subsequence(['a', 'b'], 1, 'x')",
+        "contains(1, 'a')",
+        "starts-with(1, 'a')",
+        "ends-with(1, 'a')",
+        "ends-with('a', 1)",
+        "max(['a'])",
+        "index-of-substring(1, 'a')",
+        "index-of-substring('a', 1)",
+        "round-down('a')",
+        "round-up(TRUE)",
+        "month(10:00:00Z)",
+        "seconds(2020-01-01Z)",
+        "months('P1M')",
+        "substring('abc', 1, 'x')",
+        "substring-before(1, 'a')",
+        "substring-before('a', 1)",
+        "substring-after(1, 'a')",
+        "substring-after('a', 1)",
+        "concat(1, 'a')",
+        "concat('a', 'b', 1)",
+        "lower-case(1)",
+        "normalize-space(1)",
+        "trim(1)",
+        "trim-left(1)",
+        "trim-right(1)",
+        "pad-left(1, 2, ' ')",
+        "pad-left('a', 2, 1)",
+        "pad-right(1, 2, ' ')",
+        "pad-right('a', 'b', ' ')",
+        "pad-right('a', 2, 1)",
+        "replace(1, 'a', 'b')",
+        "replace('a', 'b', 1)",
+        "replace-regex(1, 'a', 'b')",
+        "replace-regex('a', 1, 'b')",
+        "replace-regex('a', 'b', 1)",
+        "repeat(1, 2)",
+        "repeat('a', 'b')",
+        "url-encode(1)",
+        "capitalize-first(1)",
+        "split('a', 1)",
+        "subtract-duration(1, P1D)",
+        "subtract-duration(2020-01-01Z, 1)",
 
         // A built-in function takes the number of arguments it declares
         "upper-case()",
@@ -339,6 +397,7 @@ class EfxInvalidOperationV2Test extends EfxTestsBase {
         "not(TRUE, FALSE)",
         "value-union(['a'])",
         "sequence-equal(['a'], ['b'], ['c'])",
+        "current-time(1)",
 
         // The result of a built-in function has the type the function declares
         "count(['a']) like 'a'",
