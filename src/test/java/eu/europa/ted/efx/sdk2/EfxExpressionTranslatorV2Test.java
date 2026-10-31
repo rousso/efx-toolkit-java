@@ -986,6 +986,36 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
         "ND-Root", "if 1 > 2 then P1D else BT-00-Duration");
   }
 
+  // The else branch reaches as far to the right as the expression goes, as in XPath (Yannis,
+  // 31 October): the seventh language change of the untyped grammar.
+
+  @Test
+  void testConditionalExpression_ElseBranchTakesTheComparison_Throws() {
+    // Read as if TRUE then 1 else (2 == 3): a number and a boolean as branches
+    assertThrows(TypeMismatchException.class,
+        () -> translateExpressionWithContext("ND-Root", "if TRUE then 1 else 2 == 3"));
+  }
+
+  @Test
+  void testConditionalExpression_ElseBranchTakesTheAddition() {
+    testExpressionTranslationWithContext("(if (true()) then 1 else 2 + 3)", "ND-Root",
+        "if TRUE then 1 else 2 + 3");
+  }
+
+  @Test
+  void testConditionalExpression_InParentheses_Compared() {
+    testExpressionTranslationWithContext("((if (true()) then 1 else 2)) = 3", "ND-Root",
+        "(if TRUE then 1 else 2) == 3");
+  }
+
+  @Test
+  void testSequenceFromIteration_ReturnTakesTheAddition() {
+    // The return clause reaches as far to the right too: (for ... return $x) + 1 would add a
+    // number to a sequence
+    testExpressionTranslationWithContext("for $x in (1,2) return $x + 1", "ND-Root",
+        "for number:$x in [1, 2] return $x + 1");
+  }
+
   // #endregion: Conditional expressions
 
   // #region: Iteration expressions -------------------------------------------
