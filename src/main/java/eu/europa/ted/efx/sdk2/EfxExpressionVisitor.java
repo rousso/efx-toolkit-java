@@ -14,7 +14,9 @@
 package eu.europa.ted.efx.sdk2;
 
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -115,6 +117,12 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   private final ContextStack efxContext;
   private final Origin<TypedExpression> none;
   private final IteratorDeclarations iteratorDeclarations = new IteratorDeclarations();
+
+  /**
+   * How many references have been resolved from each context, so that a bracket can tell whether
+   * its content reads the context it is translated in.
+   */
+  private final Map<Context, Integer> readsOfContexts = new IdentityHashMap<>();
 
   EfxExpressionVisitor(final TranslationContext translation) {
     this.symbols = translation.symbols();
@@ -374,6 +382,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   @Override
   public Operand<?> visitLinkedFieldReference(final LinkedFieldReferenceContext ctx) {
     final String fieldId = this.fieldIdOf(ctx);
+    this.countReadOfCurrentContext();
     return new Operand<>(this.symbols.getRelativePathOfField(fieldId, this.efxContext.symbol()),
         new FieldOrigin(this, ctx, fieldId));
   }
@@ -400,6 +409,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   @Override
   public Operand<?> visitSimpleNodeReference(final SimpleNodeReferenceContext ctx) {
     final String nodeId = ctx.NodeId().getText();
+    this.countReadOfCurrentContext();
     return new Operand<>(this.symbols.getRelativePathOfNode(nodeId, this.efxContext.symbol()),
         new NodeOrigin(this, nodeId));
   }
@@ -525,6 +535,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
     if (!this.symbols.isAttributeField(fieldId)) {
       return this.script.composeFieldValueReference(path);
     }
+    this.countReadOfCurrentContext();
     final PathExpression attribute = this.script.composeFieldAttributeReference(
         this.script.contextualizePath(
             this.symbols.getAbsolutePathOfFieldWithoutTheAttribute(fieldId),
@@ -651,16 +662,19 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   /**
    * A bracket after a field or a node. Its content is read in the context of the field or node, as
    * each element the path selects: a condition filters the elements, and a number selects one of
-   * them, by its position in the whole sequence the path selects.
+   * them, by its position in the whole sequence the path selects. A number is computed once, so it
+   * must not read the field or node.
    *
    * @param path the path of the field or the node
    * @param origin the field or the node
    * @param content the content of the bracket
    * @return the elements the bracket selects, with the origin of the field or node
+   * @throws InvalidUsageException if a number reads the field or node
    */
   Operand<?> positionInPath(final PathExpression path, final PathOrigin origin,
       final ExpressionContext content) {
     origin.pushElementContext();
+    final int readsBefore = this.readsOfCurrentContext();
     final Operand<?> selector = this.visit(content);
     final TypedExpression value = selector.value();
     final PathExpression selected;
@@ -668,6 +682,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
       selected = origin.filter(path,
           this.converted(selector, value, BooleanExpression.class, content));
     } else if (value.is(EfxDataType.Number.class)) {
+      this.rejectIndexReadingContext(content, readsBefore);
       selected = this.elementAt(path,
           this.converted(selector, value, NumericExpression.class, content));
     } else {
@@ -693,15 +708,18 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
 
   /**
    * A bracket after a value: a position in the sequence of its values. A single value is a
-   * sequence of one.
+   * sequence of one. The position is computed once, so it must not read the context.
    *
    * @param sequence the value
    * @param content the content of the bracket
    * @return the value at that position
+   * @throws InvalidUsageException if the position reads the context
    */
   Operand<?> positionInValue(final Operand<?> sequence, final ExpressionContext content) {
     final TypedExpression value = sequence.value();
+    final int readsBefore = this.readsOfCurrentContext();
     final NumericExpression index = this.valueAs(content, NumericExpression.class);
+    this.rejectIndexReadingContext(content, readsBefore);
     final Class<? extends SequenceExpression> listType = this.sequenceTypeOf(value);
     final SequenceExpression list = value instanceof PathExpression
         ? this.inParentheses(value, listType)
@@ -725,6 +743,35 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
         this.script.composeDictionaryLookup(dictionary.name,
             this.valueAs(key, StringExpression.class), dictionary.type),
         new DictionaryOrigin(this, reference, dictionary.name));
+  }
+
+  /**
+   * An index is computed once, where the expression stands. The target language evaluates the
+   * content of a bracket for each element instead, so content that reads the context would give a
+   * different number for each element; it is rejected.
+   *
+   * @param content the content of the bracket, translated in the current context
+   * @param readsBefore the reads of the current context before the content was translated
+   * @throws InvalidUsageException if translating the content read the current context
+   */
+  private void rejectIndexReadingContext(final ExpressionContext content, final int readsBefore) {
+    if (this.readsOfCurrentContext() > readsBefore) {
+      throw InvalidUsageException.indexReadsContext(content);
+    }
+  }
+
+  /**
+   * Counts a read of the current context: a reference is resolved from it.
+   */
+  private void countReadOfCurrentContext() {
+    if (!this.efxContext.isEmpty()) {
+      this.readsOfContexts.merge(this.efxContext.peek(), 1, Integer::sum);
+    }
+  }
+
+  private int readsOfCurrentContext() {
+    return this.efxContext.isEmpty() ? 0
+        : this.readsOfContexts.getOrDefault(this.efxContext.peek(), 0);
   }
 
   private <T extends TypedExpression> T inParentheses(final TypedExpression expression,
@@ -1067,6 +1114,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
     if (privacyCodeFieldId == null) {
       throw SdkInconsistencyException.missingPrivacyCodeField(fieldId);
     }
+    this.countReadOfCurrentContext();
     return this.script.composeComparisonOperation(
         new StringExpression(this.script.composeFieldValueReference(
             this.symbols.getRelativePathOfField(privacyCodeFieldId, this.efxContext.symbol()))
@@ -1080,6 +1128,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
     if (publicationDateFieldId == null) {
       throw SdkInconsistencyException.missingPublicationDateField(fieldId);
     }
+    this.countReadOfCurrentContext();
     final PathExpression publicationDate =
         this.symbols.getRelativePathOfField(publicationDateFieldId, this.efxContext.symbol());
     return this.script.composeParenthesizedExpression(
@@ -1093,6 +1142,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   }
 
   private BooleanExpression composeIsMaskedCondition(final String fieldId) {
+    this.countReadOfCurrentContext();
     final PathExpression fieldValue = this.script.composeFieldValueReference(
         this.symbols.getRelativePathOfField(fieldId, this.efxContext.symbol()));
     return this.script.composeComparisonOperation(

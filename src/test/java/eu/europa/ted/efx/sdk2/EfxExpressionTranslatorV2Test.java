@@ -4670,6 +4670,70 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
         "[P1D, P2M][2]");
   }
 
+  // An index is computed once, where the expression stands. Content that reads no field or node
+  // from the context means the same wherever it is evaluated; content that does is rejected.
+
+  @Test
+  void testIndexer_WithVariable() {
+    testExpressionTranslationWithContext(
+        "for $n in PathNode/NumberField/number() return (PathNode/RepeatableTextField)[$n]/normalize-space(text())",
+        "ND-Root", "for number:$n in BT-00-Number return BT-00-Repeatable-Text[$n]");
+  }
+
+  @Test
+  void testIndexer_WithArithmeticOnLiterals() {
+    testExpressionTranslationWithContext(
+        "(PathNode/RepeatableTextField)[1 + 1]/normalize-space(text())", "ND-Root",
+        "BT-00-Repeatable-Text[1 + 1]");
+  }
+
+  @Test
+  void testIndexer_WithAbsoluteFieldReference() {
+    testExpressionTranslationWithContext(
+        "(PathNode/RepeatableTextField)[/*/PathNode/NumberField/number()]/normalize-space(text())",
+        "ND-Root", "BT-00-Repeatable-Text[/BT-00-Number]");
+  }
+
+  @Test
+  void testIndexer_WithFieldOfContextVariable() {
+    testExpressionTranslationWithContext(
+        "for $c in RepeatableNode return (PathNode/RepeatableTextField)[count($c/TextField/normalize-space(text()))]/normalize-space(text())",
+        "ND-Root",
+        "for context:$c in ND-RepeatableNode return BT-00-Repeatable-Text[count($c::BT-00-Text-In-Repeatable-Node)]");
+  }
+
+  @Test
+  void testIndexer_ReadingAField_Throws() {
+    InvalidUsageException exception = assertThrows(InvalidUsageException.class,
+        () -> translateExpressionWithContext("ND-Root", "BT-00-Repeatable-Text[BT-00-Number]"));
+    assertEquals(InvalidUsageException.ErrorCode.INDEX_READS_CONTEXT, exception.getErrorCode());
+    assertEquals("line 1:34 The index 'BT-00-Number' reads a field or a node from its context."
+        + " An index is computed once, where the expression stands: bind it to a variable first,"
+        + " and index with the variable.", exception.getMessage());
+  }
+
+  @Test
+  void testIndexer_ComputedFromAField_Throws() {
+    InvalidUsageException exception = assertThrows(InvalidUsageException.class,
+        () -> translateExpressionWithContext("ND-Root", "BT-00-Repeatable-Text[BT-00-Number + 1]"));
+    assertEquals(InvalidUsageException.ErrorCode.INDEX_READS_CONTEXT, exception.getErrorCode());
+  }
+
+  @Test
+  void testIndexer_OnNodeReadingAField_Throws() {
+    InvalidUsageException exception = assertThrows(InvalidUsageException.class,
+        () -> translateExpressionWithContext("ND-Root",
+            "ND-RepeatableNode[count(BT-00-Text-In-Repeatable-Node)] is present"));
+    assertEquals(InvalidUsageException.ErrorCode.INDEX_READS_CONTEXT, exception.getErrorCode());
+  }
+
+  @Test
+  void testIndexer_OnListReadingAField_Throws() {
+    InvalidUsageException exception = assertThrows(InvalidUsageException.class,
+        () -> translateExpressionWithContext("ND-Root", "[1, 2, 3][BT-00-Number]"));
+    assertEquals(InvalidUsageException.ErrorCode.INDEX_READS_CONTEXT, exception.getErrorCode());
+  }
+
   // #endregion: Indexers
 
   // #region: Scalar/Sequence Validation --------------------------------------
