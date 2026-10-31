@@ -1734,6 +1734,108 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
         "'test' in BT-00-Text-Multilingual[BT-00-Text-Multilingual != '']");
   }
 
+  @Test
+  void testMultilingualTextFieldReference_FromOwnContextByAlias_InScalarContext() {
+    testExpressionTranslationWithContext(
+        "string-length(./normalize-space(text())) <= 400",
+        "BT-00-Text-Multilingual",
+        "string-length(textMultilingualField) <= 400");
+  }
+
+  @Test
+  void testMultilingualTextFieldReference_AbsoluteFromOwnContext_InScalarContext_Throws() {
+    TypeMismatchException ex = assertThrows(TypeMismatchException.class,
+        () -> translateExpressionWithContext("BT-00-Text-Multilingual",
+            "/BT-00-Text-Multilingual == 'test'"));
+    assertEquals(TypeMismatchException.ErrorCode.FIELD_IS_MULTILINGUAL, ex.getErrorCode());
+  }
+
+  /*
+   * A reference that names another context, by an absolute slash or a context override, is a
+   * sequence if the path to that context or the path from it to the field may select several nodes.
+   */
+
+  @Test
+  void testAbsoluteFieldReference_FromInsideRepeatableNode_InScalarContext_Throws() {
+    TypeMismatchException ex = assertThrows(TypeMismatchException.class,
+        () -> translateExpressionWithContext("ND-RepeatableNode",
+            "/BT-00-Text-In-Repeatable-Node == 'test'"));
+    assertEquals(TypeMismatchException.ErrorCode.FIELD_MAY_REPEAT, ex.getErrorCode());
+  }
+
+  @Test
+  void testAbsoluteFieldReference_FromInsideRepeatableNode_InSequenceContext() {
+    testExpressionTranslationWithContext("count(/*/RepeatableNode/TextField/normalize-space(text()))",
+        "ND-RepeatableNode", "count(/BT-00-Text-In-Repeatable-Node)");
+  }
+
+  @Test
+  void testAbsoluteAttributeFieldReference_FromInsideRepeatableNode_InScalarContext_Throws() {
+    TypeMismatchException ex = assertThrows(TypeMismatchException.class,
+        () -> translateExpressionWithContext("ND-RepeatableNode",
+            "/BT-00-Attribute-In-Repeatable-Node == 'test'"));
+    assertEquals(TypeMismatchException.ErrorCode.FIELD_MAY_REPEAT, ex.getErrorCode());
+  }
+
+  @Test
+  void testFieldReferenceWithNodeContextOverride_IntoRepeatableNode_InScalarContext_Throws() {
+    TypeMismatchException ex = assertThrows(TypeMismatchException.class,
+        () -> translateExpressionWithContext("ND-Root",
+            "ND-RepeatableNode::BT-00-Text-In-Repeatable-Node == 'test'"));
+    assertEquals(TypeMismatchException.ErrorCode.FIELD_MAY_REPEAT, ex.getErrorCode());
+  }
+
+  @Test
+  void testFieldReferenceWithNodeContextOverride_IntoRepeatableNode_InSequenceContext() {
+    testExpressionTranslationWithContext("count(RepeatableNode/TextField/normalize-space(text()))",
+        "ND-Root", "count(ND-RepeatableNode::BT-00-Text-In-Repeatable-Node)");
+  }
+
+  @Test
+  void testFieldReferenceWithNodeContextOverride_OutOfRepeatableNode_InScalarContext_Throws() {
+    TypeMismatchException ex = assertThrows(TypeMismatchException.class,
+        () -> translateExpressionWithContext("ND-RepeatableNode",
+            "ND-Root::BT-00-Text-In-Repeatable-Node == 'test'"));
+    assertEquals(TypeMismatchException.ErrorCode.FIELD_MAY_REPEAT, ex.getErrorCode());
+  }
+
+  @Test
+  void testFieldReferenceWithNodeContextOverride_OutOfRepeatableNode_InSequenceContext() {
+    testExpressionTranslationWithContext("count(../RepeatableNode/TextField/normalize-space(text()))",
+        "ND-RepeatableNode", "count(ND-Root::BT-00-Text-In-Repeatable-Node)");
+  }
+
+  @Test
+  void testFieldReferenceWithFieldContextOverride_ThroughRepeatableField_InScalarContext_Throws() {
+    TypeMismatchException ex = assertThrows(TypeMismatchException.class,
+        () -> translateExpressionWithContext("ND-Root",
+            "BT-00-Repeatable-Text::BT-00-Text == 'test'"));
+    assertEquals(TypeMismatchException.ErrorCode.FIELD_MAY_REPEAT, ex.getErrorCode());
+  }
+
+  @Test
+  void testFieldReferenceWithFieldContextOverride_ThroughRepeatableField_InSequenceContext() {
+    testExpressionTranslationWithContext(
+        "count(PathNode/RepeatableTextField/../TextField/normalize-space(text()))",
+        "ND-Root", "count(BT-00-Repeatable-Text::BT-00-Text)");
+  }
+
+  @Test
+  void testFieldReferenceWithVariableContextOverride_InScalarContext() {
+    testExpressionTranslationWithContext(
+        "some $c in RepeatableNode satisfies $c/TextField/normalize-space(text()) = 'test'",
+        "ND-Root",
+        "some context:$c in ND-RepeatableNode satisfies $c::BT-00-Text-In-Repeatable-Node == 'test'");
+  }
+
+  @Test
+  void testFieldReferenceWithVariableContextOverride_InIteration() {
+    testExpressionTranslationWithContext(
+        "for $c in RepeatableNode return $c/TextField/normalize-space(text())",
+        "ND-Root",
+        "for context:$c in ND-RepeatableNode return $c::BT-00-Text-In-Repeatable-Node");
+  }
+
   // #endregion: References
 
   // #region: Boolean functions -----------------------------------------------
@@ -4505,6 +4607,26 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     // Field in ND-NonRepeatableSubNode used from ND-RepeatableNode context should NOT throw
     testExpressionTranslationWithContext("NonRepeatableSubNode/TextField/normalize-space(text()) = 'test'",
         "ND-RepeatableNode", "BT-00-Text-In-NonRepeatableSubNode == 'test'");
+  }
+
+  @Test
+  void testScalarFromAttributeFieldInRepeatableNode_ThrowsErrorFromRootContext() {
+    TypeMismatchException ex = assertThrows(TypeMismatchException.class,
+        () -> translateExpressionWithContext("ND-Root", "BT-00-Attribute-In-Repeatable-Node == 'test'"));
+    assertEquals(TypeMismatchException.ErrorCode.FIELD_MAY_REPEAT, ex.getErrorCode());
+  }
+
+  @Test
+  void testScalarFromAttributeFieldInRepeatableNode_OkFromSameContext() {
+    testExpressionTranslationWithContext("TextField/@attribute = 'test'",
+        "ND-RepeatableNode", "BT-00-Attribute-In-Repeatable-Node == 'test'");
+  }
+
+  @Test
+  void testScalarFromAttributeOfRepeatableField_ThrowsError() {
+    TypeMismatchException ex = assertThrows(TypeMismatchException.class,
+        () -> translateExpressionWithContext("ND-Root", "BT-00-Repeatable-Text/@attr == 'test'"));
+    assertEquals(TypeMismatchException.ErrorCode.FIELD_MAY_REPEAT, ex.getErrorCode());
   }
 
   @Test

@@ -1901,17 +1901,30 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
 
   /**
    * Returns the reference to the value of a field, given the path of the field. The value of an attribute
-   * field is its attribute, on the element of the field.
+   * field is its attribute, on the element of the field. The value has the cardinality of the path.
    */
   protected PathExpression composeFieldValueReference(final String fieldId, final PathExpression path) {
     if (!this.symbols.isAttributeField(fieldId)) {
       return this.script.composeFieldValueReference(path);
     }
-    return this.script.composeFieldAttributeReference(
+    final PathExpression attribute = this.script.composeFieldAttributeReference(
         this.script.contextualizePath(
             this.symbols.getAbsolutePathOfFieldWithoutTheAttribute(fieldId), this.efxContext.peek().absolutePath()),
         this.symbols.getAttributeNameFromAttributeField(fieldId),
         ScalarPath.fromFieldType.get(FieldTypes.fromString(this.symbols.getTypeOfField(fieldId))));
+    return continuing(path, attribute);
+  }
+
+  /**
+   * Types a path that continues from the nodes another path selects: it may select several nodes if the
+   * other may, and otherwise as many as it selects from a single node.
+   *
+   * @param start the path whose nodes the continuation starts from
+   * @param continuation the continuing path, typed as it is from a single node
+   * @return the continuation, as a sequence if the start is one
+   */
+  private static PathExpression continuing(final PathExpression start, final PathExpression continuation) {
+    return start instanceof SequenceExpression ? continuation.asSequence() : continuation;
   }
 
   /**
@@ -1935,68 +1948,49 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
 
   @Override
   public void exitScalarFromAttributeReference(ScalarFromAttributeReferenceContext ctx) {
-    PathExpression result = this.script.composeFieldAttributeReference(this.stack.pop(PathExpression.class),
-        ctx.attributeReference().attributeName.getText(), StringPath.class);
-    String fieldId = getFieldId(ctx.attributeReference().fieldReference());
-    this.resolveAndPushFieldReference(result, fieldId);
+    this.pushAttributeValueReference(ctx.attributeReference());
   }
 
   @Override
   public void exitSequenceFromAttributeReference(SequenceFromAttributeReferenceContext ctx) {
-    PathExpression result = this.script.composeFieldAttributeReference(this.stack.pop(PathExpression.class),
-        ctx.attributeReference().attributeName.getText(), StringPath.class);
-    String fieldId = getFieldId(ctx.attributeReference().fieldReference());
-    this.resolveAndPushFieldReference(result, fieldId);
+    this.pushAttributeValueReference(ctx.attributeReference());
   }
 
   /**
-   * Pushes a field or attribute reference onto the stack, applying cardinality resolution
-   * when inside a late-bound expression. In a typed context ({@code RESOLVED}), the result
-   * is pushed as-is. In a late-bound context, the field's repeatability determines whether
-   * a scalar or sequence path is pushed, and errors are raised for type mismatches.
-   *
-   * @param result the composed field/attribute path expression
-   * @param fieldId the field identifier (used to check repeatability)
+   * Pushes the value of an attribute written after a field reference. The attribute is on each element
+   * the field reference selects.
    */
-  private void resolveAndPushFieldReference(PathExpression result, String fieldId) {
+  private void pushAttributeValueReference(AttributeReferenceContext ctx) {
+    final PathExpression field = this.stack.pop(PathExpression.class);
+    final PathExpression attribute =
+        this.script.composeFieldAttributeReference(field, ctx.attributeName.getText(), StringPath.class);
+    this.resolveAndPushFieldReference(continuing(field, attribute), getFieldId(ctx.fieldReference()));
+  }
+
+  /**
+   * Pushes the value of a field or attribute reference. The value has the cardinality the symbol
+   * resolver gave the reference's path. Inside a late-bound expression, a sequence where a single value
+   * is required is an error, and a single value where a sequence is required is promoted to one.
+   *
+   * @param value the value of the field or attribute reference
+   * @param fieldId the identifier of the field, named by the error
+   */
+  private void resolveAndPushFieldReference(PathExpression value, String fieldId) {
     switch (this.currentCardinalityResolutionContext()) {
-      case RESOLVED:
-        this.stack.push(result);
-        break;
       case RESOLVE_SCALAR:
-        if (this.fieldMayReturnMultipleValues(fieldId)) {
+        if (value instanceof SequenceExpression) {
           throw this.fieldMayReturnMultipleValuesException(fieldId);
         }
-        this.stack.push(result);
+        this.stack.push(value);
         break;
       case RESOLVE_SEQUENCE:
-        this.stack.push(result.asSequence());
+        this.stack.push(value.asSequence());
         break;
+      case RESOLVED:
       case RESOLVE_EITHER:
-        if (this.fieldMayReturnMultipleValues(fieldId)) {
-          this.stack.push(result.asSequence());
-        } else {
-          this.stack.push(result);
-        }
+        this.stack.push(value);
         break;
     }
-  }
-
-  /**
-   * Returns true if a field may return multiple values from the current EFX context.
-   * This includes fields that are repeatable (from SDK metadata or node hierarchy)
-   * and multilingual fields (which have multiple XML elements, one per language).
-   * A field is not considered repeatable if it IS the current context (e.g., inside a WITH block
-   * on this field, we're referencing the current element being iterated, not the whole sequence).
-   */
-  private boolean fieldMayReturnMultipleValues(String fieldId) {
-    if (!this.efxContext.isEmpty()
-        && this.efxContext.peek() != null
-        && this.efxContext.peek().isFieldContext()
-        && fieldId.equals(this.efxContext.symbol())) {
-      return false;
-    }
-    return this.symbols.isFieldRepeatableFromContext(fieldId, this.getContextNodeId());
   }
 
   /**
@@ -2009,25 +2003,6 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
       return TypeMismatchException.fieldIsMultilingual(this.stack.peekParserContext(), fieldId);
     }
     return TypeMismatchException.fieldMayRepeat(this.stack.peekParserContext(), fieldId, this.efxContext.symbol());
-  }
-
-  /**
-   * Gets the node ID of the current context for use with
-   * {@link SymbolResolver#isFieldRepeatableFromContext}.
-   * If the context is a NodeContext, returns the node ID directly.
-   * If the context is a FieldContext, returns the parent node of that field.
-   * If the context is empty/null, returns null (root context).
-   */
-  private String getContextNodeId() {
-    if (this.efxContext.isEmpty() || this.efxContext.peek() == null) {
-      return null;
-    }
-    Context context = this.efxContext.peek();
-    if (context.isNodeContext()) {
-      return context.symbol();
-    } else {
-      return this.symbols.getParentNodeOfField(context.symbol());
-    }
   }
 
   // #endregion Value References ----------------------------------------------
@@ -2057,7 +2032,7 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
       FieldReferenceWithFieldContextOverrideContext ctx) {
     if (ctx.contextFieldSpecifier() != null) {
       final PathExpression field = this.stack.pop(PathExpression.class);
-      this.stack.push(this.script.joinPaths(this.efxContext.relativePath(), field));
+      this.stack.push(this.joinReference(this.efxContext.relativePath(), field));
       this.efxContext.pop(); // Restores the previous context
     }
   }
@@ -2084,7 +2059,7 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
       FieldReferenceWithNodeContextOverrideContext ctx) {
     if (ctx.contextNodeSpecifier() != null) {
       final PathExpression field = this.stack.pop(PathExpression.class);
-      this.stack.push(this.script.joinPaths(this.efxContext.relativePath(), field));
+      this.stack.push(this.joinReference(this.efxContext.relativePath(), field));
       this.efxContext.pop(); // Restores the previous context
     }
   }
@@ -2117,9 +2092,22 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
     if (ctx.contextVariableSpecifier() != null) {
       final PathExpression field = this.stack.pop(PathExpression.class);
       final PathExpression contextVariable = this.stack.pop(PathExpression.class);
-      this.stack.push(this.script.joinPaths(contextVariable, field));
+      this.stack.push(this.joinReference(contextVariable, field));
       this.efxContext.pop(); // Restores the previous context
     }
+  }
+
+  /**
+   * Joins the path to the context of a context override with the path of the field from that context.
+   * The joined reference may give several values if either path may select several nodes. A context
+   * variable holds one node, so its own path never does.
+   *
+   * @param context the path to the context, from the context the override is written in
+   * @param field the path of the field, from the context of the override
+   * @return the path of the field from the context the override is written in
+   */
+  private PathExpression joinReference(final PathExpression context, final PathExpression field) {
+    return continuing(context, this.script.joinPaths(context, field));
   }
 
   // #endregion References with context override ------------------------------
