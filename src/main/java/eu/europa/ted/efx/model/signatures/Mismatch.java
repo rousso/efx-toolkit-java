@@ -13,9 +13,11 @@
  */
 package eu.europa.ted.efx.model.signatures;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import eu.europa.ted.efx.model.expressions.PathExpression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 
 /**
@@ -23,7 +25,8 @@ import eu.europa.ted.efx.model.expressions.TypedExpression;
  * takes that many arguments, or each overload that does rejects one of them.
  *
  * <p>A mismatch keeps the arguments and, for each overload of the right arity, the first position
- * it rejected. That is what the translator needs to raise the error a call deserves.</p>
+ * it rejected. Its {@link #getDiagnosis diagnosis} is what the translator needs to raise the error
+ * a call deserves.</p>
  */
 public final class Mismatch {
 
@@ -68,6 +71,21 @@ public final class Mismatch {
     return this.rejections;
   }
 
+  /**
+   * Gives the rejection that explains the mismatch, whatever the order of the overloads: the one
+   * at the furthest position, and among those a cardinality failure before a primitive one, and a
+   * primitive failure before a path one.
+   *
+   * @return the rejection to report
+   * @throws IllegalStateException if the mismatch is the number of arguments
+   */
+  public Rejection getDiagnosis() {
+    return this.rejections.stream()
+        .min(Comparator.comparingInt(Rejection::getPosition).reversed()
+            .thenComparing(Rejection::getKind))
+        .orElseThrow(() -> new IllegalStateException(this.toString()));
+  }
+
   @Override
   public String toString() {
     return "no overload of '" + this.builtIn.getName() + "' takes (" + describe(this.arguments) + ")";
@@ -90,11 +108,11 @@ public final class Mismatch {
   public static final class Rejection {
 
     private final Overload overload;
-    private final int position;
+    private final Match match;
 
-    Rejection(final Overload overload, final int position) {
+    Rejection(final Overload overload, final Match match) {
       this.overload = overload;
-      this.position = position;
+      this.match = match;
     }
 
     /**
@@ -108,7 +126,7 @@ public final class Mismatch {
      * @return the position of the rejected argument
      */
     public int getPosition() {
-      return this.position;
+      return this.match.getPosition();
     }
 
     /**
@@ -116,7 +134,50 @@ public final class Mismatch {
      *         bound
      */
     public ParameterType getExpected() {
-      return this.overload.getSignature().parameterAt(this.position).getType();
+      return this.overload.getSignature().parameterAt(this.getPosition()).getType();
+    }
+
+    /**
+     * @return the parameter type the argument had to convert to: the one declared at that
+     *         position, with {@code T} bound by the arguments of the call if they bind it
+     */
+    public ParameterType getRequired() {
+      return this.match.getRequired();
+    }
+
+    /**
+     * @return the rejected argument
+     */
+    public TypedExpression getArgument() {
+      return this.match.getArgument();
+    }
+
+    /**
+     * @return what is wrong with the argument
+     */
+    public Kind getKind() {
+      ParameterType required = this.getRequired();
+      TypedExpression argument = this.getArgument();
+      if (PathExpression.class.isAssignableFrom(required.getExpressionType())
+          || ParameterType.T.boundBy(argument).isEmpty()) {
+        return Kind.PATH;
+      }
+      return required.acceptsValuesOf(argument) ? Kind.CARDINALITY : Kind.PRIMITIVE;
+    }
+
+    /**
+     * What is wrong with a rejected argument, in the order in which a mismatch reports them.
+     */
+    public enum Kind {
+
+      /** A sequence where a single value of its primitive is required. */
+      CARDINALITY,
+
+      /** A value of another primitive than the one required. */
+      PRIMITIVE,
+
+      /** A value where a path is required, or a node, which has no value, where a value is. */
+      PATH
     }
   }
 }

@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import eu.europa.ted.efx.model.ParsedEntity;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
@@ -25,6 +26,18 @@ public class ParsedArguments extends LinkedList<ParsedArgument> implements Parse
     public ParsedArguments(ParsedParameters parameters) {
         super(parameters.stream()
                 .map(p -> new ParsedArgument(p, p.referenceExpression))
+                .collect(Collectors.toList()));
+    }
+
+    /**
+     * Pairs each parameter of a declaration with the argument at its position.
+     *
+     * @param parameters the parameters of the declaration
+     * @param values the arguments of an invocation, one for each parameter
+     */
+    public ParsedArguments(ParsedParameters parameters, List<? extends TypedExpression> values) {
+        super(IntStream.range(0, parameters.size())
+                .mapToObj(position -> new ParsedArgument(parameters.get(position), values.get(position)))
                 .collect(Collectors.toList()));
     }
 

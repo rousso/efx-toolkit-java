@@ -14,8 +14,9 @@
 package eu.europa.ted.efx.model.signatures;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.OptionalInt;
+import java.util.Map;
 
 import eu.europa.ted.efx.exceptions.TranslatorConfigurationException;
 import eu.europa.ted.efx.interfaces.ScriptGenerator;
@@ -25,8 +26,8 @@ import eu.europa.ted.efx.model.expressions.TypedExpression;
  * The outcome of resolving a call of a {@link BuiltIn}: the overload that applies, with the
  * arguments converted to its parameters, or the {@link Mismatch} when none applies.
  *
- * <p>An overload applies when it takes the number of arguments and, once {@code T} is bound, every
- * argument converts to its parameter. At most one overload of a built-in applies to any arguments;
+ * <p>An overload applies when its signature {@link Parameters#match matches} the arguments: it
+ * takes their number and, once {@code T} is bound, every argument converts to its parameter. At most one overload of a built-in applies to any arguments;
  * the catalogue's unit tests prove it for every built-in, and a resolution that finds more than one
  * raises a {@link TranslatorConfigurationException}.</p>
  */
@@ -51,27 +52,25 @@ public final class Resolution {
    * @throws TranslatorConfigurationException if more than one overload applies, a defect of the catalogue
    */
   static Resolution of(final BuiltIn builtIn, final List<? extends TypedExpression> arguments) {
-    List<Overload> applicable = new ArrayList<>();
+    Map<Overload, Arguments> applicable = new LinkedHashMap<>();
     List<Mismatch.Rejection> rejections = new ArrayList<>();
     for (Overload overload : builtIn.getOverloads()) {
-      if (overload.getSignature().takes(arguments.size())) {
-        OptionalInt rejected = overload.getSignature().firstRejectedPosition(arguments);
-        if (rejected.isPresent()) {
-          rejections.add(new Mismatch.Rejection(overload, rejected.getAsInt()));
-        } else {
-          applicable.add(overload);
-        }
+      Match match = overload.getSignature().match(arguments);
+      if (match.isMatched()) {
+        applicable.put(overload, match.getArguments());
+      } else if (!match.isCountMismatch()) {
+        rejections.add(new Mismatch.Rejection(overload, match));
       }
     }
     if (applicable.size() > 1) {
-      throw TranslatorConfigurationException.ambiguousOverloads(builtIn.getName(), applicable.toString(),
-          Mismatch.describe(arguments));
+      throw TranslatorConfigurationException.ambiguousOverloads(builtIn.getName(),
+          applicable.keySet().toString(), Mismatch.describe(arguments));
     }
     if (applicable.isEmpty()) {
       return new Resolution(null, null, new Mismatch(builtIn, arguments, rejections));
     }
-    Overload overload = applicable.get(0);
-    return new Resolution(overload, overload.getSignature().convert(arguments), null);
+    Map.Entry<Overload, Arguments> resolved = applicable.entrySet().iterator().next();
+    return new Resolution(resolved.getKey(), resolved.getValue(), null);
   }
 
   /**

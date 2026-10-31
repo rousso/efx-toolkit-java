@@ -13,6 +13,8 @@
  */
 package eu.europa.ted.efx.model.signatures;
 
+import java.util.Optional;
+
 import eu.europa.ted.efx.interfaces.TypeChecker;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.types.EfxDataType;
@@ -40,6 +42,11 @@ final class ConcreteParameterType implements ParameterType {
   }
 
   @Override
+  public Optional<ParameterType> boundBy(final TypedExpression argument) {
+    return Optional.of(this);
+  }
+
+  @Override
   public Class<? extends TypedExpression> getExpressionType() {
     return this.expressionType;
   }
@@ -47,6 +54,13 @@ final class ConcreteParameterType implements ParameterType {
   @Override
   public boolean accepts(final TypedExpression argument) {
     return TypeChecker.V2.canConvert(argument.getClass(), this.expressionType);
+  }
+
+  @Override
+  public boolean acceptsValuesOf(final TypedExpression argument) {
+    return T.boundBy(argument)
+        .map(value -> TypeChecker.V2.canConvert(value.getExpressionType(), this.expressionType))
+        .orElse(false);
   }
 
   @Override

@@ -13,20 +13,15 @@
  */
 package eu.europa.ted.efx.model.signatures;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.OptionalInt;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.types.EfxDataType;
 
 /**
- * The signature of an {@link Overload}: its parameters, an optional variadic tail, and its result
- * type.
+ * The signature of an {@link Overload}: its {@link Parameters}, which may end in a variadic tail,
+ * and its result type.
  *
  * <p>A variadic tail takes one or more arguments after the fixed parameters. An optional argument
  * is not part of a signature: the built-in declares a second overload instead. A signature whose
@@ -35,14 +30,11 @@ import eu.europa.ted.efx.model.types.EfxDataType;
  */
 public final class Signature {
 
-  private final List<Parameter> parameters;
-  private final Parameter variadic;
+  private final Parameters parameters;
   private final ParameterType result;
 
-  private Signature(final List<Parameter> parameters, final Parameter variadic,
-      final ParameterType result) {
+  private Signature(final Parameters parameters, final ParameterType result) {
     this.parameters = parameters;
-    this.variadic = variadic;
     this.result = result;
   }
 
@@ -60,14 +52,14 @@ public final class Signature {
    * @return the fixed parameters, in order
    */
   public List<Parameter> getParameters() {
-    return this.parameters;
+    return this.parameters.getFixed();
   }
 
   /**
    * @return the parameter of the variadic tail, if the signature has one
    */
   public Optional<Parameter> getVariadic() {
-    return Optional.ofNullable(this.variadic);
+    return this.parameters.getVariadic();
   }
 
   /**
@@ -85,7 +77,7 @@ public final class Signature {
    *         greater than it
    */
   public boolean takes(final int count) {
-    return this.variadic == null ? count == this.parameters.size() : count > this.parameters.size();
+    return this.parameters.takes(count);
   }
 
   /**
@@ -95,7 +87,18 @@ public final class Signature {
    * @return the parameter at that position
    */
   public Parameter parameterAt(final int position) {
-    return position < this.parameters.size() ? this.parameters.get(position) : this.variadic;
+    return this.parameters.parameterAt(position);
+  }
+
+  /**
+   * Matches the arguments of a call against the parameters of this signature.
+   *
+   * @param arguments the translated arguments of the call
+   * @return the converted arguments, or the first reason they do not match
+   * @see Parameters#match
+   */
+  Match match(final List<? extends TypedExpression> arguments) {
+    return this.parameters.match(arguments);
   }
 
   /**
@@ -105,10 +108,7 @@ public final class Signature {
    * @return the signature with every parameter type and the result type bound
    */
   Signature bind(final Class<? extends EfxDataType.Primitive> primitive) {
-    return new Signature(
-        this.parameters.stream().map(parameter -> parameter.bind(primitive)).collect(Collectors.toList()),
-        this.variadic == null ? null : this.variadic.bind(primitive),
-        this.result.bind(primitive));
+    return new Signature(this.parameters.bind(primitive), this.result.bind(primitive));
   }
 
   /**
@@ -117,68 +117,12 @@ public final class Signature {
    * @return {@code true} if a fixed parameter or the variadic tail is a type variable
    */
   boolean isGeneric() {
-    return this.allParameters().anyMatch(parameter -> parameter.getType().isTypeVariable());
-  }
-
-  /**
-   * Finds the first argument this signature does not accept. For a generic signature that is the
-   * argument at the first position of {@code T} when it cannot bind {@code T}, and otherwise the
-   * first argument the bound signature does not accept.
-   *
-   * @param arguments arguments whose number the signature {@link #takes}
-   * @return the position of the first argument not accepted, or nothing if all are
-   */
-  OptionalInt firstRejectedPosition(final List<? extends TypedExpression> arguments) {
-    Optional<Signature> bound = this.boundTo(arguments);
-    if (bound.isEmpty()) {
-      return OptionalInt.of(this.typeVariablePosition());
-    }
-    return IntStream.range(0, arguments.size())
-        .filter(position -> !bound.get().parameterAt(position).getType().accepts(arguments.get(position)))
-        .findFirst();
-  }
-
-  /**
-   * Converts arguments this signature accepts to the expression classes of its bound parameters.
-   *
-   * @param arguments arguments with no {@link #firstRejectedPosition rejected position}
-   * @return the converted arguments
-   */
-  Arguments convert(final List<? extends TypedExpression> arguments) {
-    Signature bound = this.boundTo(arguments).orElseThrow();
-    List<TypedExpression> values = new ArrayList<>();
-    List<Class<? extends TypedExpression>> types = new ArrayList<>();
-    for (int position = 0; position < arguments.size(); position++) {
-      ParameterType type = bound.parameterAt(position).getType();
-      values.add(type.convert(arguments.get(position)));
-      types.add(type.getExpressionType());
-    }
-    return new Arguments(values, types);
-  }
-
-  private Optional<Signature> boundTo(final List<? extends TypedExpression> arguments) {
-    if (!this.isGeneric()) {
-      return Optional.of(this);
-    }
-    return TypeVariableParameterType.bindingOf(arguments.get(this.typeVariablePosition()))
-        .map(this::bind);
-  }
-
-  private int typeVariablePosition() {
-    return IntStream.range(0, this.parameters.size())
-        .filter(position -> this.parameters.get(position).getType().isTypeVariable())
-        .findFirst()
-        .orElse(this.parameters.size());
-  }
-
-  private Stream<Parameter> allParameters() {
-    return Stream.concat(this.parameters.stream(), this.getVariadic().stream());
+    return this.parameters.isGeneric();
   }
 
   @Override
   public String toString() {
-    return "(" + this.allParameters().map(Parameter::toString).collect(Collectors.joining(", "))
-        + (this.variadic == null ? "" : "...") + ") -> " + this.result;
+    return this.parameters + " -> " + this.result;
   }
 
   /**
@@ -212,7 +156,7 @@ public final class Signature {
      * @return the signature
      */
     public Signature returning(final ParameterType result) {
-      return new Signature(this.parameters, this.variadic, result);
+      return new Signature(new Parameters(this.parameters, this.variadic), result);
     }
   }
 }

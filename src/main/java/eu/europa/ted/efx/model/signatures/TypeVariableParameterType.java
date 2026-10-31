@@ -28,25 +28,30 @@ import eu.europa.ted.efx.model.types.EfxTypeLattice;
  *
  * <p>{@code T} ranges over the six value primitives. A multilingual text binds it to text and a
  * dynamic value to indicator, as the typed grammar reads them today; a node never binds it. Until
- * it is bound, a type variable has no expression class and accepts no argument.</p>
+ * it is bound, a type variable accepts no argument, and its expression class is that of every
+ * value, or every sequence, it stands for.</p>
  */
 enum TypeVariableParameterType implements ParameterType {
 
-  SCALAR("T", ScalarExpression.fromEfxDataType),
+  SCALAR("T", ScalarExpression.class, ScalarExpression.fromEfxDataType),
 
-  SEQUENCE("T*", SequenceExpression.fromEfxDataType);
+  SEQUENCE("T*", SequenceExpression.class, SequenceExpression.fromEfxDataType);
 
   private static final List<Class<? extends EfxDataType.Primitive>> VALUE_PRIMITIVES = List.of(
       EfxDataType.String.class, EfxDataType.Boolean.class, EfxDataType.Number.class,
       EfxDataType.Date.class, EfxDataType.Time.class, EfxDataType.Duration.class);
 
   private final String symbol;
+  private final Class<? extends TypedExpression> expressionType;
   private final Map<Class<? extends EfxDataType.Primitive>,
       ? extends Class<? extends TypedExpression>> expressionTypes;
 
-  TypeVariableParameterType(final String symbol, final Map<Class<? extends EfxDataType.Primitive>,
-      ? extends Class<? extends TypedExpression>> expressionTypes) {
+  TypeVariableParameterType(final String symbol,
+      final Class<? extends TypedExpression> expressionType,
+      final Map<Class<? extends EfxDataType.Primitive>,
+          ? extends Class<? extends TypedExpression>> expressionTypes) {
     this.symbol = symbol;
+    this.expressionType = expressionType;
     this.expressionTypes = expressionTypes;
   }
 
@@ -81,12 +86,22 @@ enum TypeVariableParameterType implements ParameterType {
   }
 
   @Override
+  public Optional<ParameterType> boundBy(final TypedExpression argument) {
+    return bindingOf(argument).map(this::bind);
+  }
+
+  @Override
   public Class<? extends TypedExpression> getExpressionType() {
-    throw new IllegalStateException(this.symbol + " has no expression class until it is bound");
+    return this.expressionType;
   }
 
   @Override
   public boolean accepts(final TypedExpression argument) {
+    throw new IllegalStateException(this.symbol + " accepts no argument until it is bound");
+  }
+
+  @Override
+  public boolean acceptsValuesOf(final TypedExpression argument) {
     throw new IllegalStateException(this.symbol + " accepts no argument until it is bound");
   }
 

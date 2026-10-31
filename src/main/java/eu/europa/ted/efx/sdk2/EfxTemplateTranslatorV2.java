@@ -102,7 +102,6 @@ import eu.europa.ted.efx.model.variables.ParsedParameters;
 import eu.europa.ted.efx.model.variables.Template;
 import eu.europa.ted.efx.model.variables.Variable;
 import eu.europa.ted.efx.model.variables.Variables;
-import eu.europa.ted.efx.model.expressions.sequence.MultilingualStringSequencePath;
 import eu.europa.ted.efx.sdk2.EfxParser.*;
 
 /**
@@ -299,7 +298,7 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
   @Override
   public void exitStringFunctionDeclaration(StringFunctionDeclarationContext ctx) {
-      this.exitFunctionDeclaration(ctx.functionName.getText(), StringExpression.class);
+      this.exitFunctionDeclaration(ctx, ctx.functionName.getText(), StringExpression.class);
   }
 
   @Override
@@ -309,7 +308,7 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
   @Override
   public void exitBooleanFunctionDeclaration(BooleanFunctionDeclarationContext ctx) {
-      this.exitFunctionDeclaration(ctx.functionName.getText(), BooleanExpression.class);
+      this.exitFunctionDeclaration(ctx, ctx.functionName.getText(), BooleanExpression.class);
   }
 
   @Override
@@ -319,7 +318,7 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
   @Override
   public void exitNumericFunctionDeclaration(NumericFunctionDeclarationContext ctx) {
-      this.exitFunctionDeclaration(ctx.functionName.getText(), NumericExpression.class);
+      this.exitFunctionDeclaration(ctx, ctx.functionName.getText(), NumericExpression.class);
   }
 
   @Override
@@ -329,7 +328,7 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
   @Override
   public void exitDateFunctionDeclaration(DateFunctionDeclarationContext ctx) {
-      this.exitFunctionDeclaration(ctx.functionName.getText(), DateExpression.class);
+      this.exitFunctionDeclaration(ctx, ctx.functionName.getText(), DateExpression.class);
   }
 
   @Override
@@ -339,7 +338,7 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
   @Override
   public void exitTimeFunctionDeclaration(TimeFunctionDeclarationContext ctx) {
-      this.exitFunctionDeclaration(ctx.functionName.getText(), TimeExpression.class);
+      this.exitFunctionDeclaration(ctx, ctx.functionName.getText(), TimeExpression.class);
   }
 
   @Override
@@ -349,7 +348,7 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
   @Override
   public void exitDurationFunctionDeclaration(DurationFunctionDeclarationContext ctx) {
-      this.exitFunctionDeclaration(ctx.functionName.getText(), DurationExpression.class);
+      this.exitFunctionDeclaration(ctx, ctx.functionName.getText(), DurationExpression.class);
   }
 
   // Sequence function declarations
@@ -361,7 +360,7 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
   @Override
   public void exitStringSequenceFunctionDeclaration(StringSequenceFunctionDeclarationContext ctx) {
-      this.exitFunctionDeclaration(ctx.functionName.getText(), StringSequenceExpression.class);
+      this.exitFunctionDeclaration(ctx, ctx.functionName.getText(), StringSequenceExpression.class);
   }
 
   @Override
@@ -371,7 +370,7 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
   @Override
   public void exitNumericSequenceFunctionDeclaration(NumericSequenceFunctionDeclarationContext ctx) {
-      this.exitFunctionDeclaration(ctx.functionName.getText(), NumericSequenceExpression.class);
+      this.exitFunctionDeclaration(ctx, ctx.functionName.getText(), NumericSequenceExpression.class);
   }
 
   @Override
@@ -381,7 +380,7 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
   @Override
   public void exitBooleanSequenceFunctionDeclaration(BooleanSequenceFunctionDeclarationContext ctx) {
-      this.exitFunctionDeclaration(ctx.functionName.getText(), BooleanSequenceExpression.class);
+      this.exitFunctionDeclaration(ctx, ctx.functionName.getText(), BooleanSequenceExpression.class);
   }
 
   @Override
@@ -391,7 +390,7 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
   @Override
   public void exitDateSequenceFunctionDeclaration(DateSequenceFunctionDeclarationContext ctx) {
-      this.exitFunctionDeclaration(ctx.functionName.getText(), DateSequenceExpression.class);
+      this.exitFunctionDeclaration(ctx, ctx.functionName.getText(), DateSequenceExpression.class);
   }
 
   @Override
@@ -401,7 +400,7 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
   @Override
   public void exitTimeSequenceFunctionDeclaration(TimeSequenceFunctionDeclarationContext ctx) {
-      this.exitFunctionDeclaration(ctx.functionName.getText(), TimeSequenceExpression.class);
+      this.exitFunctionDeclaration(ctx, ctx.functionName.getText(), TimeSequenceExpression.class);
   }
 
   @Override
@@ -411,12 +410,17 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
   @Override
   public void exitDurationSequenceFunctionDeclaration(DurationSequenceFunctionDeclarationContext ctx) {
-      this.exitFunctionDeclaration(ctx.functionName.getText(), DurationSequenceExpression.class);
+      this.exitFunctionDeclaration(ctx, ctx.functionName.getText(), DurationSequenceExpression.class);
   }
 
-  private <T extends TypedExpression> void exitFunctionDeclaration(String functionName,
-      Class<T> expressionType) {
-    var expression = this.stack.pop(expressionType);
+  /**
+   * Declares a function. Its body, the last child rule of the declaration, must give a value of the
+   * declared type.
+   */
+  private <T extends TypedExpression> void exitFunctionDeclaration(ParserRuleContext declaration,
+      String functionName, Class<T> expressionType) {
+    var parts = declaration.getRuleContexts(ParserRuleContext.class);
+    var expression = this.popOperand(parts.get(parts.size() - 1), expressionType);
     var parameters = this.stack.pop(ParsedParameters.class);
 
     var function = new Function(functionName, parameters, expression);
@@ -582,7 +586,7 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
   @Override
   public void exitLinkedExpressionBlock(LinkedExpressionBlockContext ctx) {
-    var url = this.stack.pop(StringExpression.class);
+    var url = this.popOperand(ctx.linkBlock().getRuleContext(ParserRuleContext.class, 0), StringExpression.class);
     var value = this.stack.pop(FormatContentTemplateFragment.class);
     this.stack.push(new HyperlinkContentTemplateFragment(value, url));
   }
@@ -1185,8 +1189,14 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
     this.efxContext.pushFieldContext(getFieldId(ctx.fieldContext()));
   }
 
+  /**
+   * Takes the value of the key as the text it is, and then switches back from the context of the
+   * indexed field. The value is taken first, so that a field of the key that may repeat is
+   * reported with the context the key reads it from.
+   */
   @Override
   public void exitDictionaryKeyClause(DictionaryKeyClauseContext ctx) {
+    this.stack.push(this.popOperand(ctx.getRuleContext(ParserRuleContext.class, 0), StringExpression.class));
     this.efxContext.pop();
   }
 
@@ -1196,127 +1206,16 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
   
   // #region Expression Blocks ${...} -----------------------------------------
 
-  // #region Formatting functions (template-only) --------------------------------
-
+  /**
+   * A template translates the built-ins that only templates may call, such as the formatting
+   * functions.
+   *
+   * @return {@code true}
+   */
   @Override
-  public void exitLateBoundFormatShortFunction(LateBoundFormatShortFunctionContext ctx) {
-    if (EfxDataType.Date.class.isAssignableFrom(this.stack.peekType().getDataType())) {
-      this.stack.push(this.script.composeFormatDateShort(this.stack.pop(DateExpression.class)));
-    } else {
-      this.stack.push(this.script.composeFormatTimeShort(this.stack.pop(TimeExpression.class)));
-    }
+  protected boolean translatesTemplateOnlyBuiltIns() {
+    return true;
   }
-
-  @Override
-  public void exitFormatNumberFunction(FormatNumberFunctionContext ctx) {
-    final StringExpression format = this.stack.pop(StringExpression.class);
-    final NumericExpression number = this.stack.pop(NumericExpression.class);
-    this.stack.push(this.script.composeNumberFormatting(number, format));
-  }
-
-  @Override
-  public void exitFormatShortDateFunction(FormatShortDateFunctionContext ctx) {
-    this.stack.push(this.script.composeFormatDateShort(this.stack.pop(DateExpression.class)));
-  }
-
-  @Override
-  public void exitFormatShortTimeFunction(FormatShortTimeFunctionContext ctx) {
-    this.stack.push(this.script.composeFormatTimeShort(this.stack.pop(TimeExpression.class)));
-  }
-
-  @Override
-  public void exitFormatShortDateTimeFunction(FormatShortDateTimeFunctionContext ctx) {
-    TimeExpression time = this.stack.pop(TimeExpression.class);
-    DateExpression date = this.stack.pop(DateExpression.class);
-    this.stack.push(this.script.composeStringConcatenation(List.of(
-        this.script.composeFormatDateShort(date),
-        this.script.getStringLiteralFromUnquotedString(" "),
-        this.script.composeFormatTimeShort(time))));
-  }
-
-  @Override
-  public void exitLateBoundFormatMediumFunction(LateBoundFormatMediumFunctionContext ctx) {
-    if (EfxDataType.Date.class.isAssignableFrom(this.stack.peekType().getDataType())) {
-      this.stack.push(this.script.composeFormatDateMedium(this.stack.pop(DateExpression.class)));
-    } else {
-      this.stack.push(this.script.composeFormatTimeMedium(this.stack.pop(TimeExpression.class)));
-    }
-  }
-
-  @Override
-  public void exitFormatMediumDateFunction(FormatMediumDateFunctionContext ctx) {
-    this.stack.push(this.script.composeFormatDateMedium(this.stack.pop(DateExpression.class)));
-  }
-
-  @Override
-  public void exitFormatMediumTimeFunction(FormatMediumTimeFunctionContext ctx) {
-    this.stack.push(this.script.composeFormatTimeMedium(this.stack.pop(TimeExpression.class)));
-  }
-
-  @Override
-  public void exitFormatMediumDateTimeFunction(FormatMediumDateTimeFunctionContext ctx) {
-    TimeExpression time = this.stack.pop(TimeExpression.class);
-    DateExpression date = this.stack.pop(DateExpression.class);
-    this.stack.push(this.script.composeStringConcatenation(List.of(
-        this.script.composeFormatDateMedium(date),
-        this.script.getStringLiteralFromUnquotedString(" "),
-        this.script.composeFormatTimeMedium(time))));
-  }
-
-  @Override
-  public void exitLateBoundFormatLongFunction(LateBoundFormatLongFunctionContext ctx) {
-    if (EfxDataType.Date.class.isAssignableFrom(this.stack.peekType().getDataType())) {
-      this.stack.push(this.script.composeFormatDateLong(this.stack.pop(DateExpression.class)));
-    } else {
-      this.stack.push(this.script.composeFormatTimeLong(this.stack.pop(TimeExpression.class)));
-    }
-  }
-
-  @Override
-  public void exitFormatLongDateFunction(FormatLongDateFunctionContext ctx) {
-    this.stack.push(this.script.composeFormatDateLong(this.stack.pop(DateExpression.class)));
-  }
-
-  @Override
-  public void exitFormatLongTimeFunction(FormatLongTimeFunctionContext ctx) {
-    this.stack.push(this.script.composeFormatTimeLong(this.stack.pop(TimeExpression.class)));
-  }
-
-  @Override
-  public void exitFormatLongDateTimeFunction(FormatLongDateTimeFunctionContext ctx) {
-    TimeExpression time = this.stack.pop(TimeExpression.class);
-    DateExpression date = this.stack.pop(DateExpression.class);
-    this.stack.push(this.script.composeStringConcatenation(List.of(
-        this.script.composeFormatDateLong(date),
-        this.script.getStringLiteralFromUnquotedString(" "),
-        this.script.composeFormatTimeLong(time))));
-  }
-
-  // #endregion Formatting functions ---------------------------------------------
-
-  // #region Preferred language functions ----------------------------------------
-
-  @Override
-  public void exitPreferredLanguageFunction(PreferredLanguageFunctionContext ctx) {
-    this.stack.push(this.script.getPreferredLanguage(this.stack.pop(MultilingualStringSequencePath.class)));
-  }
-
-  @Override
-  public void exitPreferredLanguageTextFunction(PreferredLanguageTextFunctionContext ctx) {
-    this.stack.push(this.script.getTextInPreferredLanguage(this.stack.pop(MultilingualStringSequencePath.class)));
-  }
-
-  @Override
-  public void exitFieldPreferredLanguageProperty(FieldPreferredLanguagePropertyContext ctx) {
-    this.stack.push(this.script.getPreferredLanguage(this.stack.pop(MultilingualStringSequencePath.class)));
-  }
-
-  @Override
-  public void exitFieldPreferredLanguageTextProperty(FieldPreferredLanguageTextPropertyContext ctx) {
-    this.stack.push(this.script.getTextInPreferredLanguage(this.stack.pop(MultilingualStringSequencePath.class)));
-  }
-
-  // #endregion Preferred language functions -------------------------------------
 
   /***
    * Handles the $value shorthand syntax which renders the value of the field declared as context in
@@ -1457,14 +1356,14 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
   @Override
   public void exitWhenDisplayTemplate(WhenDisplayTemplateContext ctx) {
     var template = this.stack.pop(DisplayContentTemplate.class);
-    template.setCondition(this.stack.pop(BooleanExpression.class));
+    template.setCondition(this.popOperand(ctx.getRuleContext(ParserRuleContext.class, 0), BooleanExpression.class));
     this.stack.push(template);
   }
 
   @Override
   public void exitWhenInvokeTemplate(WhenInvokeTemplateContext ctx) {
     var template = this.stack.pop(InvokeContentTemplate.class);
-    template.setCondition(this.stack.pop(BooleanExpression.class));
+    template.setCondition(this.popOperand(ctx.getRuleContext(ParserRuleContext.class, 0), BooleanExpression.class));
     this.stack.push(template);
   }
 
@@ -1476,8 +1375,7 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
   @Override
   public void exitInvokeTemplate(InvokeTemplateContext ctx) {
-    final StrictArguments arguments = this.stack.pop(StrictArguments.class);
-    this.stack.push(new InvokeContentTemplate(ctx.templateName.getText(), arguments));
+    this.stack.push(new InvokeContentTemplate(ctx.templateName.getText(), this.popMatchedArguments()));
   }
   
   // #endregion Conditional template blocks ---------------------------------
@@ -1486,37 +1384,37 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
   @Override
   public void exitStringVariableInitializer(StringVariableInitializerContext ctx) {
-    this.exitVariableInitializer(ctx.variableName.getText(), StringExpression.class);
+    this.exitVariableInitializer(ctx, ctx.variableName.getText(), StringExpression.class);
   }
 
   @Override
   public void exitBooleanVariableInitializer(BooleanVariableInitializerContext ctx) {
-    this.exitVariableInitializer(ctx.variableName.getText(), BooleanExpression.class);
+    this.exitVariableInitializer(ctx, ctx.variableName.getText(), BooleanExpression.class);
   }
 
   @Override
   public void exitNumericVariableInitializer(NumericVariableInitializerContext ctx) {
-    this.exitVariableInitializer(ctx.variableName.getText(), NumericExpression.class);
+    this.exitVariableInitializer(ctx, ctx.variableName.getText(), NumericExpression.class);
   }
 
   @Override
   public void exitDateVariableInitializer(DateVariableInitializerContext ctx) {
-    this.exitVariableInitializer(ctx.variableName.getText(), DateExpression.class);
+    this.exitVariableInitializer(ctx, ctx.variableName.getText(), DateExpression.class);
   }
 
   @Override
   public void exitTimeVariableInitializer(TimeVariableInitializerContext ctx) {
-    this.exitVariableInitializer(ctx.variableName.getText(), TimeExpression.class);
+    this.exitVariableInitializer(ctx, ctx.variableName.getText(), TimeExpression.class);
   }
 
   @Override
   public void exitDurationVariableInitializer(DurationVariableInitializerContext ctx) {
-    this.exitVariableInitializer(ctx.variableName.getText(), DurationExpression.class);
+    this.exitVariableInitializer(ctx, ctx.variableName.getText(), DurationExpression.class);
   }
 
-  private void exitVariableInitializer(
+  private void exitVariableInitializer(ParserRuleContext initializer,
       String variableName, Class<? extends ScalarExpression> expressionType) {
-    var expression = this.stack.pop(expressionType);
+    var expression = this.popOperand(initializer.getRuleContext(ParserRuleContext.class, 0), expressionType);
     var variable = new Variable(variableName,
         this.script.composeVariableDeclaration(variableName, expression.getClass()),
         expression,
@@ -1579,13 +1477,13 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
   @Override
   public void exitLinkedTextBlock(LinkedTextBlockContext ctx) {
-    var url = this.stack.pop(StringExpression.class);
+    var url = this.popOperand(ctx.linkBlock().getRuleContext(ParserRuleContext.class, 0), StringExpression.class);
     this.stack.push(new HyperlinkContentTemplateFragment(new TextContentTemplateFragment(ctx.textBlock().getText()), url));
   }
 
   @Override
   public void exitLinkedLabelBlock(LinkedLabelBlockContext ctx) {
-    var url = this.stack.pop(StringExpression.class);
+    var url = this.popOperand(ctx.linkBlock().getRuleContext(ParserRuleContext.class, 0), StringExpression.class);
     var label = this.stack.pop(ContentTemplateFragment.class);
     this.stack.push(new HyperlinkContentTemplateFragment(label, url));
   }
