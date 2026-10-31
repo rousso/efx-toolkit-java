@@ -26,7 +26,6 @@ import org.antlr.v4.runtime.BaseErrorListener;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CharStreams;
-import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,13 +40,9 @@ import eu.europa.ted.efx.interfaces.TranslatorOptions;
 import eu.europa.ted.efx.interfaces.ValidatorGenerator;
 import eu.europa.ted.efx.exceptions.InvalidIdentifierException;
 import eu.europa.ted.efx.exceptions.InvalidUsageException;
-import eu.europa.ted.efx.exceptions.TranslatorConfigurationException;
-import eu.europa.ted.efx.model.CallStack;
 import eu.europa.ted.efx.model.Context;
-import eu.europa.ted.efx.model.ContextStack;
 import eu.europa.ted.efx.model.Context.FieldContext;
 import eu.europa.ted.efx.model.Context.NodeContext;
-import eu.europa.ted.efx.model.expressions.PathExpression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.expressions.scalar.BooleanExpression;
 import eu.europa.ted.efx.model.expressions.scalar.DynamicExpression;
@@ -64,7 +59,7 @@ import eu.europa.ted.efx.model.rules.ValidationRule;
 import eu.europa.ted.efx.model.rules.ValidationStage;
 import eu.europa.ted.efx.model.variables.DynamicFunction;
 import eu.europa.ted.efx.model.variables.DynamicVariable;
-import eu.europa.ted.efx.model.variables.ParsedParameter;
+import eu.europa.ted.efx.model.variables.Function;
 import eu.europa.ted.efx.model.variables.ParsedParameters;
 import eu.europa.ted.efx.model.variables.Variable;
 import eu.europa.ted.efx.sdk2.EfxParser.*;
@@ -81,7 +76,7 @@ import eu.europa.ted.efx.sdk2.EfxParser.*;
  * implements EfxRulesTranslator to provide the rules translation API.
  */
 @SdkComponent(versions = {"2"}, componentType = SdkComponentType.EFX_RULES_TRANSLATOR)
-public class EfxRulesTranslatorV2 extends EfxBaseListener
+public class EfxRulesTranslatorV2 extends TranslatorListener
     implements EfxRulesTranslator {
 
   private static final Logger logger = LoggerFactory.getLogger(EfxRulesTranslatorV2.class);
@@ -90,37 +85,6 @@ public class EfxRulesTranslatorV2 extends EfxBaseListener
    * The ValidatorGenerator is used to generate validation output from the intermediate model.
    */
   private final ValidatorGenerator validatorGenerator;
-
-  /**
-   * Symbols are the field identifiers and node identifiers. The symbols map is used to resolve them
-   * to their location in the data source (typically their XPath).
-   */
-  private final SymbolResolver symbols;
-
-  /**
-   * The ScriptGenerator is called to determine the target language syntax whenever needed.
-   */
-  private final ScriptGenerator script;
-
-  private final BaseErrorListener errorListener;
-
-  // The state of the translation in progress, created for each rules file translated.
-
-  /**
-   * The stack is used by the methods of this listener to pass data to each other as the parse tree
-   * is being walked.
-   */
-  private CallStack stack;
-
-  /**
-   * The context stack is used to keep track of context switching in nested expressions.
-   */
-  private ContextStack efxContext;
-
-  /**
-   * Translates the expressions, field contexts and node contexts of the rules.
-   */
-  private EfxExpressionVisitor expressions;
 
   /**
    * List of validation stages collected during parsing.
@@ -149,10 +113,13 @@ public class EfxRulesTranslatorV2 extends EfxBaseListener
   public EfxRulesTranslatorV2(final ValidatorGenerator validatorGenerator,
       final SymbolResolver symbolResolver, final ScriptGenerator scriptGenerator,
       final BaseErrorListener errorListener) {
+    super(symbolResolver, scriptGenerator, errorListener);
     this.validatorGenerator = validatorGenerator;
-    this.symbols = symbolResolver;
-    this.script = scriptGenerator;
-    this.errorListener = errorListener;
+  }
+
+  @Override
+  EfxExpressionVisitor visitorOf(final TranslationContext translation) {
+    return new RulesExpressionVisitor(translation);
   }
 
   /**
@@ -162,16 +129,6 @@ public class EfxRulesTranslatorV2 extends EfxBaseListener
   public String translateExpression(final String expression, final String... arguments) {
     return new EfxExpressionTranslatorV2(this.symbols, this.script, this.errorListener)
         .translateExpression(expression, arguments);
-  }
-
-  @Override
-  public void enterEveryRule(final ParserRuleContext ctx) {
-    this.stack.pushParserContext(ctx);
-  }
-
-  @Override
-  public void exitEveryRule(final ParserRuleContext ctx) {
-    this.stack.popParserContext();
   }
 
   @Override
@@ -224,34 +181,18 @@ public class EfxRulesTranslatorV2 extends EfxBaseListener
     final CharStream resolvedInput =
         new IncludeProcessor(options.getIncludedFileResolver()).resolve(input);
 
-    EfxLexer lexer = new EfxLexer(resolvedInput);
-    lexer.removeErrorListeners();
-    lexer.addErrorListener(this.errorListener);
-
-    CommonTokenStream tokens = new CommonTokenStream(lexer);
-
-    EfxParser parser = new EfxParser(tokens);
-    parser.setErrorHandler(new EfxErrorStrategy());
-    parser.removeErrorListeners();
-    parser.addErrorListener(this.errorListener);
-
     // Parse the rules file
-    ParseTree tree = parser.rulesFile();
+    ParseTree tree = this.parserOf(resolvedInput).rulesFile();
 
     logger.debug("Walking parse tree to build intermediate model");
 
     // Initialize per-translation state
     this.validationPlan = new ValidationPlan();
     this.apiCallCounter = 0;
-    final TranslationContext translation =
-        new TranslationContext(this.symbols, this.script, this.errorListener);
-    this.stack = translation.stack();
-    this.efxContext = translation.efxContext();
-    this.expressions = new RulesExpressionVisitor(translation);
     this.ruleStack.clear();
 
     // Walk the parse tree - this translator IS the listener
-    new ExpressionSkippingWalker().walk(this, tree);
+    this.translate(tree);
 
     if (this.validationPlan.getStages().isEmpty()) {
       throw InvalidUsageException.emptyRulesFile();
@@ -262,16 +203,6 @@ public class EfxRulesTranslatorV2 extends EfxBaseListener
   }
 
   // #region ANTLR Listener Methods for EFX Rules Grammar
-
-  /**
-   * Guard: throws if an {@code #include} directive survived into the parse tree,
-   * meaning the {@link IncludeProcessor} did not resolve it.
-   */
-  @Override
-  public void exitIncludeDirective(IncludeDirectiveContext ctx) {
-    String path = ctx.IncludePath() != null ? ctx.IncludePath().getText().trim() : "<unknown>";
-    throw TranslatorConfigurationException.unresolvedIncludeDirective(path);
-  }
 
   // #region Variable Initializers
 
@@ -496,54 +427,12 @@ public class EfxRulesTranslatorV2 extends EfxBaseListener
   }
 
   /**
-   * Declares the context of a field or a node, with its predicates.
+   * The context declared is also the context of the rule set.
    */
-  private void exitContextDeclaration(Context declared, Variable contextVariable) {
-    if (declared.isFieldContext()) {
-      this.exitFieldContextDeclaration(declared.symbol(), declared.relativePath(), contextVariable);
-    } else {
-      this.exitNodeContextDeclaration(declared.symbol(), declared.relativePath(), contextVariable);
-    }
-  }
-
-  private void exitRootContextDeclaration() {
-    this.exitNodeContextDeclaration(this.symbols.getRootNodeId(), this.symbols.getRootPath(), null);
-  }
-
-  private void exitFieldContextDeclaration(String fieldId, PathExpression contextPath, Variable contextVariable) {
-    var context = new FieldContext(fieldId, contextPath, contextVariable);
+  @Override
+  void declareContext(final Context context, final Variable contextVariable) {
     this.ruleStack.peek(RuleSet.class).setContext(context, contextVariable);
-    this.efxContext.push(context);
-    if (contextVariable != null) {
-      this.stack.declareIdentifier(contextVariable);
-      this.efxContext.declareContextVariable(contextVariable.name, context);
-    }
-  }
-
-  private void exitNodeContextDeclaration(String nodeId, PathExpression contextPath, Variable contextVariable) {
-    var context = new NodeContext(nodeId, contextPath, contextVariable);
-    this.ruleStack.peek(RuleSet.class).setContext(context, contextVariable);
-    this.efxContext.push(context);
-    if (contextVariable != null) {
-      this.stack.declareIdentifier(contextVariable);
-      this.efxContext.declareContextVariable(contextVariable.name, context);
-    }
-  }
-
-  private Variable getContextVariable(ContextVariableInitializerContext ctx,
-      PathExpression contextPath) {
-    if (ctx == null) {
-      return null;
-    }
-
-    final String variableName = ctx.variableName.getText();
-    final Class<? extends TypedExpression> variableType = contextPath.asScalar().getClass();
-
-    return new Variable(variableName,
-        this.script.composeVariableDeclaration(variableName, variableType),
-        this.script.contextualizePath(contextPath, contextPath),
-        this.script.composeVariableReference(variableName, variableType));
-
+    super.declareContext(context, contextVariable);
   }
 
 
@@ -770,10 +659,6 @@ public class EfxRulesTranslatorV2 extends EfxBaseListener
     this.stack.declareFunction(new DynamicFunction(apiName, params, endpointName, errorSeverity, errorLabel));
   }
 
-  private boolean isApiFunction(FunctionInvocationContext ctx) {
-    return this.stack.getFunction(ctx.functionName.getText()) instanceof DynamicFunction;
-  }
-
   private int apiCallCounter = 0;
 
   /**
@@ -781,11 +666,11 @@ public class EfxRulesTranslatorV2 extends EfxBaseListener
    * Creates an auto-generated dynamic variable on the current ValidationRule and returns
    * a boolean reference expression ($varName = 1).
    */
-  private BooleanExpression composeAutoGeneratedDynamicVariable(FunctionInvocationContext ctx) {
+  private BooleanExpression composeAutoGeneratedDynamicVariable(FunctionInvocationContext ctx,
+      DynamicFunction apiFunc) {
     String funcName = ctx.functionName.getText();
 
-    // Resolve the dynamic function and compose the raw dynamic function call.
-    DynamicFunction apiFunc = (DynamicFunction) this.stack.getFunction(funcName);
+    // Compose the raw dynamic function call.
     List<? extends TypedExpression> args =
         this.expressions.argumentsOf(apiFunc, ctx.argumentList()).getArgumentValues();
     if (!this.ruleStack.contains(ValidationRule.class)) {
@@ -811,19 +696,6 @@ public class EfxRulesTranslatorV2 extends EfxBaseListener
 
     // Return the success check so it can be used in the rule's condition.
     return referenceExpression;
-  }
-
-  /**
-   * Declares a parameter of an API function.
-   */
-  @Override
-  public void exitParameterDeclaration(ParameterDeclarationContext ctx) {
-    final String parameterName = ctx.parameterName.getText();
-    ParsedParameter parameter = new ParsedParameter(parameterName,
-        this.script.composeParameterReference(parameterName,
-            EfxExpressionVisitor.typeOf(ctx.typeDeclaration())));
-    this.stack.declareIdentifier(parameter);
-    this.stack.peek(ParsedParameters.class).add(parameter);
   }
 
   private static String unquote(String literal) {
@@ -853,8 +725,11 @@ public class EfxRulesTranslatorV2 extends EfxBaseListener
 
     @Override
     public Operand<?> visitFunctionInvocation(final FunctionInvocationContext ctx) {
-      if (EfxRulesTranslatorV2.this.isApiFunction(ctx)) {
-        return this.operand(EfxRulesTranslatorV2.this.composeAutoGeneratedDynamicVariable(ctx));
+      final Function function =
+          EfxRulesTranslatorV2.this.stack.getFunction(ctx.functionName.getText());
+      if (function instanceof DynamicFunction) {
+        return this.operand(EfxRulesTranslatorV2.this.composeAutoGeneratedDynamicVariable(ctx,
+            (DynamicFunction) function));
       }
       return super.visitFunctionInvocation(ctx);
     }

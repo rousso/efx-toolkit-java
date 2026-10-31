@@ -16,6 +16,7 @@ package eu.europa.ted.efx.model.types;
 import static java.util.Map.entry;
 
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import eu.europa.ted.efx.exceptions.TranslatorConfigurationException;
 import eu.europa.ted.efx.sdk2.EfxLexer;
@@ -63,14 +64,12 @@ public final class EfxTypeTokenLookup {
       entry(EfxDataType.Date.class, DATE),
       entry(EfxDataType.Time.class, TIME));
 
+  /**
+   * The inverse of {@link #FROM_JAVA_TYPE}, whose types are all primitives.
+   */
   private static final Map<String, Class<? extends EfxDataType.Primitive>> TO_JAVA_TYPE =
-      Map.ofEntries(
-          entry(TEXT, EfxDataType.String.class),
-          entry(INDICATOR, EfxDataType.Boolean.class),
-          entry(NUMERIC, EfxDataType.Number.class),
-          entry(DURATION, EfxDataType.Duration.class),
-          entry(DATE, EfxDataType.Date.class),
-          entry(TIME, EfxDataType.Time.class));
+      FROM_JAVA_TYPE.entrySet().stream().collect(Collectors.toUnmodifiableMap(Map.Entry::getValue,
+          javaType -> javaType.getKey().asSubclass(EfxDataType.Primitive.class)));
 
   /**
    * Resolves an eForms SDK field type name to the corresponding EFX type name.

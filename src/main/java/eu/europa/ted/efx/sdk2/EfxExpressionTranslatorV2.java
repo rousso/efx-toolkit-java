@@ -19,9 +19,7 @@ import java.util.LinkedList;
 import java.util.function.Function;
 
 import org.antlr.v4.runtime.BaseErrorListener;
-import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CharStreams;
-import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.TerminalNode;
 
@@ -32,8 +30,6 @@ import eu.europa.ted.efx.exceptions.SymbolResolutionException;
 import eu.europa.ted.efx.interfaces.EfxExpressionTranslator;
 import eu.europa.ted.efx.interfaces.ScriptGenerator;
 import eu.europa.ted.efx.interfaces.SymbolResolver;
-import eu.europa.ted.efx.model.CallStack;
-import eu.europa.ted.efx.model.ContextStack;
 import eu.europa.ted.efx.model.expressions.Expression;
 import eu.europa.ted.efx.model.expressions.PathExpression;
 import eu.europa.ted.efx.model.expressions.scalar.StringPath;
@@ -42,7 +38,6 @@ import eu.europa.ted.efx.sdk2.EfxParser.AttributeReferenceContext;
 import eu.europa.ted.efx.sdk2.EfxParser.ParameterDeclarationContext;
 import eu.europa.ted.efx.sdk2.EfxParser.SelectionContext;
 import eu.europa.ted.efx.sdk2.EfxParser.SingleExpressionContext;
-import eu.europa.ted.efx.sdk2.EfxParser.StandardExpressionBlockContext;
 
 /**
  * The goal of the EfxExpressionTranslator is to take an EFX expression and translate it to a
@@ -63,45 +58,21 @@ import eu.europa.ted.efx.sdk2.EfxParser.StandardExpressionBlockContext;
  * an {@link EfxExpressionVisitor}.</p>
  */
 @SdkComponent(versions = {"2"}, componentType = SdkComponentType.EFX_EXPRESSION_TRANSLATOR)
-public class EfxExpressionTranslatorV2 extends EfxBaseListener
+public class EfxExpressionTranslatorV2 extends TranslatorListener
     implements EfxExpressionTranslator {
 
   private static final String BEGIN_EXPRESSION_BLOCK = "{";
   private static final String END_EXPRESSION_BLOCK = "}";
 
   /**
-   * Symbols are the field identifiers and node identifiers. The symbols map is used to resolve them
-   * to their location in the data source (typically their XPath).
-   */
-  private final SymbolResolver symbols;
-
-  /**
-   * The ScriptGenerator is called to determine the target language syntax whenever needed.
-   */
-  private final ScriptGenerator script;
-
-  private final BaseErrorListener errorListener;
-
-  /**
    * Creates the visitor that translates the expression, for each translation.
    */
   private final Function<TranslationContext, EfxExpressionVisitor> visitors;
 
-  // The state of the translation in progress, created for each expression translated.
-
   /**
-   * Passes the declared parameters to the expression, and the translated expression to
-   * {@link #getTranslatedScript()}.
+   * The values of the declared parameters, in the order of their declarations, for the translation
+   * in progress.
    */
-  private CallStack stack;
-
-  /**
-   * Keeps track of the context the expression is evaluated in.
-   */
-  private ContextStack efxContext;
-
-  private EfxExpressionVisitor expressions;
-
   private Deque<String> expressionArguments;
 
   protected EfxExpressionTranslatorV2() {
@@ -122,20 +93,13 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
   EfxExpressionTranslatorV2(final SymbolResolver symbolResolver,
       final ScriptGenerator scriptGenerator, final BaseErrorListener errorListener,
       final Function<TranslationContext, EfxExpressionVisitor> visitors) {
-    this.symbols = symbolResolver;
-    this.script = scriptGenerator;
-    this.errorListener = errorListener;
+    super(symbolResolver, scriptGenerator, errorListener);
     this.visitors = visitors;
   }
 
   @Override
-  public void enterEveryRule(final ParserRuleContext ctx) {
-    this.stack.pushParserContext(ctx);
-  }
-
-  @Override
-  public void exitEveryRule(final ParserRuleContext ctx) {
-    this.stack.popParserContext();
+  EfxExpressionVisitor visitorOf(final TranslationContext translation) {
+    return this.visitors.apply(translation);
   }
 
   @Override
@@ -143,14 +107,8 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
     final SingleExpressionContext tree =
         this.parserOf(CharStreams.fromString(expression)).singleExpression();
 
-    final TranslationContext translation =
-        new TranslationContext(this.symbols, this.script, this.errorListener);
-    this.stack = translation.stack();
-    this.efxContext = translation.efxContext();
-    this.expressions = this.visitors.apply(translation);
     this.expressionArguments = new LinkedList<>(Arrays.asList(arguments));
-
-    new ExpressionSkippingWalker().walk(this, tree);
+    this.translate(tree);
 
     return this.getTranslatedScript();
   }
@@ -159,25 +117,10 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
       final Class<T> parameterType) {
     final EfxParser parser = this.parserOf(
         CharStreams.fromString(BEGIN_EXPRESSION_BLOCK + parameterValue + END_EXPRESSION_BLOCK));
-    final EfxExpressionVisitor visitor = new EfxExpressionVisitor(
-        new TranslationContext(this.symbols, this.script, this.errorListener));
+    final EfxExpressionVisitor visitor =
+        new EfxExpressionVisitor(new TranslationContext(this.symbols, this.script));
     return Expression.instantiate(visitor.visit(parser.parameterValue()).value().getScript(),
         parameterType);
-  }
-
-  private EfxParser parserOf(final CharStream input) {
-    final EfxLexer lexer = new EfxLexer(input);
-    final CommonTokenStream tokens = new CommonTokenStream(lexer);
-    final EfxParser parser = new EfxParser(tokens);
-    parser.setErrorHandler(new EfxErrorStrategy());
-
-    if (this.errorListener != null) {
-      lexer.removeErrorListeners();
-      lexer.addErrorListener(this.errorListener);
-      parser.removeErrorListeners();
-      parser.addErrorListener(this.errorListener);
-    }
-    return parser;
   }
 
   /**
@@ -233,11 +176,6 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
       this.stack.push(this.expressions.valueOf(ctx.expression()));
     }
     this.efxContext.pop();
-  }
-
-  @Override
-  public void exitStandardExpressionBlock(StandardExpressionBlockContext ctx) {
-    this.stack.push(this.expressions.valueOf(ctx.expression()));
   }
 
   /**

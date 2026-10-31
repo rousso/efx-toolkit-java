@@ -13,8 +13,6 @@
  */
 package eu.europa.ted.efx.sdk2;
 
-import org.antlr.v4.runtime.BaseErrorListener;
-
 import eu.europa.ted.efx.interfaces.ScriptGenerator;
 import eu.europa.ted.efx.interfaces.SymbolResolver;
 import eu.europa.ted.efx.model.CallStack;
@@ -23,8 +21,7 @@ import eu.europa.ted.efx.model.ContextStack;
 /**
  * The state that the translators of SDK 2 share during one translation: the symbols that
  * references resolve to, the script generator that composes the target language, the call stack
- * of declarations and template data, the stack of the contexts that references are read in, and
- * the listener of syntax errors.
+ * of declarations and template data, and the stack of the contexts that references are read in.
  *
  * <p>A translator creates one for each translation, so that the declarations and contexts of one
  * translation are not visible in the next.</p>
@@ -33,15 +30,12 @@ final class TranslationContext {
 
   private final SymbolResolver symbols;
   private final ScriptGenerator script;
-  private final BaseErrorListener errorListener;
   private final CallStack stack = new CallStack();
   private final ContextStack efxContext;
 
-  TranslationContext(final SymbolResolver symbols, final ScriptGenerator script,
-      final BaseErrorListener errorListener) {
+  TranslationContext(final SymbolResolver symbols, final ScriptGenerator script) {
     this.symbols = symbols;
     this.script = script;
-    this.errorListener = errorListener;
     this.efxContext = new ContextStack(symbols);
   }
 
@@ -51,13 +45,6 @@ final class TranslationContext {
 
   ScriptGenerator script() {
     return this.script;
-  }
-
-  /**
-   * @return the listener of syntax errors, or {@code null} if the parser's own listeners are kept
-   */
-  BaseErrorListener errorListener() {
-    return this.errorListener;
   }
 
   CallStack stack() {
