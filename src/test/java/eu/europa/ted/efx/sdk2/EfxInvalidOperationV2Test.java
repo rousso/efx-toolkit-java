@@ -310,6 +310,7 @@ class EfxInvalidOperationV2Test extends EfxTestsBase {
         "get-duplicates(ND-RepeatableNode)",
         "sort(ND-RepeatableNode)",
         "reverse(ND-RepeatableNode)",
+        "subsequence(ND-RepeatableNode, 1)",
 
         // is present applies to a field or node reference
         "1 is present",
