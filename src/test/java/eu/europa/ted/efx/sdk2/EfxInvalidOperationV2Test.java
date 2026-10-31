@@ -14,6 +14,7 @@
 package eu.europa.ted.efx.sdk2;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.stream.Stream;
 
@@ -22,19 +23,24 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import eu.europa.ted.efx.EfxTestsBase;
+import eu.europa.ted.efx.exceptions.InvalidArgumentException;
+import eu.europa.ted.efx.exceptions.ThrowingErrorListener;
+import eu.europa.ted.efx.exceptions.TypeMismatchException;
 
 /**
  * The table of operations that EFX rejects: one row per expression, grouped by the rule the
  * expression breaks.
  * <p>
- * Each row is expected to fail with a {@link ParseCancellationException}, the common base of syntax
- * errors and compilation errors, so that a row holds whether the parser or the translator rejects
- * the expression. Binary operations appear in both operand orders, and with literals as well as
- * field references, because the two kinds of operand are rejected along different paths.
+ * Each row is expected to fail with a syntax error or a type error, so that a row holds whether the
+ * parser or the translator rejects the expression. A syntax error is a bare
+ * {@link ParseCancellationException}, as the {@link ThrowingErrorListener} raises it; a type error is
+ * a {@link TypeMismatchException} or an {@link InvalidArgumentException}. Any other failure, such as
+ * a name that does not resolve, would let a row pass without testing its rule.
+ * <p>
+ * Binary operations appear in both operand orders, and with literals as well as field references,
+ * because the two kinds of operand are rejected along different paths.
  */
 class EfxInvalidOperationV2Test extends EfxTestsBase {
-
-  private static final String CONTEXT = "ND-Root";
 
   @Override
   protected String getSdkVersion() {
@@ -44,8 +50,15 @@ class EfxInvalidOperationV2Test extends EfxTestsBase {
   @ParameterizedTest(name = "{0}")
   @MethodSource("invalidOperations")
   void testInvalidOperation_IsRejected(final String expression) {
-    assertThrows(ParseCancellationException.class,
-        () -> translateExpressionWithContext(CONTEXT, expression));
+    ParseCancellationException exception = assertThrows(ParseCancellationException.class,
+        () -> translateExpressionWithContext("ND-Root", expression));
+    assertTrue(isSyntaxOrTypeError(exception), exception::toString);
+  }
+
+  private static boolean isSyntaxOrTypeError(final ParseCancellationException exception) {
+    return exception.getClass() == ParseCancellationException.class
+        || exception instanceof TypeMismatchException
+        || exception instanceof InvalidArgumentException;
   }
 
   static Stream<String> invalidOperations() {
@@ -77,16 +90,20 @@ class EfxInvalidOperationV2Test extends EfxTestsBase {
         // + adds two numbers or two durations
         "'a' + 'b'",
         "BT-00-Text + BT-00-Text",
+        "BT-00-Text + 1",
         "'a' + 1",
         "1 + 'a'",
         "TRUE + 1",
         "BT-00-Number + BT-00-Indicator",
         "2020-01-01Z + 2020-01-02Z",
         "BT-00-StartDate + BT-00-EndDate",
+        "1 + BT-00-StartDate",
         "10:00:00Z + P1D",
         "BT-00-StartTime + BT-00-Duration",
+        "BT-00-StartTime + P1D",
         "1 + P1D",
         "BT-00-Duration + BT-00-Number",
+        "P1D + BT-00-Number",
 
         // - subtracts two numbers, two durations, or two dates
         "BT-00-Text - 1",
@@ -239,12 +256,13 @@ class EfxInvalidOperationV2Test extends EfxTestsBase {
         "some text:$x in ['a'] satisfies $x is present",
         "for text:$x in ['a'] return $x is present",
 
-        // A predicate is a boolean or a number, and an index on a sequence is a number
+        // A predicate is a boolean, and an index on a sequence is a number
         "BT-00-Text['x']",
         "BT-00-Repeatable-Text[2020-01-01Z]",
         "BT-00-Repeatable-Text[P1D]",
         "BT-00-Repeatable-Text[BT-00-Text]",
         "ND-SubNode['x'] is present",
+        "ND-SubNode[1] is present",
         "['a', 'b']['x']",
         "['a', 'b'][TRUE]",
         "['a', 'b'][BT-00-Text]",
