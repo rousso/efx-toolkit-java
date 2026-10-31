@@ -3,7 +3,7 @@
 Single record of the work described in `plan.md`. Update it at the end of every session: item status, gate results with their numbers, the commit ids of both repositories, decisions taken, open questions for Yannis.
 
 **Last updated:** 2026-10-31, by the implementing thread (session 1).
-**Current phase:** 1. **Next item:** gate 1 waits for Yannis's review of the invalid-operation table; then P2.1.
+**Current phase:** 2. **Next item:** P2.1.
 
 ## Work items
 
@@ -36,7 +36,7 @@ Single record of the work described in `plan.md`. Update it at the end of every 
 | Gate | Date | Tests (count, green) | Corpus comparison | Timings | Profiler | Toolkit commit | SDK commit |
 |---|---|---|---|---|---|---|---|
 | 0 | 2026-10-31 | 1,554 green (default run, corpus excluded); 56 green (corpus run) | Baseline captured: 52 templates and 4 rules files, 790 output files, identical to the run before the commit and, for the templates and the 3 stage files, to `develop` | Templates 388.7 s, rules 69.6 s (`rules.efx` 69.4 s), 461.0 s in all; 411 to 461 s over 4 runs | Not yet (phase 3) | 5136df4 (test), a317994 (record) | 0c66c10 |
-| 1 | 2026-10-31 | 1,947 green (default run, corpus excluded) | Not run: phase 1 changes tests only | Not measured, for the same reason | Not yet (phase 3) | this commit | 0c66c10 |
+| 1 | 2026-10-31 | 1,947 green (default run, corpus excluded); every V2 translator handler of a language feature runs; Yannis reviewed the invalid-operation table and passed the gate ("looks quite complete") | Not run: phase 1 changes tests only | Not measured, for the same reason | Not yet (phase 3) | 33ec1e4 (review), 3762ff7 and d6bb3fe (decisions) | 0c66c10 |
 | 2 | | | | | | | |
 | 3 | | | | | | | |
 | 4 | | | | | | | |
@@ -188,4 +188,4 @@ Answered: 2026-10-31, Yannis approved both pom.xml additions for P0.4. 2026-10-3
 ## Session log
 
 - 2026-10-31, design thread: plan approved by Yannis; branches created in both forks; `plan.md` and `progress.md` committed.
-- 2026-10-31, implementing thread, session 1: P0.2 and P0.5 done and pushed; phase 0 review applied; Yannis approved the two pom.xml additions; P0.4 committed; baseline captured; gate 0 passed. Scratch comparison with `develop` (same harness, real SDK): outputs identical, except that `rules.efx` now translates. Phase 1 started: P1.1, P1.2 and P1.3 done and pushed. Phase 1 review applied; gate 1 checks green (1,947 tests, coverage as above); gate 1 waits for Yannis's review of the table.
+- 2026-10-31, implementing thread, session 1: P0.2 and P0.5 done and pushed; phase 0 review applied; Yannis approved the two pom.xml additions; P0.4 committed; baseline captured; gate 0 passed. Scratch comparison with `develop` (same harness, real SDK): outputs identical, except that `rules.efx` now translates. Phase 1 started: P1.1, P1.2 and P1.3 done and pushed. Phase 1 review applied; gate 1 checks green (1,947 tests, coverage as above); Yannis reviewed the table and passed gate 1; phase 2 started.
