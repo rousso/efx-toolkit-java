@@ -171,7 +171,8 @@ class ResolutionTest {
   void testTextEqualsNumber_IsRejectedAtTheNumber() {
     Mismatch mismatch = mismatch(ComparisonOperators.EQUAL, TEXT, NUMBER);
     assertEquals(List.of(1), positions(mismatch));
-    assertEquals(ParameterType.T, mismatch.getRejections().get(0).getExpected());
+    assertEquals(StringExpression.class,
+        mismatch.getRejections().get(0).getRequired().getExpressionType());
   }
 
   @Test

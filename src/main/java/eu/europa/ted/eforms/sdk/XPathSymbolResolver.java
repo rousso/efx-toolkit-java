@@ -618,6 +618,11 @@ public abstract class XPathSymbolResolver implements SymbolResolver {
   }
 
   private boolean isNodeRepeatableFromContext(final SdkNode sdkNode, final SdkNode contextNode) {
+    // A node that is not there (the parent of a field whose parent node is unknown) cannot repeat
+    if (sdkNode == null) {
+      return false;
+    }
+
     // Use cached ancestry from node
     List<String> contextAncestry = this.ancestryOf(contextNode);
 

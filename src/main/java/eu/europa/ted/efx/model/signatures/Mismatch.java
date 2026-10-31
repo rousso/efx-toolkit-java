@@ -17,7 +17,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import eu.europa.ted.efx.model.expressions.PathExpression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 
 /**
@@ -39,13 +38,6 @@ public final class Mismatch {
     this.builtIn = builtIn;
     this.arguments = List.copyOf(arguments);
     this.rejections = List.copyOf(rejections);
-  }
-
-  /**
-   * @return the built-in that was called
-   */
-  public BuiltIn getBuiltIn() {
-    return this.builtIn;
   }
 
   /**
@@ -130,14 +122,6 @@ public final class Mismatch {
     }
 
     /**
-     * @return the parameter type the overload declares at that position, before {@code T} is
-     *         bound
-     */
-    public ParameterType getExpected() {
-      return this.overload.getSignature().parameterAt(this.getPosition()).getType();
-    }
-
-    /**
      * @return the parameter type the argument had to convert to: the one declared at that
      *         position, with {@code T} bound by the arguments of the call if they bind it
      */
@@ -156,13 +140,7 @@ public final class Mismatch {
      * @return what is wrong with the argument
      */
     public Kind getKind() {
-      ParameterType required = this.getRequired();
-      TypedExpression argument = this.getArgument();
-      if (PathExpression.class.isAssignableFrom(required.getExpressionType())
-          || ParameterType.T.boundBy(argument).isEmpty()) {
-        return Kind.PATH;
-      }
-      return required.acceptsValuesOf(argument) ? Kind.CARDINALITY : Kind.PRIMITIVE;
+      return this.getRequired().rejectionKindOf(this.getArgument());
     }
 
     /**

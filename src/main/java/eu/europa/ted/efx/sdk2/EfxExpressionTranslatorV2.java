@@ -2846,7 +2846,7 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
   @Override
   public void exitDictionaryLookup(DictionaryLookupContext ctx) {
     var dictionary = this.stack.getDictionary(ctx.dictionaryName.getText());
-    var key = this.popOperand(ctx.getRuleContext(ParserRuleContext.class, 0), StringExpression.class);
+    var key = this.popOperandOf(ctx, StringExpression.class);
     this.stack.push(this.script.composeDictionaryLookup(dictionary.name, key, dictionary.type));
   }
 
@@ -3572,67 +3572,84 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
   // #region Built-ins and operands -------------------------------------------
 
   /**
-   * Translates a call of a built-in function, or of a condition with a single operand: pops one
-   * argument for each operand, resolves the built-in against them and pushes the result. The
-   * operands of a call are the child rules of its grammar label, in order.
-   *
-   * <p>A sequence where a single value is required is reported by the reference the operand is
-   * written as; any other argument that does not fit cannot be converted.</p>
+   * Translates a call of a built-in function, or of a condition with a single operand, with
+   * {@link #exitBuiltIn}: an argument of the wrong primitive cannot be converted.
    *
    * @param call the call
    * @param builtIn the built-in called
    */
   private void exitCall(final ParserRuleContext call, final BuiltIn builtIn) {
-    final Resolution resolution = this.resolve(call, builtIn);
-    if (!resolution.isResolved()) {
-      final Rejection rejection = resolution.getMismatch().getDiagnosis();
-      throw this.sequenceError(call, rejection)
-          .orElseGet(() -> TypeMismatchException.cannotConvert(call,
-              rejection.getRequired().getExpressionType(), rejection.getArgument().getClass()));
-    }
-    this.stack.push(resolution.compose(this.script));
+    this.exitBuiltIn(call, builtIn, mismatch -> {
+      final Rejection rejection = mismatch.getDiagnosis();
+      return TypeMismatchException.cannotConvert(call, rejection.getRequired().getExpressionType(),
+          rejection.getArgument().getClass());
+    });
   }
 
   /**
-   * Translates an infix operator as {@link #exitCall} translates a call, except that operands
-   * that do not fit are incompatible operands of the operator.
+   * Translates an infix operator with {@link #exitBuiltIn}: operands of the wrong primitive are
+   * incompatible operands of the operator.
    *
    * @param operation the operation, whose two child rules are its operands
    * @param operator the operator
    */
   private void exitOperation(final ParserRuleContext operation, final BuiltIn operator) {
-    final Resolution resolution = this.resolve(operation, operator);
+    this.exitBuiltIn(operation, operator,
+        mismatch -> TypeMismatchException.incompatibleOperands(operation, operator.getName(),
+            mismatch.getArguments().get(0), mismatch.getArguments().get(1)));
+  }
+
+  /**
+   * Pops one argument for each operand of a call, resolves the built-in against them and pushes
+   * the result. The operands of a call are the child rules of its grammar label, in order.
+   *
+   * <p>A sequence where a single value is required is reported by the reference the operand is
+   * written as; any other mismatch gets the error the kind of call gives.</p>
+   *
+   * @param call the call
+   * @param builtIn the built-in called
+   * @param typeError the error of a mismatch that the operand's origin does not report
+   */
+  private void exitBuiltIn(final ParserRuleContext call, final BuiltIn builtIn,
+      final java.util.function.Function<Mismatch, TypeMismatchException> typeError) {
+    if (builtIn.isTemplateOnly() && !this.translatesTemplateOnlyBuiltIns()) {
+      throw InvalidUsageException.templateOnlyFunction(call, builtIn.getName());
+    }
+    final Resolution resolution =
+        builtIn.resolve(this.popArguments(call.getRuleContexts(ParserRuleContext.class).size()));
     if (!resolution.isResolved()) {
       final Mismatch mismatch = resolution.getMismatch();
-      throw this.sequenceError(operation, mismatch.getDiagnosis())
-          .orElseGet(() -> TypeMismatchException.incompatibleOperands(operation, operator.getName(),
-              mismatch.getArguments().get(0), mismatch.getArguments().get(1)));
+      final Rejection rejection = mismatch.getDiagnosis();
+      throw this.sequenceError(call.getRuleContext(ParserRuleContext.class, rejection.getPosition()),
+          rejection.getKind()).orElseGet(() -> typeError.apply(mismatch));
     }
     this.stack.push(resolution.compose(this.script));
   }
 
-  private Resolution resolve(final ParserRuleContext call, final BuiltIn builtIn) {
-    if (builtIn.isTemplateOnly() && !this.translatesTemplateOnlyBuiltIns()) {
-      throw InvalidUsageException.templateOnlyFunction(call, builtIn.getName());
-    }
-    return builtIn.resolve(this.popArguments(call.getRuleContexts(ParserRuleContext.class).size()));
-  }
-
   private List<TypedExpression> popArguments(final int count) {
-    final LinkedList<TypedExpression> arguments = new LinkedList<>();
+    final List<TypedExpression> arguments = new ArrayList<>(count);
     for (int position = 0; position < count; position++) {
-      arguments.addFirst(this.stack.pop(TypedExpression.class));
+      arguments.add(this.stack.pop(TypedExpression.class));
     }
+    Collections.reverse(arguments);
     return arguments;
   }
 
-  private Optional<TypeMismatchException> sequenceError(final ParserRuleContext call,
-      final Rejection rejection) {
-    if (rejection.getKind() != Rejection.Kind.CARDINALITY) {
+  /**
+   * Gives the error for an operand rejected for its cardinality alone: a sequence where a single
+   * value is required. The error names the reference the operand is written as.
+   *
+   * @param operand the operand, as the parser read it
+   * @param rejection what is wrong with the operand's value
+   * @return the error, or nothing if the value is not rejected for its cardinality alone or the
+   *         operand is not written as a reference
+   */
+  private Optional<TypeMismatchException> sequenceError(final ParserRuleContext operand,
+      final Rejection.Kind rejection) {
+    if (rejection != Rejection.Kind.CARDINALITY) {
       return Optional.empty();
     }
-    return OperandOrigin.sequenceErrorOf(
-        call.getRuleContext(ParserRuleContext.class, rejection.getPosition()), this);
+    return OperandOrigin.sequenceErrorOf(operand, this);
   }
 
   /**
@@ -3665,23 +3682,36 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
    * @param operand the operand, as the parser read it
    * @param type the class of the value required
    * @return the value, converted to that class
-   * @throws TypeMismatchException if the value does not fit; a sequence where a single value is
-   *         required is reported by the reference the operand is written as
+   * @throws TypeMismatchException if the value does not fit: a sequence where a single value is
+   *         required is reported by the reference the operand is written as, and any other value
+   *         is rejected by the call stack, as every pop of a value is
    */
   protected <T extends TypedExpression> T popOperand(final ParserRuleContext operand,
       final Class<T> type) {
     final ParameterType required = ParameterType.of(type);
-    final TypedExpression value = this.stack.pop(TypedExpression.class);
-    if (required.accepts(value)) {
-      return type.cast(required.convert(value));
-    }
-    if (required.acceptsValuesOf(value)) {
-      final Optional<TypeMismatchException> sequenceError = OperandOrigin.sequenceErrorOf(operand, this);
+    final TypedExpression value = this.stack.peekType();
+    if (!required.accepts(value)) {
+      final Optional<TypeMismatchException> sequenceError =
+          this.sequenceError(operand, required.rejectionKindOf(value));
       if (sequenceError.isPresent()) {
         throw sequenceError.get();
       }
     }
-    throw TypeMismatchException.cannotConvert(this.stack.peekParserContext(), type, value.getClass());
+    return this.stack.pop(type);
+  }
+
+  /**
+   * Pops the value of the operand a clause, declaration or block holds as its first child rule,
+   * as {@link #popOperand} does.
+   *
+   * @param <T> the class of the value required
+   * @param holder the clause, declaration or block
+   * @param type the class of the value required
+   * @return the value, converted to that class
+   */
+  protected <T extends TypedExpression> T popOperandOf(final ParserRuleContext holder,
+      final Class<T> type) {
+    return this.popOperand(holder.getRuleContext(ParserRuleContext.class, 0), type);
   }
 
   /**

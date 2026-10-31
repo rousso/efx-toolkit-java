@@ -20,6 +20,7 @@ import java.util.Optional;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.expressions.scalar.ScalarExpression;
 import eu.europa.ted.efx.model.expressions.sequence.SequenceExpression;
+import eu.europa.ted.efx.model.signatures.Mismatch.Rejection;
 import eu.europa.ted.efx.model.types.EfxDataType;
 import eu.europa.ted.efx.model.types.EfxTypeLattice;
 
@@ -100,9 +101,12 @@ enum TypeVariableParameterType implements ParameterType {
     throw new IllegalStateException(this.symbol + " accepts no argument until it is bound");
   }
 
+  /**
+   * An unbound type variable rejects only the argument that cannot bind it, a node.
+   */
   @Override
-  public boolean acceptsValuesOf(final TypedExpression argument) {
-    throw new IllegalStateException(this.symbol + " accepts no argument until it is bound");
+  public Rejection.Kind rejectionKindOf(final TypedExpression argument) {
+    return Rejection.Kind.PATH;
   }
 
   @Override

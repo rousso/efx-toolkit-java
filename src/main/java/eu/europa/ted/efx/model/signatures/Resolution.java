@@ -55,7 +55,7 @@ public final class Resolution {
     Map<Overload, Arguments> applicable = new LinkedHashMap<>();
     List<Mismatch.Rejection> rejections = new ArrayList<>();
     for (Overload overload : builtIn.getOverloads()) {
-      Match match = overload.getSignature().match(arguments);
+      Match match = overload.getSignature().getParameters().match(arguments);
       if (match.isMatched()) {
         applicable.put(overload, match.getArguments());
       } else if (!match.isCountMismatch()) {

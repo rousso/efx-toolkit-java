@@ -14,9 +14,7 @@
 package eu.europa.ted.efx.model.signatures;
 
 import java.util.List;
-import java.util.Optional;
 
-import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.types.EfxDataType;
 
 /**
@@ -49,17 +47,10 @@ public final class Signature {
   }
 
   /**
-   * @return the fixed parameters, in order
+   * @return the parameters, which arguments are matched against
    */
-  public List<Parameter> getParameters() {
-    return this.parameters.getFixed();
-  }
-
-  /**
-   * @return the parameter of the variadic tail, if the signature has one
-   */
-  public Optional<Parameter> getVariadic() {
-    return this.parameters.getVariadic();
+  public Parameters getParameters() {
+    return this.parameters;
   }
 
   /**
@@ -70,38 +61,6 @@ public final class Signature {
   }
 
   /**
-   * Tells whether the signature takes a number of arguments.
-   *
-   * @param count the number of arguments
-   * @return {@code true} if the count is that of the fixed parameters, or, with a variadic tail,
-   *         greater than it
-   */
-  public boolean takes(final int count) {
-    return this.parameters.takes(count);
-  }
-
-  /**
-   * Gives the parameter at a position, which is the variadic tail past the fixed parameters.
-   *
-   * @param position the position of an argument the signature {@link #takes}
-   * @return the parameter at that position
-   */
-  public Parameter parameterAt(final int position) {
-    return this.parameters.parameterAt(position);
-  }
-
-  /**
-   * Matches the arguments of a call against the parameters of this signature.
-   *
-   * @param arguments the translated arguments of the call
-   * @return the converted arguments, or the first reason they do not match
-   * @see Parameters#match
-   */
-  Match match(final List<? extends TypedExpression> arguments) {
-    return this.parameters.match(arguments);
-  }
-
-  /**
    * Gives this signature with {@code T} bound.
    *
    * @param primitive the value primitive {@code T} is bound to
@@ -109,15 +68,6 @@ public final class Signature {
    */
   Signature bind(final Class<? extends EfxDataType.Primitive> primitive) {
     return new Signature(this.parameters.bind(primitive), this.result.bind(primitive));
-  }
-
-  /**
-   * Tells whether a parameter of this signature is {@code T}.
-   *
-   * @return {@code true} if a fixed parameter or the variadic tail is a type variable
-   */
-  boolean isGeneric() {
-    return this.parameters.isGeneric();
   }
 
   @Override

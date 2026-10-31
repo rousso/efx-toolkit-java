@@ -117,7 +117,9 @@ public interface ParameterType {
    *
    * @return {@code true} for {@link #T} and {@link #T_SEQUENCE}
    */
-  boolean isTypeVariable();
+  default boolean isTypeVariable() {
+    return false;
+  }
 
   /**
    * Gives the parameter type this one stands for once {@code T} is bound.
@@ -125,7 +127,9 @@ public interface ParameterType {
    * @param primitive the value primitive {@code T} is bound to
    * @return the concrete type for a type variable, and this parameter type for any other
    */
-  ParameterType bind(Class<? extends EfxDataType.Primitive> primitive);
+  default ParameterType bind(Class<? extends EfxDataType.Primitive> primitive) {
+    return this;
+  }
 
   /**
    * Gives the parameter type this one stands for once an argument binds {@code T}, as a generic
@@ -135,7 +139,9 @@ public interface ParameterType {
    * @return the concrete type for a type variable, or nothing if the argument cannot bind
    *         {@code T} (a node); this parameter type for any other
    */
-  Optional<ParameterType> boundBy(TypedExpression argument);
+  default Optional<ParameterType> boundBy(TypedExpression argument) {
+    return Optional.of(this);
+  }
 
   /**
    * Gives the expression class an argument is converted to. For a type variable, whose arguments
@@ -156,15 +162,15 @@ public interface ParameterType {
   boolean accepts(TypedExpression argument);
 
   /**
-   * Tells whether this parameter type accepts the values of an argument, whatever the argument's
-   * cardinality: whether a single value of the primitive the argument binds {@code T} to converts
-   * to it. An argument rejected by a parameter type that accepts its values is a sequence where a
-   * single value is required.
+   * Tells what is wrong with an argument this parameter type does not accept: its cardinality
+   * alone, when a single value of its primitive would convert, so that it is a sequence where a
+   * single value is required; its primitive; or a path where a value is required, or a node, which
+   * has no value, where one is.
    *
-   * @param argument the translated argument
-   * @return {@code true} if a single value of the argument's primitive converts to this type
+   * @param argument a translated argument this parameter type does not {@link #accepts accept}
+   * @return the kind of the rejection
    */
-  boolean acceptsValuesOf(TypedExpression argument);
+  Mismatch.Rejection.Kind rejectionKindOf(TypedExpression argument);
 
   /**
    * Converts an accepted argument to {@link #getExpressionType()}, as

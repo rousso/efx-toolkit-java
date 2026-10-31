@@ -118,14 +118,14 @@ class TypeVariableBindingTest {
    */
   private static Resolution resolve(final BuiltIn builtIn, final Overload overload, final String first,
       final String second) {
-    List<Parameter> parameters = overload.getSignature().getParameters();
+    List<Parameter> parameters = overload.getSignature().getParameters().getFixed();
     return builtIn.resolve(List.of(
         VALUES.get(parameters.get(0).getType()).get(first),
         VALUES.get(parameters.get(1).getType()).get(second)));
   }
 
   private static boolean takesTwoTypeVariables(final Overload overload) {
-    List<Parameter> parameters = overload.getSignature().getParameters();
+    List<Parameter> parameters = overload.getSignature().getParameters().getFixed();
     return parameters.size() == 2
         && parameters.stream().allMatch(parameter -> parameter.getType().isTypeVariable());
   }

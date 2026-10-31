@@ -13,12 +13,10 @@
  */
 package eu.europa.ted.efx.model.signatures;
 
-import java.util.Optional;
-
 import eu.europa.ted.efx.interfaces.TypeChecker;
 import eu.europa.ted.efx.model.expressions.PathExpression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
-import eu.europa.ted.efx.model.types.EfxDataType;
+import eu.europa.ted.efx.model.signatures.Mismatch.Rejection;
 
 /**
  * A parameter type that takes a reference as a path rather than as its value: any path, or a path
@@ -34,21 +32,6 @@ final class PathParameterType implements ParameterType {
   }
 
   @Override
-  public boolean isTypeVariable() {
-    return false;
-  }
-
-  @Override
-  public ParameterType bind(final Class<? extends EfxDataType.Primitive> primitive) {
-    return this;
-  }
-
-  @Override
-  public Optional<ParameterType> boundBy(final TypedExpression argument) {
-    return Optional.of(this);
-  }
-
-  @Override
   public Class<? extends TypedExpression> getExpressionType() {
     return this.pathType;
   }
@@ -60,8 +43,8 @@ final class PathParameterType implements ParameterType {
   }
 
   @Override
-  public boolean acceptsValuesOf(final TypedExpression argument) {
-    return false;
+  public Rejection.Kind rejectionKindOf(final TypedExpression argument) {
+    return Rejection.Kind.PATH;
   }
 
   @Override

@@ -13,11 +13,9 @@
  */
 package eu.europa.ted.efx.model.signatures;
 
-import java.util.Optional;
-
 import eu.europa.ted.efx.interfaces.TypeChecker;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
-import eu.europa.ted.efx.model.types.EfxDataType;
+import eu.europa.ted.efx.model.signatures.Mismatch.Rejection;
 
 /**
  * A parameter type that names one expression class, such as a number or a sequence of texts. An
@@ -32,21 +30,6 @@ final class ConcreteParameterType implements ParameterType {
   }
 
   @Override
-  public boolean isTypeVariable() {
-    return false;
-  }
-
-  @Override
-  public ParameterType bind(final Class<? extends EfxDataType.Primitive> primitive) {
-    return this;
-  }
-
-  @Override
-  public Optional<ParameterType> boundBy(final TypedExpression argument) {
-    return Optional.of(this);
-  }
-
-  @Override
   public Class<? extends TypedExpression> getExpressionType() {
     return this.expressionType;
   }
@@ -56,11 +39,17 @@ final class ConcreteParameterType implements ParameterType {
     return TypeChecker.V2.canConvert(argument.getClass(), this.expressionType);
   }
 
+  /**
+   * Compares the class of the argument's single values, the one the argument binds {@code T} to,
+   * with this one: if they convert, only the argument's cardinality is wrong.
+   */
   @Override
-  public boolean acceptsValuesOf(final TypedExpression argument) {
+  public Rejection.Kind rejectionKindOf(final TypedExpression argument) {
     return T.boundBy(argument)
-        .map(value -> TypeChecker.V2.canConvert(value.getExpressionType(), this.expressionType))
-        .orElse(false);
+        .map(value -> TypeChecker.V2.canConvert(value.getExpressionType(), this.expressionType)
+            ? Rejection.Kind.CARDINALITY
+            : Rejection.Kind.PRIMITIVE)
+        .orElse(Rejection.Kind.PATH);
   }
 
   @Override
