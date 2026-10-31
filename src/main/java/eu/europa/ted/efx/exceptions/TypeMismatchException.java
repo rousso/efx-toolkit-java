@@ -32,7 +32,6 @@ public class TypeMismatchException extends EfxCompilationException {
         FIELD_IS_MULTILINGUAL,
         NODE_CONTEXT_AS_VALUE,
         IDENTIFIER_IS_SEQUENCE,
-        IDENTIFIER_IS_SCALAR,
         DICTIONARY_IS_SEQUENCE
     }
 
@@ -43,7 +42,6 @@ public class TypeMismatchException extends EfxCompilationException {
     private static final String FIELD_IS_MULTILINGUAL = "Type mismatch. Field '%s' is multilingual and has multiple values (one per language), but is used as a scalar. Use :preferredLanguageText to select the preferred language, or an indexer [n] to select a specific element.";
     private static final String NODE_CONTEXT_AS_VALUE = "Type mismatch. Context variable '$%s' refers to node '%s', but is used as a value. Only field context variables can be used in value expressions.";
     private static final String IDENTIFIER_IS_SEQUENCE = "Type mismatch. Variable '$%s' is declared as a sequence, but is used as a scalar.";
-    private static final String IDENTIFIER_IS_SCALAR = "Type mismatch. Variable '$%s' is declared as a scalar, but is used where a sequence is expected. To use it as a single-element sequence, wrap it in square brackets: [$%s].";
     private static final String DICTIONARY_IS_SEQUENCE = "Type mismatch. Dictionary lookup '$%s' returns a sequence, but is used where a scalar is expected. Use an index to select a single value: $%s['key'][1].";
 
     private final ErrorCode errorCode;
@@ -97,10 +95,6 @@ public class TypeMismatchException extends EfxCompilationException {
 
     public static TypeMismatchException identifierIsSequence(ParserRuleContext ctx, String variableName) {
         return new TypeMismatchException(ErrorCode.IDENTIFIER_IS_SEQUENCE, ctx, IDENTIFIER_IS_SEQUENCE, variableName);
-    }
-
-    public static TypeMismatchException identifierIsScalar(ParserRuleContext ctx, String variableName) {
-        return new TypeMismatchException(ErrorCode.IDENTIFIER_IS_SCALAR, ctx, IDENTIFIER_IS_SCALAR, variableName, variableName);
     }
 
     public static TypeMismatchException dictionaryIsSequence(ParserRuleContext ctx, String dictionaryName) {
