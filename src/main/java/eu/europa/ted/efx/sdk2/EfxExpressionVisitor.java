@@ -132,18 +132,19 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   private final Map<Variable, Context> contextsOfVariables = new IdentityHashMap<>();
 
   /**
-   * How many references have been resolved from each context, so that a bracket can tell whether
-   * its content reads the context it is translated in. A reference is resolved from the current
-   * context only through {@link #relativePathOfField}, {@link #relativePathOfNode} and
-   * {@link #absolutePathOfCurrentContext}, which count it.
+   * The reads made in each context while it is the current one, so that a bracket can tell
+   * whether its content reads the context it is translated in. A reference is resolved only
+   * through {@link #relativePathOfField}, {@link #relativePathOfNode},
+   * {@link #absolutePathOfCurrentContext}, {@link #absolutePathOfField} and
+   * {@link #absolutePathOfNode}, and a dictionary is only looked up by {@link #lookUp}, which
+   * count the read in the current context.
    */
-  private final Map<Context, Integer> readsOfContexts = new IdentityHashMap<>();
+  private final Map<Context, Reads> readsInContexts = new IdentityHashMap<>();
 
   /**
-   * How many references have been resolved from the root: absolute references, and references
-   * read where no context is declared.
+   * The reads made where no context is declared.
    */
-  private int readsOfRoot;
+  private final Reads readsWithoutContext = new Reads();
 
   EfxExpressionVisitor(final TranslationContext translation) {
     this.symbols = translation.symbols();
@@ -181,11 +182,22 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   // #region Readings of an expression ----------------------------------------
 
   /**
+   * Translates an expression where a value of any type is taken, and nothing after checks its
+   * type: what a translation gives, such as the expression of a template block, and the body of an
+   * iteration. A node has no value, so it is rejected, as the operators and the built-ins that
+   * take a value reject it.
+   *
    * @param expression an expression
    * @return its value
+   * @throws TypeMismatchException if the expression is a node
    */
   TypedExpression valueOf(final ExpressionContext expression) {
-    return this.visit(expression).value();
+    final TypedExpression value = this.visit(expression).value();
+    if (ParameterType.T.boundBy(value).isEmpty()) {
+      throw TypeMismatchException.cannotConvert(expression, TypedExpression.class,
+          value.getClass());
+    }
+    return value;
   }
 
   /**
@@ -413,9 +425,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   @Override
   public Operand<?> visitAbsoluteFieldReference(final AbsoluteFieldReferenceContext ctx) {
     final String fieldId = this.fieldIdOf(ctx.linkedFieldReference());
-    this.readsOfRoot++;
-    return new Operand<>(this.symbols.getRelativePathOfField(fieldId, NO_CONTEXT),
-        new FieldOrigin(this, ctx, fieldId));
+    return new Operand<>(this.absolutePathOfField(fieldId), new FieldOrigin(this, ctx, fieldId));
   }
 
   @Override
@@ -432,9 +442,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   @Override
   public Operand<?> visitAbsoluteNodeReference(final AbsoluteNodeReferenceContext ctx) {
     final String nodeId = ctx.simpleNodeReference().NodeId().getText();
-    this.readsOfRoot++;
-    return new Operand<>(this.symbols.getRelativePathOfNode(nodeId, NO_CONTEXT),
-        new NodeOrigin(this, nodeId));
+    return new Operand<>(this.absolutePathOfNode(nodeId), new NodeOrigin(this, nodeId));
   }
 
   /**
@@ -702,7 +710,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   Operand<?> positionInPath(final PathExpression path, final PathOrigin origin,
       final ExpressionContext content) {
     origin.pushElementContext();
-    final int readsBefore = this.readsOfCurrentContext();
+    final Reads reads = this.readsInCurrentContext();
+    final int readsBefore = reads.ofContext();
     final Operand<?> selector = this.visit(content);
     final TypedExpression value = selector.value();
     final PathExpression selected;
@@ -710,14 +719,14 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
       selected = origin.filter(path,
           this.converted(selector, value, BooleanExpression.class, content));
     } else if (value.is(EfxDataType.Number.class)) {
-      rejectIndexReadingContext(content, readsBefore, this.readsOfCurrentContext());
+      rejectIndexReadingContext(content, readsBefore, reads.ofContext());
       selected = this.elementAt(path,
           this.converted(selector, value, NumericExpression.class, content));
     } else {
       throw TypeMismatchException.cannotConvert(content, BooleanExpression.class,
           value.getClass());
     }
-    this.readsOfContexts.remove(this.efxContext.pop());
+    this.readsInContexts.remove(this.efxContext.pop());
     return new Operand<>(selected, origin);
   }
 
@@ -736,20 +745,22 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
 
   /**
    * A bracket after a value: a position in the sequence of its values. A single value is a
-   * sequence of one. The position is computed once, so it must read neither the context nor a
-   * path from the root: the target language reads the content for each value, which has no
-   * element that a path could start from.
+   * sequence of one. The position is computed once, so it must read neither the context nor the
+   * root, by a path or by a lookup in a dictionary: the target language reads the content for each
+   * value, which has no element that a path or a lookup could start from. What the content reads
+   * in a bracket of its own is read from the elements of that bracket.
    *
    * @param sequence the value
    * @param content the content of the bracket
    * @return the value at that position
-   * @throws InvalidUsageException if the position reads the context or a path from the root
+   * @throws InvalidUsageException if the position reads the context or the root
    */
   Operand<?> positionInValue(final Operand<?> sequence, final ExpressionContext content) {
     final TypedExpression value = sequence.value();
-    final int readsBefore = this.readsOfCurrentContextAndRoot();
+    final Reads reads = this.readsInCurrentContext();
+    final int readsBefore = reads.all();
     final NumericExpression index = this.valueAs(content, NumericExpression.class);
-    rejectIndexReadingContext(content, readsBefore, this.readsOfCurrentContextAndRoot());
+    rejectIndexReadingContext(content, readsBefore, reads.all());
     final Class<? extends SequenceExpression> listType = this.sequenceTypeOf(value);
     final SequenceExpression list = value instanceof PathExpression
         ? this.inParentheses(value, listType)
@@ -758,7 +769,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   }
 
   /**
-   * A key in brackets after the name of a dictionary: the values the key indexes.
+   * A key in brackets after the name of a dictionary: the values the key indexes. A dictionary
+   * indexes the fields of the whole notice, so a lookup reads the root.
    *
    * @param name the name of the dictionary
    * @param reference the name of the dictionary, as written
@@ -769,6 +781,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   Operand<?> lookUp(final String name, final ParserRuleContext reference,
       final ExpressionContext key) {
     final Dictionary dictionary = this.stack.getDictionary(name);
+    this.readsInCurrentContext().countReadOfRoot();
     return new Operand<>(
         this.script.composeDictionaryLookup(dictionary.name,
             this.valueAs(key, StringExpression.class), dictionary.type),
@@ -819,29 +832,76 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   }
 
   /**
+   * @param fieldId a field
+   * @return the path of the field from the root, whose read is counted
+   */
+  private PathExpression absolutePathOfField(final String fieldId) {
+    this.readsInCurrentContext().countReadOfRoot();
+    return this.symbols.getRelativePathOfField(fieldId, NO_CONTEXT);
+  }
+
+  /**
+   * @param nodeId a node
+   * @return the path of the node from the root, whose read is counted
+   */
+  private PathExpression absolutePathOfNode(final String nodeId) {
+    this.readsInCurrentContext().countReadOfRoot();
+    return this.symbols.getRelativePathOfNode(nodeId, NO_CONTEXT);
+  }
+
+  /**
    * Counts a read of the current context: a reference is resolved from it.
    */
   private void countReadOfCurrentContext() {
-    if (this.efxContext.isEmpty()) {
-      this.readsOfRoot++;
-    } else {
-      this.readsOfContexts.merge(this.efxContext.peek(), 1, Integer::sum);
-    }
+    this.readsInCurrentContext().countReadOfContext();
   }
 
-  private int readsOfCurrentContext() {
-    return this.efxContext.isEmpty() ? 0
-        : this.readsOfContexts.getOrDefault(this.efxContext.peek(), 0);
-  }
-
-  private int readsOfCurrentContextAndRoot() {
-    return this.readsOfCurrentContext() + this.readsOfRoot;
+  /**
+   * @return the reads made in the current context, or where no context is declared
+   */
+  private Reads readsInCurrentContext() {
+    return this.efxContext.isEmpty() ? this.readsWithoutContext
+        : this.readsInContexts.computeIfAbsent(this.efxContext.peek(), context -> new Reads());
   }
 
   private <T extends TypedExpression> T inParentheses(final TypedExpression expression,
       final Class<T> type) {
     return this.script.composeParenthesizedExpression(TypedExpression.from(expression, type),
         type);
+  }
+
+  /**
+   * The references resolved, and the dictionaries looked up, while a context is the current one:
+   * the reads of the context, and the reads of the root, which an absolute reference and a lookup
+   * start from. Where no context is declared, the root is the context that a relative reference
+   * reads.
+   */
+  private static final class Reads {
+
+    private int ofContext;
+    private int ofRoot;
+
+    void countReadOfContext() {
+      this.ofContext++;
+    }
+
+    void countReadOfRoot() {
+      this.ofRoot++;
+    }
+
+    /**
+     * @return how many references have been resolved from the context
+     */
+    int ofContext() {
+      return this.ofContext;
+    }
+
+    /**
+     * @return how many reads of the context and of the root have been made
+     */
+    int all() {
+      return this.ofContext + this.ofRoot;
+    }
   }
 
   // #endregion Brackets ------------------------------------------------------
@@ -1250,7 +1310,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   /**
    * Translates the arguments of an invocation of a declared function or template, and matches
    * them against the parameters of the declaration, as the arguments of a built-in are matched
-   * against its overloads.
+   * against its overloads. The parameters reject an argument that does not fit them, a node
+   * included.
    *
    * @param declaration the function or template invoked
    * @param list the arguments, or {@code null} if there are none
@@ -1261,7 +1322,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
     final StrictArguments arguments = new StrictArguments(declaration);
     if (list != null) {
       for (final ArgumentContext argument : list.argument()) {
-        arguments.addArgument(this.valueOf(argument.expression()));
+        arguments.addArgument(this.visit(argument.expression()).value());
       }
     }
     final Match match = Parameters.of(declaration.parameters).match(arguments.getValues());

@@ -537,6 +537,38 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
             "display ${$dic['key']};")));
   }
 
+  @Test
+  void testDictionaryLookup_InIndexOnPath() {
+    // The index is read from each element of the path, which a lookup can start from
+    assertEquals(
+        lines(
+            "GLOBALS:",
+            "let d index /*/PathNode/TextField by ./normalize-space(text());",
+            "TEMPLATES:",
+            "let body01() -> { eval((PathNode/RepeatableTextField)[count(key('d', 'x'))]/normalize-space(text())) }",
+            "MAIN:",
+            "for-each(/*).call(body01())"),
+        translateTemplate(lines(
+            "let $d index BT-00-Text by BT-00-Text;",
+            "{ND-Root} ${BT-00-Repeatable-Text[count($d['x'])]}")));
+  }
+
+  @Test
+  void testDictionaryLookup_InFilterInIndexOnList() {
+    // The filter reads the root from each of its own elements, not from the values of the list
+    assertEquals(
+        lines(
+            "GLOBALS:",
+            "let d index /*/PathNode/TextField by ./normalize-space(text());",
+            "TEMPLATES:",
+            "let body01() -> { eval(for $item in for $c in . return (1,2)[count($c/PathNode/RepeatableTextField[count(key('d', 'x')) = 1]/normalize-space(text()))] return format-number($item, '# ##0,#########')) }",
+            "MAIN:",
+            "for-each(/*).call(body01())"),
+        translateTemplate(lines(
+            "let $d index BT-00-Text by BT-00-Text;",
+            "{ND-Root} ${for context:$c in ND-Root return [1, 2][count($c::BT-00-Repeatable-Text[count($d['x']) == 1])]}")));
+  }
+
   // #endregion Globals --------------------------------------------------------
 
   @Test
@@ -2789,6 +2821,20 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
   }
 
   @Test
+  void testComputedExpressionBlock_Node_Throws() {
+    assertThrows(TypeMismatchException.class,
+        () -> translateTemplate("{ND-Root} ${ND-SubNode}"));
+  }
+
+  @Test
+  void testTemplateInvocation_NodeArgument_Throws() {
+    var template = lines(
+        "let template:greeting(text:$name) display Hello ${$name};",
+        "invoke greeting(ND-SubNode);");
+    assertThrows(InvalidArgumentException.class, () -> translateTemplate(template));
+  }
+
+  @Test
   void testChooseTemplate_NumericCondition_Throws() {
     assertThrows(TypeMismatchException.class,
         () -> translateTemplate("when 1 display this is one;"));
@@ -2809,6 +2855,17 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
     var template = lines(
         "let number:$n = [1, 2][BT-00-Number];",
         "display ${$n};");
+    InvalidUsageException exception =
+        assertThrows(InvalidUsageException.class, () -> translateTemplate(template));
+    assertEquals(InvalidUsageException.ErrorCode.INDEX_READS_CONTEXT, exception.getErrorCode());
+  }
+
+  @Test
+  void testDictionaryLookup_InIndexOnList_Throws() {
+    // A lookup starts from the root, which the target language would read for each value
+    var template = lines(
+        "let $d index BT-00-Text by BT-00-Text;",
+        "{ND-Root} ${[1, 2][count($d['x'])]}");
     InvalidUsageException exception =
         assertThrows(InvalidUsageException.class, () -> translateTemplate(template));
     assertEquals(InvalidUsageException.ErrorCode.INDEX_READS_CONTEXT, exception.getErrorCode());

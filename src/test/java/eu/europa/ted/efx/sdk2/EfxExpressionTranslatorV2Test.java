@@ -4750,6 +4750,23 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
         "for context:$c in ND-Root return [1, 2, 3][$c::BT-00-Number]");
   }
 
+  @Test
+  void testIndexer_OnListWithAbsoluteFieldInAFilterOfItsOwn() {
+    // The filter reads the root from each of its own elements, not from the values of the list
+    testExpressionTranslationWithContext(
+        "for $c in . return (1,2)[count($c/PathNode/TextField[/*/PathNode/NumberField/number() = 1]/normalize-space(text()))]",
+        "ND-Root",
+        "for context:$c in ND-Root return [1, 2][count($c::BT-00-Text[/BT-00-Number == 1])]");
+  }
+
+  @Test
+  void testIndexer_OnListWithAbsoluteFieldBesideAFilter_Throws() {
+    InvalidUsageException exception = assertThrows(InvalidUsageException.class,
+        () -> translateExpressionWithContext("ND-Root",
+            "for context:$c in ND-Root return [1, 2][count($c::BT-00-Text[/BT-00-Number == 1]) + /BT-00-Number]"));
+    assertEquals(InvalidUsageException.ErrorCode.INDEX_READS_CONTEXT, exception.getErrorCode());
+  }
+
   // #endregion: Indexers
 
   // #region: Scalar/Sequence Validation --------------------------------------

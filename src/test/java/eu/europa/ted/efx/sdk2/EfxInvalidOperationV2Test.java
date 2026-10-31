@@ -477,7 +477,14 @@ class EfxInvalidOperationV2Test extends EfxTestsBase {
         "1:preferredLanguageText",
 
         // A node has no value, so it cannot stand in parentheses
-        "(ND-SubNode) is present");
+        "(ND-SubNode) is present",
+
+        // A node has no value, so an expression cannot give one, nor an iteration return one
+        "ND-SubNode",
+        "ND-RepeatableNode",
+        "/ND-SubNode",
+        "ND-Root::ND-SubNode",
+        "for text:$x in ['a'] return ND-SubNode");
   }
 
   static Stream<String> invalidTemplateOperations() {
