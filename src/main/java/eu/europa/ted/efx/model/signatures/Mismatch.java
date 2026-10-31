@@ -70,10 +70,18 @@ public final class Mismatch {
 
   @Override
   public String toString() {
-    return "no overload of '" + this.builtIn.getName() + "' takes ("
-        + this.arguments.stream().map(argument -> argument.getClass().getSimpleName())
-            .collect(Collectors.joining(", "))
-        + ")";
+    return "no overload of '" + this.builtIn.getName() + "' takes (" + describe(this.arguments) + ")";
+  }
+
+  /**
+   * Names the classes of the arguments of a call, as the messages about the call show them.
+   *
+   * @param arguments the translated arguments of the call
+   * @return the simple class names of the arguments, separated by commas
+   */
+  static String describe(final List<? extends TypedExpression> arguments) {
+    return arguments.stream().map(argument -> argument.getClass().getSimpleName())
+        .collect(Collectors.joining(", "));
   }
 
   /**
