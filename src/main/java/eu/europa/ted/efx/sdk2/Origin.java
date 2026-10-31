@@ -284,9 +284,12 @@ abstract class Origin<E extends TypedExpression> {
   // #region Identifiers ------------------------------------------------------
 
   /**
-   * A declared identifier that gives a value: a function invocation, or a variable or parameter.
+   * A declared identifier that gives a value: a function invocation, a variable or a parameter, or
+   * a context variable.
+   *
+   * @param <E> the class of the reference to the identifier: a path for a context variable
    */
-  static class IdentifierOrigin extends Origin<TypedExpression> {
+  static class IdentifierOrigin<E extends TypedExpression> extends Origin<E> {
 
     protected final ParserRuleContext reference;
     protected final String name;
@@ -307,7 +310,7 @@ abstract class Origin<E extends TypedExpression> {
   /**
    * A variable or a parameter that holds a value. It names no context.
    */
-  static final class VariableOrigin extends IdentifierOrigin {
+  static final class VariableOrigin extends IdentifierOrigin<TypedExpression> {
 
     VariableOrigin(final EfxExpressionVisitor translator, final ParserRuleContext reference,
         final String name) {
@@ -325,17 +328,13 @@ abstract class Origin<E extends TypedExpression> {
    * that field or node as a context. A field context variable is a value of its field; a node
    * context variable has no value.
    */
-  static final class ContextVariableOrigin extends Origin<PathExpression> {
+  static final class ContextVariableOrigin extends IdentifierOrigin<PathExpression> {
 
-    private final ParserRuleContext reference;
-    private final String name;
     private final Context context;
 
     ContextVariableOrigin(final EfxExpressionVisitor translator,
         final ParserRuleContext reference, final String name, final Context context) {
-      super(translator);
-      this.reference = reference;
-      this.name = name;
+      super(translator, reference, name);
       this.context = context;
     }
 
@@ -360,11 +359,6 @@ abstract class Origin<E extends TypedExpression> {
       }
       return Optional.of(new FieldContext(symbol,
           this.translator.symbols().getAbsolutePathOfField(symbol), variable));
-    }
-
-    @Override
-    Optional<TypeMismatchException> sequenceError() {
-      return Optional.of(TypeMismatchException.identifierIsSequence(this.reference, this.name));
     }
   }
 

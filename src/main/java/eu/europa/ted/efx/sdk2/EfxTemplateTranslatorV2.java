@@ -24,12 +24,10 @@ import java.util.Optional;
 import org.antlr.v4.runtime.BaseErrorListener;
 import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CharStreams;
-import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.atn.DecisionInfo;
 import org.antlr.v4.runtime.atn.ParseInfo;
 import org.antlr.v4.runtime.atn.ProfilingATNSimulator;
-import org.antlr.v4.runtime.tree.ParseTree;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,7 +35,6 @@ import eu.europa.ted.eforms.sdk.component.SdkComponent;
 import eu.europa.ted.eforms.sdk.component.SdkComponentType;
 import eu.europa.ted.efx.exceptions.InvalidUsageException;
 import eu.europa.ted.efx.exceptions.InvalidIndentationException;
-import eu.europa.ted.efx.exceptions.TranslatorConfigurationException;
 import eu.europa.ted.efx.interfaces.EfxTemplateTranslator;
 import eu.europa.ted.efx.interfaces.MarkupGenerator;
 import eu.europa.ted.efx.interfaces.ScriptGenerator;
@@ -45,9 +42,7 @@ import eu.europa.ted.efx.interfaces.SymbolResolver;
 import eu.europa.ted.efx.interfaces.TranslatorOptions;
 import eu.europa.ted.efx.interfaces.TemplateSection;
 import eu.europa.ted.efx.interfaces.TranslatorContext;
-import eu.europa.ted.efx.model.CallStack;
 import eu.europa.ted.efx.model.Context;
-import eu.europa.ted.efx.model.ContextStack;
 import eu.europa.ted.efx.util.EfxProfilerReportGenerator;
 import eu.europa.ted.efx.util.TranslatorTimings;
 import eu.europa.ted.efx.model.Context.FieldContext;
@@ -95,7 +90,6 @@ import eu.europa.ted.efx.model.types.EfxDataType;
 import eu.europa.ted.efx.model.types.FieldTypes;
 import eu.europa.ted.efx.model.variables.Dictionary;
 import eu.europa.ted.efx.model.variables.Function;
-import eu.europa.ted.efx.model.variables.ParsedParameter;
 import eu.europa.ted.efx.model.variables.ParsedParameters;
 import eu.europa.ted.efx.model.variables.Template;
 import eu.europa.ted.efx.model.variables.Variable;
@@ -109,7 +103,7 @@ import eu.europa.ted.efx.sdk2.EfxParser.*;
  * call, such as the formatting functions.
  */
 @SdkComponent(versions = {"2"}, componentType = SdkComponentType.EFX_TEMPLATE_TRANSLATOR)
-public class EfxTemplateTranslatorV2 extends EfxBaseListener
+public class EfxTemplateTranslatorV2 extends TranslatorListener
     implements EfxTemplateTranslator {
 
   private static final Logger logger = LoggerFactory.getLogger(EfxTemplateTranslatorV2.class);
@@ -141,37 +135,6 @@ public class EfxTemplateTranslatorV2 extends EfxBaseListener
    */
   MarkupGenerator markup;
 
-  /**
-   * Symbols are the field identifiers and node identifiers. The symbols map is used to resolve them
-   * to their location in the data source (typically their XPath).
-   */
-  private final SymbolResolver symbols;
-
-  /**
-   * The ScriptGenerator is called to determine the target language syntax whenever needed.
-   */
-  private final ScriptGenerator script;
-
-  private final BaseErrorListener errorListener;
-
-  // The state of the translation in progress, created for each template rendered.
-
-  /**
-   * The stack is used by the methods of this listener to pass data to each other as the parse tree
-   * is being walked.
-   */
-  private CallStack stack;
-
-  /**
-   * The context stack is used to keep track of context switching in nested expressions.
-   */
-  private ContextStack efxContext;
-
-  /**
-   * Translates the expressions, field contexts and node contexts of the template.
-   */
-  private EfxExpressionVisitor expressions;
-
   TranslatorContext translatorContext = new TranslatorContext();
 
   /**
@@ -195,10 +158,13 @@ public class EfxTemplateTranslatorV2 extends EfxBaseListener
   public EfxTemplateTranslatorV2(final MarkupGenerator markupGenerator,
       final SymbolResolver symbolResolver, final ScriptGenerator scriptGenerator,
       final BaseErrorListener errorListener) {
+    super(symbolResolver, scriptGenerator, errorListener);
     this.markup = markupGenerator;
-    this.symbols = symbolResolver;
-    this.script = scriptGenerator;
-    this.errorListener = errorListener;
+  }
+
+  @Override
+  EfxExpressionVisitor visitorOf(final TranslationContext translation) {
+    return new TemplateExpressionVisitor(translation);
   }
 
   /**
@@ -209,16 +175,6 @@ public class EfxTemplateTranslatorV2 extends EfxBaseListener
   public String translateExpression(final String expression, final String... arguments) {
     return new EfxExpressionTranslatorV2(this.symbols, this.script, this.errorListener,
         TemplateExpressionVisitor::new).translateExpression(expression, arguments);
-  }
-
-  @Override
-  public void enterEveryRule(final ParserRuleContext ctx) {
-    this.stack.pushParserContext(ctx);
-  }
-
-  @Override
-  public void exitEveryRule(final ParserRuleContext ctx) {
-    this.stack.popParserContext();
   }
 
   /**
@@ -261,33 +217,14 @@ public class EfxTemplateTranslatorV2 extends EfxBaseListener
     final CharStream resolvedInput =
         new IncludeProcessor(options.getIncludedFileResolver()).resolve(charStream);
 
-    final EfxLexer lexer = new EfxLexer(resolvedInput);
-    final CommonTokenStream tokens = new CommonTokenStream(lexer);
-    final EfxParser parser = new EfxParser(tokens);
-    parser.setErrorHandler(new EfxErrorStrategy());
+    final EfxParser parser = this.parserOf(resolvedInput);
 
     // Enable profiling if requested
     if (options != null && options.isProfilerEnabled()) {
       parser.setInterpreter(new ProfilingATNSimulator(parser));
     }
 
-    if (errorListener != null) {
-      lexer.removeErrorListeners();
-      lexer.addErrorListener(errorListener);
-      parser.removeErrorListeners();
-      parser.addErrorListener(errorListener);
-    }
-
-    final ParseTree tree = parser.templateFile();
-
-    // The declarations of a previous template must not be visible in this one.
-    final TranslationContext translation =
-        new TranslationContext(this.symbols, this.script, this.errorListener);
-    this.stack = translation.stack();
-    this.efxContext = translation.efxContext();
-    this.expressions = new TemplateExpressionVisitor(translation);
-
-    new ExpressionSkippingWalker().walk(this, tree);
+    this.translate(parser.templateFile());
     assert this.stack.empty() : "Stack should be empty at this point.";
 
     final String output = this.viewTemplate.render(this.markup, this.translatorContext).script.trim();
@@ -378,16 +315,6 @@ public class EfxTemplateTranslatorV2 extends EfxBaseListener
   // #endregion Global declarationExpressions ------------------------------------
 
   // #region Template File ----------------------------------------------------
-
-  /**
-   * Guard: throws if an {@code #include} directive survived into the parse tree,
-   * meaning the {@link IncludeProcessor} did not resolve it.
-   */
-  @Override
-  public void exitIncludeDirective(IncludeDirectiveContext ctx) {
-    String path = ctx.IncludePath() != null ? ctx.IncludePath().getText().trim() : "<unknown>";
-    throw TranslatorConfigurationException.unresolvedIncludeDirective(path);
-  }
 
   @Override
   public void enterTemplateFile(TemplateFileContext ctx) {
@@ -1156,15 +1083,6 @@ public class EfxTemplateTranslatorV2 extends EfxBaseListener
   
   // #region Expression Blocks ${...} -----------------------------------------
 
-  /**
-   * Leaves the value of the expression for the label block that holds it, which takes it as the
-   * asset type, the label type, the asset id or the pluraliser.
-   */
-  @Override
-  public void exitStandardExpressionBlock(StandardExpressionBlockContext ctx) {
-    this.stack.push(this.expressions.valueOf(ctx.expression()));
-  }
-
   /***
    * Handles the $value shorthand syntax which renders the value of the field declared as context in
    * the current line of the template.
@@ -1213,17 +1131,6 @@ public class EfxTemplateTranslatorV2 extends EfxBaseListener
     }
   }
 
-  /**
-   * Declares the context of a field or a node, with its predicates.
-   */
-  private void exitContextDeclaration(Context declared, Variable contextVariable) {
-    if (declared.isFieldContext()) {
-      this.exitFieldContextDeclaration(declared.symbol(), declared.relativePath(), contextVariable);
-    } else {
-      this.exitNodeContextDeclaration(declared.symbol(), declared.relativePath(), contextVariable);
-    }
-  }
-
   private void exitSameContextDeclaration() {
     Context currentContext = this.blockStack.currentContext();
 
@@ -1257,44 +1164,6 @@ public class EfxTemplateTranslatorV2 extends EfxBaseListener
     } else if (parentContext.isNodeContext()) {
       this.exitNodeContextDeclaration(symbol, contextPath, parentContext.variable());
     }
-  }
-
-  private void exitRootContextDeclaration() {
-    this.exitNodeContextDeclaration(this.symbols.getRootNodeId(), this.symbols.getRootPath(), null);
-  }
-
-  private void exitFieldContextDeclaration(String fieldId, PathExpression contextPath, Variable contextVariable) {
-    var context = new FieldContext(fieldId, contextPath, contextVariable);
-    this.efxContext.push(context);
-    if (contextVariable != null) {
-      this.stack.declareIdentifier(contextVariable);
-      this.efxContext.declareContextVariable(contextVariable.name, context);
-    }
-  }
-
-  private void exitNodeContextDeclaration(String nodeId, PathExpression contextPath, Variable contextVariable) {
-    var context = new NodeContext(nodeId, contextPath, contextVariable);
-    this.efxContext.push(context);
-    if (contextVariable != null) {
-      this.stack.declareIdentifier(contextVariable);
-      this.efxContext.declareContextVariable(contextVariable.name, context);
-    }
-  }
-
-  private Variable getContextVariable(ContextVariableInitializerContext ctx,
-      PathExpression contextPath) {
-    if (ctx == null) {
-      return null;
-    }
-
-    final String variableName = ctx.variableName.getText();
-    final Class<? extends TypedExpression> variableType = contextPath.asScalar().getClass();
-
-    return new Variable(variableName,
-        this.script.composeVariableDeclaration(variableName, variableType),
-        this.script.contextualizePath(contextPath, contextPath),
-        this.script.composeVariableReference(variableName, variableType));
-
   }
 
   // #region Conditional template blocks --------------------------------------
@@ -1387,23 +1256,6 @@ public class EfxTemplateTranslatorV2 extends EfxBaseListener
 
   // #endregion Context Declaration Blocks {...} ------------------------------
   
-  // #region Parameter Declarations -------------------------------------------
-
-  /**
-   * Declares a parameter of a template or a function, which its body reads by reference.
-   */
-  @Override
-  public void exitParameterDeclaration(ParameterDeclarationContext ctx) {
-    final String parameterName = ctx.parameterName.getText();
-    ParsedParameter parameter = new ParsedParameter(parameterName,
-        this.script.composeParameterReference(parameterName,
-            EfxExpressionVisitor.typeOf(ctx.typeDeclaration())));
-    this.stack.declareIdentifier(parameter);
-    this.stack.peek(ParsedParameters.class).add(parameter);
-  }
-
-  // #endregion Parameter Declarations ----------------------------------------
-
   @Override
   public void enterSummarySection(SummarySectionContext ctx) {
     while (!this.blockStack.isEmpty()) {
