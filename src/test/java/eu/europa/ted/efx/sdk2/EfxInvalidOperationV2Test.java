@@ -1,0 +1,333 @@
+/*
+ * Copyright 2026 European Union
+ *
+ * Licensed under the EUPL, Version 1.2 or – as soon they will be approved by the European
+ * Commission – subsequent versions of the EUPL (the "Licence"); You may not use this work except in
+ * compliance with the Licence. You may obtain a copy of the Licence at:
+ * https://joinup.ec.europa.eu/software/page/eupl
+ *
+ * Unless required by applicable law or agreed to in writing, software distributed under the Licence
+ * is distributed on an "AS IS" basis, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+ * or implied. See the Licence for the specific language governing permissions and limitations under
+ * the Licence.
+ */
+package eu.europa.ted.efx.sdk2;
+
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import java.util.stream.Stream;
+
+import org.antlr.v4.runtime.misc.ParseCancellationException;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+
+import eu.europa.ted.efx.EfxTestsBase;
+
+/**
+ * The table of operations that EFX rejects: one row per expression, grouped by the rule the
+ * expression breaks.
+ * <p>
+ * Each row is expected to fail with a {@link ParseCancellationException}, the common base of syntax
+ * errors and compilation errors, so that a row holds whether the parser or the translator rejects
+ * the expression. Binary operations appear in both operand orders, and with literals as well as
+ * field references, because the two kinds of operand are rejected along different paths.
+ */
+class EfxInvalidOperationV2Test extends EfxTestsBase {
+
+  private static final String CONTEXT = "ND-Root";
+
+  @Override
+  protected String getSdkVersion() {
+    return "eforms-sdk-2.0";
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("invalidOperations")
+  void testInvalidOperation_IsRejected(final String expression) {
+    assertThrows(ParseCancellationException.class,
+        () -> translateExpressionWithContext(CONTEXT, expression));
+  }
+
+  static Stream<String> invalidOperations() {
+    return Stream.of(
+        // A comparison needs two operands of the same type
+        "'a' == 1",
+        "1 == 'a'",
+        "BT-00-Text == BT-00-Number",
+        "BT-00-Number == 'a'",
+        "'a' != BT-00-Number",
+        "'a' < TRUE",
+        "BT-00-Indicator > 1",
+        "'a' <= 2020-01-01Z",
+        "BT-00-StartTime == 'a'",
+        "'a' >= P1D",
+        "1 == TRUE",
+        "BT-00-Number < BT-00-StartDate",
+        "10:00:00Z > 1",
+        "1 != BT-00-Duration",
+        "TRUE == 2020-01-01Z",
+        "BT-00-StartTime != BT-00-Indicator",
+        "BT-00-Indicator == P1D",
+        "2020-01-01Z == 10:00:00Z",
+        "BT-00-StartDate == BT-00-StartTime",
+        "2020-01-01Z < BT-00-Duration",
+        "P1D > 10:00:00Z",
+        "BT-00-StartTime <= BT-00-Duration",
+
+        // + adds two numbers or two durations
+        "'a' + 'b'",
+        "BT-00-Text + BT-00-Text",
+        "'a' + 1",
+        "1 + 'a'",
+        "TRUE + 1",
+        "BT-00-Number + BT-00-Indicator",
+        "2020-01-01Z + 2020-01-02Z",
+        "BT-00-StartDate + BT-00-EndDate",
+        "10:00:00Z + P1D",
+        "BT-00-StartTime + BT-00-Duration",
+        "1 + P1D",
+        "BT-00-Duration + BT-00-Number",
+
+        // - subtracts two numbers, two durations, or two dates
+        "BT-00-Text - 1",
+        "'a' - 'b'",
+        "1 - BT-00-Indicator",
+        "TRUE - FALSE",
+        "1 - 2020-01-01Z",
+        "BT-00-Number - BT-00-StartDate",
+        "2020-01-01Z - 1",
+        "11:00:00Z - 10:00:00Z",
+        "BT-00-EndTime - BT-00-StartTime",
+        "BT-00-Duration - BT-00-Number",
+        "P1D - 2020-01-01Z",
+        "BT-00-Duration - BT-00-StartDate",
+
+        // * multiplies two numbers, or a number and a duration
+        "'a' * 2",
+        "2 * BT-00-Text",
+        "TRUE * 2",
+        "BT-00-Indicator * BT-00-Number",
+        "2020-01-01Z * 2",
+        "2 * BT-00-StartDate",
+        "10:00:00Z * 2",
+        "P1D * P2D",
+        "BT-00-Duration * BT-00-Duration",
+
+        // / and % divide numbers only
+        "'a' / 2",
+        "BT-00-Number / BT-00-Text",
+        "TRUE / 2",
+        "2 / 2020-01-01Z",
+        "BT-00-StartTime / 2",
+        "P2D / 2",
+        "BT-00-Duration / 2",
+        "2 / P1D",
+        "5 % 'a'",
+        "TRUE % 2",
+        "2020-01-01Z % 2",
+        "5 % BT-00-StartTime",
+        "BT-00-Duration % 2",
+
+        // and, or and not() take booleans
+        "1 and TRUE",
+        "TRUE or 'a'",
+        "BT-00-Text and TRUE",
+        "TRUE or BT-00-Number",
+        "BT-00-Text and BT-00-Indicator",
+        "2020-01-01Z or TRUE",
+        "P1D and BT-00-StartTime",
+        "not(1)",
+        "not(BT-00-Text)",
+        "not(BT-00-Duration)",
+
+        // like matches text
+        "1 like '[0-9]'",
+        "BT-00-Number like '[0-9]*'",
+        "TRUE like 'true'",
+        "BT-00-StartDate like '2020'",
+        "10:00:00Z like '10'",
+        "BT-00-Duration like 'P1D'",
+
+        // in looks for a value in a sequence of the same type
+        "1 in ['a', 'b']",
+        "'a' in [1, 2]",
+        "BT-00-Number in ['a', 'b']",
+        "'a' in BT-00-Repeatable-Number",
+        "BT-00-Text in BT-00-Repeatable-Number",
+        "TRUE in [1, 2]",
+        "2020-01-01Z not in [10:00:00Z]",
+        "P1D in [1, 2]",
+        "BT-00-StartTime in BT-00-Repeatable-Date",
+
+        // is unique in looks for a value in a sequence of the same type
+        "'a' is unique in [1, 2]",
+        "1 is unique in BT-00-Repeatable-Text",
+        "BT-00-Number is unique in ['a']",
+        "BT-00-Text is unique in BT-00-Repeatable-Number",
+        "2020-01-01Z is unique in [P1D]",
+        "TRUE is not unique in [10:00:00Z]",
+
+        // The condition of if ... then ... else is a boolean
+        "if 1 then 'a' else 'b'",
+        "if 'a' then 1 else 2",
+        "if BT-00-Text then 1 else 2",
+        "if BT-00-Number then 'a' else 'b'",
+        "if 2020-01-01Z then TRUE else FALSE",
+
+        // The two branches of if ... then ... else have the same type
+        "if TRUE then 1 else 'a'",
+        "if TRUE then 'a' else BT-00-Number",
+        "if TRUE then BT-00-StartDate else BT-00-Text",
+        "if TRUE then 2020-01-01Z else P1D",
+        "if TRUE then 10:00:00Z else BT-00-StartDate",
+        "if TRUE then BT-00-Indicator else 1",
+
+        // The body of every ... satisfies and some ... satisfies is a boolean
+        "every text:$x in ['a', 'b'] satisfies $x",
+        "some number:$n in [1, 2] satisfies $n + 1",
+        "every text:$x in ['a'] satisfies 'a'",
+        "some date:$d in [2020-01-01Z] satisfies $d",
+
+        // The values of a list have one type
+        "[1, 'a']",
+        "['a', TRUE]",
+        "[2020-01-01Z, 10:00:00Z]",
+        "[P1D, 1]",
+        "[1, BT-00-Text]",
+        "[BT-00-Number, BT-00-Text]",
+        "[BT-00-StartDate, BT-00-StartTime]",
+        "count([1, 'a'])",
+
+        // An iterator variable has the type of the sequence it iterates over
+        "for number:$n in ['a'] return $n",
+        "for text:$t in [1, 2] return $t",
+        "for date:$d in BT-00-Repeatable-Text return $d",
+        "for indicator:$i in [1] return $i",
+        "for text:$t in BT-00-Repeatable-Number return $t",
+        "every time:$t in [2020-01-01Z] satisfies TRUE",
+        "some duration:$d in BT-00-Repeatable-Number satisfies TRUE",
+
+        // A sequence cannot stand where a single value is required
+        "BT-00-Repeatable-Text == 'x'",
+        "'x' == BT-00-Repeatable-Text",
+        "['a', 'b'] == 'a'",
+        "BT-00-Repeatable-Number + 1",
+        "BT-00-Repeatable-Indicator and TRUE",
+        "if BT-00-Repeatable-Indicator then 1 else 2",
+        "BT-00-Repeatable-Text like 'a'",
+        "['a', 'b'] like 'a'",
+        "BT-00-Repeatable-Number in [1, 2]",
+        "[1, 2] in [1, 2, 3]",
+        "string-length(BT-00-Repeatable-Text)",
+        "upper-case(['a'])",
+        "BT-00-Text-Multilingual == 'a'",
+        "['a', BT-00-Repeatable-Text]",
+        "[1, [2, 3]]",
+
+        // A node has no value
+        "ND-SubNode == 'a'",
+        "'a' == ND-Root",
+        "ND-SubNode + 1",
+        "ND-SubNode in ['a']",
+        "string-length(ND-SubNode)",
+
+        // is present applies to a field or node reference
+        "1 is present",
+        "'a' is present",
+        "(1 + 1) is present",
+        "upper-case(BT-00-Text) is present",
+        "some text:$x in ['a'] satisfies $x is present",
+        "for text:$x in ['a'] return $x is present",
+
+        // A predicate is a boolean or a number, and an index on a sequence is a number
+        "BT-00-Text['x']",
+        "BT-00-Repeatable-Text[2020-01-01Z]",
+        "BT-00-Repeatable-Text[P1D]",
+        "BT-00-Repeatable-Text[BT-00-Text]",
+        "ND-SubNode['x'] is present",
+        "['a', 'b']['x']",
+        "['a', 'b'][TRUE]",
+        "['a', 'b'][BT-00-Text]",
+        "[1, 2][2020-01-01Z]",
+
+        // A raw value is read from a field
+        "ND-SubNode:rawValue",
+        "'a':rawValue",
+
+        // Each argument of a built-in function has the type its parameter declares
+        "string-length(1)",
+        "string-length(BT-00-Number)",
+        "upper-case(TRUE)",
+        "substring(1, 2)",
+        "substring('abc', 'x')",
+        "contains(1, 2)",
+        "contains(BT-00-Text, BT-00-Number)",
+        "starts-with('a', 1)",
+        "concat('a', 1)",
+        "concat('a', BT-00-StartDate)",
+        "string-join([1, 2], ',')",
+        "string-join(['a'], 1)",
+        "replace('a', 1, 'b')",
+        "pad-left('a', 'b', 'c')",
+        "split(1, ',')",
+        "empty(1)",
+        "sum(['a', 'b'])",
+        "sum(BT-00-Repeatable-Text)",
+        "min([2020-01-01Z])",
+        "average(BT-00-Repeatable-Date)",
+        "absolute('a')",
+        "round(TRUE)",
+        "round(BT-00-Text)",
+        "year('2020')",
+        "year(BT-00-StartTime)",
+        "day(10:00:00Z)",
+        "hours(2020-01-01Z)",
+        "minutes(BT-00-StartDate)",
+        "years(1)",
+        "days(BT-00-Number)",
+        "date(1)",
+        "date(BT-00-Number)",
+        "time(TRUE)",
+        "day-time-duration(1)",
+        "year-month-duration(BT-00-Number)",
+        "indicator('x')",
+        "indicator(BT-00-Text)",
+        "number(2020-01-01Z)",
+        "number(P1D)",
+        "add-duration(10:00:00Z, P1D)",
+        "add-duration(2020-01-01Z, 1)",
+        "add-duration(BT-00-StartDate, BT-00-Number)",
+        "subtract-duration(P1D, 2020-01-01Z)",
+        "index-of(['a', 'b'], 1)",
+        "index-of(BT-00-Repeatable-Text, 1)",
+        "sequence-equal(['a'], [1])",
+        "sequence-equal(BT-00-Repeatable-Text, BT-00-Repeatable-Number)",
+        "value-union(['a'], [1])",
+        "value-intersect([1], [2020-01-01Z])",
+        "value-except(BT-00-Repeatable-Date, BT-00-Repeatable-Time)",
+        "subsequence(['a', 'b'], 'x')",
+        "subsequence(['a', 'b'], 1, 'x')",
+
+        // A built-in function takes the number of arguments it declares
+        "upper-case()",
+        "concat()",
+        "count()",
+        "count([1], [2])",
+        "string-length('a', 'b')",
+        "contains('a')",
+        "substring('a')",
+        "current-date(1)",
+        "add-duration(2020-01-01Z)",
+        "not(TRUE, FALSE)",
+        "value-union(['a'])",
+        "sequence-equal(['a'], ['b'], ['c'])",
+
+        // The result of a built-in function has the type the function declares
+        "count(['a']) like 'a'",
+        "string-length('a') and TRUE",
+        "upper-case('a') + 1",
+        "current-date() + 1",
+        "year(current-date()) == 'a'",
+        "contains('a', 'b') + 1");
+  }
+}
