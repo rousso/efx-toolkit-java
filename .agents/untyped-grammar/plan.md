@@ -1,0 +1,351 @@
+# EFX-2 untyped grammar: implementation plan
+
+**Status:** approved by Yannis Rousochatzakis (GitHub `rousso`) on 31 October 2026, in the project thread "Move EFX-2 type checking into transpiler". Nothing in this file may be changed without his word; `progress.md` beside it is the single record of progress.
+
+**Sources:** the design doc "EFX-2 untyped grammar: design and plan" (https://claude.ai/artifact/6jm2neDsnvngVAC39a5juB) and its companion analysis "EFX-2 type safety today" (https://claude.ai/artifact/LQLxogWs3r2iprsXoTJMyh). This file is the self-contained copy of the design doc, with work-item ids added; the docs hold the same text plus two diagrams and the review comments.
+
+**Repositories:** grammar in `rousso/eForms-SDK`, branch `feature/untyped-grammar` (from `efx-2`); toolkit in `rousso/efx-toolkit-java`, branch `feature/untyped-grammar` (from `develop`). The OP-TED repositories are never touched; `rousso/eforms-core-java` is built and read only.
+
+## How to work with this plan
+
+- Start every session by reading this file and `progress.md`; end every session by updating `progress.md`.
+- Work items carry ids `P<phase>.<n>`. One commit per work item, the message starting with the id. The full test suite runs before every commit.
+- A phase closes only when its gate passes; the gate results, with their numbers, go into `progress.md`.
+- The section "Rules of engagement" is binding. When in doubt, stop and ask Yannis in the thread.
+
+## Summary
+
+The work replaces the typed EFX-2 grammar with an untyped one and moves type safety into the toolkit. Today `Efx.g4` has 229 rules and 783 alternatives, and 595 of those alternatives exist only to encode the type and cardinality of operands: six typed expression rules, six typed sequence rules, six typed function groups, and 290 late-bound variants that let a field or variable reference appear in a typed position. The new grammar has one `expression` rule with standard operator precedence, one list rule, one iterator rule, one declaration rule per declaration kind, and one alternative per built-in function. It should land at about 300 alternatives.
+
+The toolkit takes over what the grammar did. It infers the type of every sub-expression bottom-up: literals carry their type, field references take theirs from the SDK metadata (type and repeatability from the current context), variables, parameters, functions and dictionaries take theirs from their declarations. Every operator and built-in is resolved against a signature catalogue that holds the overloads the typed grammar used to spell out. A scalar is promoted to a sequence wherever a sequence is expected, and everything else is rejected with a type error that names the operator and both operand types.
+
+What stays the same: the EFX language as written in templates and rules, except the cast syntax that goes; the generated XPath, byte for byte except the 3 indexed lines named in the grammar section, which the corpus check enforces; `ScriptGenerator` and `XPathScriptGenerator`, whose 122 typed compose methods remain the targets of translation; the model packages (`expressions`, `types`, `variables`, `CallStack`); the structure of the template and rules translators; the `sdk1` package; the public `EfxTranslator` API.
+
+What shrinks:
+
+|  | Today | After |
+|---|---|---|
+| Grammar alternatives | 783 | about 300 |
+| Alternatives per new built-in | up to 7 | 1 |
+| `EfxExpressionTranslatorV2` exit methods | 464 | about 120 |
+| Cardinality side stack and dispatch sites | 1 stack, 2 if-chain dispatchers, about 40 `resolveScalarType` calls | none |
+| `EfxErrorStrategy` rule-name entries | 95 | about 45 |
+| Translating the 52 SDK templates | 301 s (warm JVM) | to be measured; the parser should stop being the bottleneck |
+
+Why it is worth doing: parsing speed, which is the reason Yannis raised; grammar maintainability, since a new built-in today costs up to seven grammar alternatives and seven listener methods; and error messages that can finally say what is wrong instead of reporting a syntax error.
+
+## The untyped grammar
+
+One `expression` rule carries every operator with standard precedence, and types and cardinality leave the grammar entirely. Rule names change only where typing forced a rule to exist, so the template and rules sections, the references, the literals and the lexer keep their shape. `EfxLexer.g4` does not change at all: the type keywords `text`, `number`, `date` and the rest keep doubling as declaration types and conversion functions.
+
+### The expression rule
+
+```
+expression
+    : OpenParenthesis expression CloseParenthesis                      # parenthesizedExpression
+    | expression OpenBracket expression CloseBracket                   # indexedExpression
+    | expression operator=(Star | Slash | Percent) expression          # multiplicativeExpression
+    | expression operator=(Plus | Minus) expression                    # additiveExpression
+    | expression operator=Comparison expression                        # comparisonExpression
+    | expression modifier=Not? In expression                           # inListCondition
+    | expression Is modifier=Not? Unique In expression                 # uniqueValueCondition
+    | expression Is modifier=Not? Empty                                # emptinessCondition
+    | expression Has modifier=No? Duplicates                           # distinctCondition
+    | expression modifier=Not? Like pattern=StringLiteral              # likePatternCondition
+    | expression Is modifier=Not? Present                              # presenceCondition
+    | expression And expression                                        # logicalAndCondition
+    | expression Or expression                                         # logicalOrCondition
+    | If expression Then expression Else expression                    # conditionalExpression
+    | (Every | Some) iteratorList Satisfies expression                 # quantifiedExpression
+    | For iteratorList Return Distinct? expression                     # sequenceFromIteration
+    | OpenBracket expression (Comma expression)* CloseBracket          # list
+    | literal                                                          # literalExpression
+    | reference                                                        # referenceExpression
+    | fieldProperty                                                    # fieldPropertyExpression
+    | codelistReference                                                # codelistExpression
+    | builtInFunction                                                  # functionExpression
+    ;
+```
+
+ANTLR gives earlier alternatives higher precedence, so the order above is the precedence table Yannis approved: indexing, then `* / %`, then `+ -`, then the comparison family (`==` and friends, `in`, `like`, `is empty`, `has duplicates`, `is unique in`, `is present`), then `and`, then `or`. The three prefix forms come last so that their trailing expression extends as far right as it can, exactly as `if ... then ... else` does today. `not(...)` stays a function.
+
+The late-bound rules go: every reference is simply a `reference`, and the toolkit learns its type when it resolves it. The six typed expression rules, the six typed sequence rules and the `lateBoundExpression`, `lateBoundScalar` and `lateBoundSequence` rules (290 alternatives together) collapse into the rule above and the `list` alternative. The cast rules and their twelve `*TypeCast` helpers are deleted.
+
+### References, brackets and contexts
+
+A field, attribute or node reference is a reference and nothing more: the `(OpenBracket predicate CloseBracket)?` tail moves out of the reference rules into the single `indexedExpression` form, so the parser never has to choose between "predicate of the reference" and "index of the expression" at a `[`. A bracket after a reference is one thing, an XPath predicate on the node path, whatever its content: the content is translated in the referenced field's or node's context, as `enterPredicate` does for filters today; a boolean filters, a number selects a position, anything else is a type error; and the value step follows the predicate, so `BT-00-Repeatable-Text[2]` becomes `PathNode/RepeatableTextField[2]/normalize-space(text())` and `BT-00-Repeatable-Text[BT-00-Number]` becomes `PathNode/RepeatableTextField[../NumberField/number()]/normalize-space(text())`. A bracket after anything that is not a reference, such as a list, a variable or a parenthesised expression, stays a positional index on that sequence, `('a','b','c')[1]`, and must be numeric. The bracket content needs no rule of its own: `visitIndexedExpression` visits its left child as a path, pushes that field or node as the context, visits the content, pops the context, and decides by the content's type.
+
+Two consequences, both confirmed by Yannis on 31 October. For authors: inside the brackets the indexed field means the element being tested, as in a filter, so an index that refers to fields now means what it means in XPath. Today such an index is translated in the enclosing context and produces XPath that fails at run time, because the context item inside a predicate is the value being tested; only literal and variable indexes ever worked. The corpus has 7,603 boolean predicates on references and exactly 3 numeric indexes, all literal. For the output: those 3 lines, `BT-191-Tender[OPT-321-Tender == $tenderid][1]` in templates 28 and 30, change from `(path[filter]/value)[1]` to `path[filter][1]/value`, and the 4 indexer tests on fields change their expectation the same way. These are the only permitted output changes of the whole work.
+
+### Iterators, declarations and parameters
+
+Declared types stay in the language; they are declarations, not expressions, and the toolkit checks the initializer against them. The thirteen per-type rules for each declaration kind become one rule with a type token:
+
+```
+typeDeclaration: typeName=(Text | Indicator | Number | Date | Time | Duration) Star?;
+
+variableInitializer
+    : typeDeclaration Colon VariablePrefix variableName=Identifier Assignment expression   # typedVariableInitializer
+    | Dynamic Colon VariablePrefix variableName=Identifier Assignment dynamicFunctionInvocation # dynamicVariableInitializer
+    ;
+
+parameterDeclaration: typeDeclaration Colon VariablePrefix parameterName=Identifier;
+
+iteratorExpression
+    : typeDeclaration Colon VariablePrefix variableName=Identifier In expression   # valueIterator
+    | ContextType Colon VariablePrefix variableName=Identifier In (fieldContext | nodeContext) # contextIterator
+    ;
+
+functionDeclaration
+    : Let typeDeclaration Colon FunctionPrefix functionName=Identifier
+      OpenParenthesis parameterList? CloseParenthesis Assignment expression Semicolon
+    ;
+```
+
+`EfxTypeTokenLookup` already maps these tokens to `EfxDataType`, so the toolkit reads the declared type from `typeDeclaration` and converts the initializer to it, promoting a scalar to a sequence where the declaration asks for one and rejecting anything else. The `contextVariableInitializer`, the `dictionaryDeclaration` and the template definitions are unchanged.
+
+### Built-in functions
+
+One alternative per built-in, grouped as today by what they return, with `expression` arguments. The function name stays a keyword, so a misspelt name or a wrong arity is still a syntax error with a precise position, and prediction stays cheap because every alternative starts with its own token. Three examples show the collapse:
+
+```
+numericFunction
+    : CountFunction OpenParenthesis expression CloseParenthesis                      # countFunction
+    | Number OpenParenthesis expression CloseParenthesis                             # numberFunction
+    | IndexOfFunction OpenParenthesis expression Comma expression CloseParenthesis  # indexOfFunction
+    ...
+    ;
+```
+
+`count` had 7 alternatives, `number` 3, `index-of` 18, `sequence-equal` 18, `text` 6, `format-short` 4. The six typed sequence-function groups (85 alternatives) become one `sequenceFunction` group of 11. The 67 function tokens of the lexer stay as they are.
+
+### Everything that stays
+
+`singleExpression`, `expressionBlock`, the selectors, the template file, template lines, labels, the rules file, stages, rule sets and clauses keep their rules. Positions that read `(booleanExpression | lateBoundScalar)` today, such as `whenClause`, `assertClause`, `linkBlock`, `dictionaryKeyClause` and `whenDisplayTemplate`, read `expression`, and the toolkit pops a `BooleanExpression` there as it already does. `parameterValue` keeps its typed literal rules, because parameter values are literals and the type is their only content.
+
+### Size and shape
+
+The grammar lands at roughly 300 alternatives: about 22 in `expression`, about 85 built-in functions, about 15 reference rules, 10 declaration rules, and the template and rules sections unchanged at about 150. Every primary alternative starts with a distinct token (a literal, `[`, `(`, `if`, `for`, `every`, `some`, a function keyword, a field or node identifier, `$`, `?`, `/`, `#`), so the parser should stay in SLL mode throughout. The ANTLR profiler report that `EfxTemplateTranslatorV2` can already produce is the gate for that claim in phase 3.
+
+## Type inference in the toolkit
+
+Types are inferred bottom-up, at the exit of every parse-tree node, and every operator and built-in is resolved against a catalogue of signatures. The toolkit already has most of the ingredients: every `TypedExpression` carries its `EfxDataType`, `EfxTypeLattice` relates primitives to their scalar and sequence forms, and `CallStack.pop(Class)` already converts on pop through `TypeCheckerV2`. Two things are new: a signature catalogue with a resolver, and one leaf rule for references that replaces the cardinality side stack.
+
+Every operator and built-in takes the same path, and the catalogue is the only place that knows which operand types are legal.
+
+### Leaves
+
+- **Literals** keep their literal classes (`StringLiteral`, `NumericLiteral` and the rest). Nothing changes.
+- **Field and attribute references** become a path typed by the field's SDK type (`ScalarPath.fromFieldType`, `SequencePath.fromFieldType`) and by one cardinality rule: a sequence when the field is repeatable from the current context or multilingual, unless the field is itself the context; a scalar otherwise. This is today's `RESOLVE_EITHER` branch of `resolveAndPushFieldReference`, applied everywhere. The `RESOLVE_SCALAR` and `RESOLVE_SEQUENCE` branches are not needed: a sequence path in a scalar position is rejected by the operator, and a scalar path in a sequence position is promoted by it.
+- **Node references** become a `NodePath`, scalar or sequence by repeatability. Only path consumers accept them: `is present`, a bracket filter, a context position.
+- **Variables and parameters** take the type of their declaration, as `CallStack.pushIdentifierReference` already pushes it. A context variable bound by `for context:$c in ...` is a scalar path of its field; a node context variable used as a value stays an error (`NODE_CONTEXT_AS_VALUE`).
+- **Function invocations** `?f(args)` take `Function.dataType` as declared. `StrictArguments` already checks the arguments against the parameters and stays.
+- **Dictionary lookups** are a sequence of the indexed field's type, as today.
+
+### Paths and values
+
+A reference is pushed as a path, and the two positions that consume a path as such take it: the left side of a bracket and `is present` (context positions use `fieldContext` and `nodeContext` and are not expressions). Everywhere else the reference is dereferenced into its value, which is what `composeFieldValueReference(fieldId, path)` does today in `exitScalarFromFieldReference`. In the listener this is decided in `exitReferenceExpression` from the parent node, the way `adjustForGrammarAmbiguity` reads its parent today; in a visitor the consumer asks for a path or a value explicitly. The next section weighs the two.
+
+### Composite nodes
+
+- **List** `[a, b, c]`: all elements must share a primitive; the result is the sequence of that primitive. Mixed primitives are a type error naming the first offending element.
+- **Iteration** `for ... return body`: a scalar body gives a sequence of its primitive, a sequence body gives the same sequence type (concatenation), matching the two `composeForExpression` overloads.
+- **Conditional** `if c then a else b`: `c` must be boolean; `a` and `b` must share a primitive; the result is their join under promotion (both scalar gives a scalar, otherwise a sequence).
+- **Bracket** `x[i]`: `x` a path and `i` boolean gives the filtered path (same type); `x` a path and `i` numeric gives the scalar path of `x`'s primitive, the predicate applied before the value step; `x` a value sequence and `i` numeric gives the scalar of its primitive; anything else is a type error.
+- **Field properties** (`:isWithheld` and friends) are boolean, `:privacyCode`, `:preferredLanguage` and `:rawValue` are strings, as today.
+- **Operators and built-ins** go through the catalogue below.
+
+### The signature catalogue
+
+A new package `eu.europa.ted.efx.model.signatures` holds the operator and function signatures that the typed grammar used to spell out as alternatives, and `ScriptGenerator` as typed overloads. It has four concepts:
+
+- `ParameterType`: a pattern an argument must match. Either a concrete type (`NumberScalar`), a primitive in any cardinality (`Number`), a type variable in a cardinality (`T`, `T*`, with `T` ranging over the value primitives, never `Node`), or `Path`.
+- `Signature`: an ordered list of parameters, with an optional or variadic tail, and a result type written in the same vocabulary (`Boolean`, `T`, `T*`).
+- `BuiltIn`: a name, which is the grammar token or the operator symbol, and its overloads. Each overload pairs a `Signature` with a `Composer`, a function of the `ScriptGenerator` and the bound arguments that calls the typed compose method, for example `(script, args) -> script.composeToStringConversion(args.numeric(0))`. Operators (`+`, `==`, `and`, `in`, `is empty`, ...) are built-ins with symbolic names.
+- `Resolution`: given a built-in and the actual operand types, picks the overload. An exact match wins; otherwise a match under widening (`MultilingualString` to `String`, `Dynamic` to `Boolean`) and promotion (scalar to sequence); no match is a type error; more than one match is a catalogue defect, caught by a unit test that checks every built-in is unambiguous. Binding converts each argument with `TypedExpression.from`, as `pop(Class)` does today, calls the composer and pushes the result.
+
+The catalogue is data in one place: about 15 operators and 70 functions with about 190 signatures, against the 595 grammar alternatives that encode them today (the left and right late-bound variants collapse). User-defined functions already have a signature model (`Parametrised`, `ParsedParameters`, `StrictArguments`); a declared function becomes one more `BuiltIn` with a single overload, so `?f(args)` resolves through the same resolver. In the last phase the autocomplete catalogue `EfxBuiltInFunction` (113 string entries) is generated from the signatures, which is what unifying the type vocabularies means.
+
+### Errors
+
+A failed resolution carries the operator, the parameter position, the expected pattern and the actual type. The translator turns it into today's exceptions and keeps today's error codes, choosing by the operand's origin: a repeatable or multilingual field in a scalar slot gives `FIELD_MAY_REPEAT` with the context symbol, a sequence variable or function gives `IDENTIFIER_IS_SEQUENCE`, a dictionary gives `DICTIONARY_IS_SEQUENCE`, a node context variable gives `NODE_CONTEXT_AS_VALUE`, a mismatched primitive gives `INCOMPATIBLE_OPERANDS` for operators and `CANNOT_CONVERT` for single arguments. The message names the operator and both operand types instead of today's "Expected StringScalar instead of NumberScalar".
+
+Yannis settled the wording on 30 October: one uniform format for every type error, whichever part of the toolkit rejects the expression, so that the same kind of mistake no longer surfaces as a type mismatch in one place and as a syntax error in another, as it does today. Nothing downstream parses the message text, by design.
+
+Uniform promotion flips three existing tests, all in `LateBoundTypeResolutionTest`, which today expect `IDENTIFIER_IS_SCALAR`: `count($x)` with a scalar variable, `count(?f())` with a scalar function, and `'test' in $f` with a context variable. Under the rule Yannis chose these become valid (a singleton sequence), the tests invert in phase 1, and the `IDENTIFIER_IS_SCALAR` code and its factory are removed. No implicit conversion runs the other way: a sequence where a scalar is required stays an error, so `BT-00-Repeatable-Text == 'test'` is still rejected.
+
+### What this replaces
+
+The cardinality side stack and its 6 consumers, the two if-chain dispatchers, the roughly 40 `resolveScalarType` and `resolveSequenceType` call sites, and the 328 per-type and late-bound exit methods. What replaces them is the new `EfxExpressionVisitor` with one visit method per grammar label, most of them one line: visit the operands, resolve the built-in, return the result. `CallStack.pop(Class)` with its conversion stays for the template and rules translators, which keep popping a `BooleanExpression` for a condition or a `TypedExpression` for a display block, and which call the visitor for every expression they contain.
+
+## Listener or visitor for expressions
+
+The choice does not change what the toolkit can check. The only type information that flowed downward in the old design was the expected cardinality, and it disappears with the leaf rule above. The choice changes how plainly the code says what it does, and when the switch costs least. Yannis chose option B on 31 October: a visitor for the expression subtree, introduced in phase 3 when every expression method is rewritten anyway, composed into the template and rules translators, which stay listeners. The table records the comparison that led to it.
+
+|  | A: listener everywhere | B: visitor for expressions, composed |
+|---|---|---|
+| Shape | `EfxExpressionTranslatorV2 extends EfxBaseListener`; template and rules translators extend it, as today | `EfxExpressionVisitor extends EfxBaseVisitor<TypedExpression>`; template and rules translators stay listeners and hold a visitor |
+| Data flow | Operands are popped from `CallStack`, results pushed; push and pop pairs must match across methods | Each `visitX` returns the typed expression of its node; no stack for expressions |
+| Paths versus values | `exitReferenceExpression` reads its parent node to decide | The consumer asks for a path or a value: `visitIndexedExpression` visits its left child as a path |
+| Context switch inside brackets | An `enterIndexer` hook that reads its left sibling in the parse tree | Push the context between visiting the two children |
+| What else moves | Nothing | Symbol resolver, script generator, `CallStack` and `ContextStack` move from inherited fields into a translation-context object shared by the three translators; about 50 consumption sites in the template and rules translators call `visit(ctx.expression())` instead of popping; a `ParseTreeWalker` subclass stops at `expression` nodes (about 15 lines); `<visitor>true</visitor>` in the ANTLR plugin configuration |
+| Performance | Unchanged | Unchanged: the same tree is walked once, expression subtrees by the visitor instead of the walker |
+| Cost in phase 3 | Lowest: about 120 exit methods | About 120 visit methods plus the composition refactor, roughly two to three days of work on top |
+| What it buys | Nothing new | Explicit data flow, an expression translator that stands alone and is testable without templates, and the first stage of the full visitor migration Yannis is open to |
+
+Phase 2 stays a listener, because the grammar is untouched there and the work is to rewire existing exit methods to the resolver. The switch happens in phase 3, where the grammar labels change and every expression method is rewritten regardless; making it later would mean writing those methods twice. Option C, a visitor everywhere, is out of scope for this work: it rewrites the 2,800 lines of template and rules translators in one go, which Yannis ruled out.
+
+## Everything else that changes
+
+Eleven files in the toolkit depend on the generated parser; the test tree does not, because every test is written in EFX. The table lists each coupled part and what the change means for it.
+
+| Part | Today | Change |
+|---|---|---|
+| `EfxErrorStrategy` | A map of 95 `RULE_*` constants to display names, used to word syntax errors | Rewritten for the new rule set, about 45 entries. Syntax errors no longer mention types ("expected a numeric expression") because the parser no longer knows them |
+| `EfxComputeDependencyExtractor`, `EfxValidationDependencyExtractor` | Hook `simpleFieldReference`, `fieldMention`, `simpleNodeReference`, `codelistReference` and the rules structure | Those rules keep their names; recompile and verify, no edit expected |
+| `EfxProfilerReportGenerator`, `EfxDebugLexer`, `EfxTypeTokenLookup` | Read rule names and tokens generically | No change; the profiler report is the phase-3 gate |
+| `EfxTemplateTranslatorV2` (116 methods, 44 typed pops) | Thirteen exit methods per declaration kind (variables, parameters, functions), conditions popped as `BooleanExpression` | One exit method per declaration kind reading `typeDeclaration`; conditions popped as before. About 50 sites call the expression visitor instead of popping |
+| `EfxRulesTranslatorV2` (60 methods, 7 typed pops) | Same pattern for `whenClause`, `assertClause`, `reportClause`, the `otherwise` clauses and `dynamicFunctionDeclaration` | Same change as the template translator |
+| `CallStack`, `ContextStack`, `TypeCheckerV2`, `TypeChecker.V1` | Scopes, contexts, pop-time conversion | API unchanged. The three translators share one instance of each through a translation-context object |
+| `TypeMismatchException` | Nine factories and eight error codes | `identifierIsScalar` and `IDENTIFIER_IS_SCALAR` go; messages reworded to name the operator and both operand types |
+| `autocomplete` package | `EfxBuiltInFunction` (113 entries), its own `EfxDataType` and `EfxFunctionParameter`, no parser coupling | Derived from the signature catalogue in phase 5; `EfxKeyword` and `EfxLinkedProperty` unchanged |
+| Tests (1,550) | Written in EFX against expected XPath | All survive the grammar change. Expectations change for the three promotion tests, the one cast test, the 4 indexer tests on fields, and in phase 4 the 13 tests that assert a bare `ParseCancellationException` for what becomes a type error |
+| `pom.xml` | ANTLR plugin generates listeners for both SDK grammars | Add `<visitor>true</visitor>`. Nothing else |
+| `sdk1` package | EFX-1 translators on the SDK 1.16 grammar | Untouched |
+
+### The two repositories are coupled
+
+The toolkit builds against the `eforms-sdk` Maven artifact and unpacks `Efx.g4` from it, so a toolkit commit requires the matching grammar. During the work the implementing thread installs the SDK fork's branch locally as `2.0.0-SNAPSHOT`; the toolkit fork's CI (`build.yml` runs `mvn clean install` with the published snapshot) will fail on the branch until the new grammar is published, which is expected and must be said in the pull request. Upstream, the SDK pull request merges first and publishes its snapshot, then the toolkit pull request can build. `plan.md` records the pair of commits that belong together at every gate.
+
+### Consumers and documentation
+
+`efx-cli`, `eforms-sdk-analyzer` and `eforms-notice-viewer` use `EfxTranslator`, whose API does not change; phase 5 builds them against the branch from read-only clones and runs their tests. The `efx-grammar/README.md` in the SDK and both `CHANGELOG.md` files get entries. Two language changes, the removal of casts and the promotion rule, also belong in the EFX documentation site, which lives outside these repositories; that is a note for Yannis, not a task for the implementing thread.
+
+## Phases and gates
+
+Six phases, each closed by a gate that the implementing thread must pass before it starts the next, and each ending with every test green and the corpus output unchanged. Phases 1, 2, 4 and 5 touch only the toolkit; phase 3 touches both repositories.
+
+Phases 1, 2, 4 and 5 touch only the toolkit; phase 3 changes the grammar in the SDK and the toolkit together, and phase 0 creates the branch in each.
+
+### Phase 0: set up
+
+- **P0.1** Create `feature/untyped-grammar` from `efx-2` in rousso/eForms-SDK and from `develop` in rousso/efx-toolkit-java.
+- **P0.2** Build environment: install the SDK fork branch into the local Maven repository (`mvn install -DskipTests`, 2.0.0-SNAPSHOT), since the modified grammar is not published. `eforms-core-java` 1.10.0-SNAPSHOT and `eforms-sdk` 1.16.0-SNAPSHOT resolve from `central.sonatype.com`, which Yannis's cloud environment named rousso allows since 31 October; the implementing thread must run in that environment. If the host is unreachable, install the eforms-core fork and a worktree of the SDK's `release/1.16.0` locally and run the tests with `-Dversion.eforms-sdk-1=1.16.0`.
+- **P0.3** Add `.agents/untyped-grammar/plan.md` and `progress.md` to the toolkit branch, and a short pointer to them in the SDK branch.
+- **P0.4** Add the opt-in corpus test (JUnit tag `corpus`, excluded by surefire by default): it reads the view templates, the rules files and `fields.json` from the eforms-sdk jar on the classpath, translates them with the mock markup generator and the Schematron generator, and writes the outputs under `target/corpus/`. Capture the baseline from `develop` outside the working tree and record the per-file digests and the timings in `progress.md`.
+- **P0.5** Fix the `rules.efx` failure (Yannis decided on 31 October: fix the toolkit, keep the rules). Cause: `XPathSymbolResolver.isFieldRepeatableFromContext(SdkField, SdkField)` types a multilingual field as a sequence even when the field is the context, so the 75 maximum-length rules of the shape `WITH <multilingual field> ASSERT string-length(<field>) <= N` fail, the first at line 6498 (reported as 6522 after include expansion). The translator's `fieldMayReturnMultipleValues` already has the right rule; the fix applies the same rule in the resolver and adds the missing test, a multilingual field used inside its own `WITH`. The baseline is captured after the fix, so it includes `rules.efx`.
+
+**Gate 0.** All tests green including the new multilingual test, baseline captured for the 52 templates and the 4 rules files, timings recorded.
+
+### Phase 1: tests first (toolkit, grammar untouched)
+
+- **P1.1** Translation tests for every language feature the coverage analysis found untested: date minus date, every form of duration arithmetic, `number(...)` conversions, indexers per type, `count`, `count-duplicates`, `get-duplicates`, `is unique in` and `subsequence` per type, `format-short`, `format-medium` and `format-long` for times and date-times, and the rest of the list in the analysis document. Each asserts the generated XPath.
+- **P1.2** The invalid-operation table: one parameterised test with one row per rejected expression, written by hand with a comment naming the rule each row checks. Rows cover every operator with each wrong operand primitive, a sequence where a scalar is required, wrong arity, a non-reference before `is present`, a node used as a value, a mixed list, mismatched branches of a conditional, and a mismatched iterator declaration. Each row asserts `ParseCancellationException`, the common base of syntax and compilation errors, so the rows survive the move from parser to toolkit.
+- **P1.3** Record in `progress.md` which rows are syntax errors today; they become type errors in phase 3 and are tightened in phase 4.
+
+**Gate 1.** All green. JaCoCo shows every expression exit method that corresponds to a language feature executed by at least one test. Yannis reviews the invalid-operation table: it is the net that catches anything the typed grammar rejected silently.
+
+### Phase 2: type inference with the grammar untouched (toolkit)
+
+- **P2.1** The `model.signatures` package: `ParameterType`, `Signature`, `BuiltIn`, `Resolution`, and the catalogue binding every operator and built-in to its `ScriptGenerator` compose method, with the unit test that proves the catalogue unambiguous.
+- **P2.2** The leaf rule for references and the path-versus-value handling of the type-inference section above, implemented in one place, so that `XPathSymbolResolver` and the translator can no longer disagree as they do today for a multilingual field inside its own context.
+- **P2.3** Rewire every exit method of `EfxExpressionTranslatorV2` to the resolver; delete the cardinality stack, the two dispatchers and the `resolveScalarType` and `resolveSequenceType` methods; route `?f(args)` through the same resolver.
+- **P2.4** Flip the three promotion tests, remove `IDENTIFIER_IS_SCALAR` and its factory.
+
+**Gate 2.** All green, corpus identical to the baseline, catalogue test green.
+
+### Phase 3: the untyped grammar (SDK) and the rewiring (toolkit)
+
+- **P3.1** Write the new `Efx.g4` described in the grammar section above; `EfxLexer.g4` unchanged; update `efx-grammar/README.md`; install the SDK branch locally.
+- **P3.2** Toolkit: one method per new grammar label, as a visitor (option B, chosen by Yannis on 31 October), with the composition refactor: a translation-context object shared by the three translators, a walker that stops at expression nodes, and the template and rules translators calling the visitor at their expression sites; one exit method per declaration kind in the template and rules translators; the `EfxErrorStrategy` table; removal of the cast handling and the cast test.
+- **P3.3** Profiler run over the corpus with `EfxProfilerReportGenerator`: record decisions with full-context fallbacks and ambiguities; the target is none inside expressions.
+- **P3.4** Benchmark: corpus timing against the phase-0 numbers.
+
+**Gate 3.** All green; corpus identical except the 3 indexed lines in templates 28 and 30 named in the grammar section; profiler and timing recorded in `progress.md`, the pair of commits (SDK, toolkit) noted.
+
+### Phase 4: type checking proven (toolkit)
+
+- **P4.1** Tighten every row of the invalid-operation table to its specific exception (`TypeMismatchException`, `InvalidArgumentException`, or a syntax error) and assert that type errors name the operator and both operand types.
+- **P4.2** One uniform message format for every type error, naming the operator and both operand types, whichever part of the toolkit rejects the expression; no type mistake may surface as a syntax error.
+
+**Gate 4.** All green.
+
+### Phase 5: unification and verification (toolkit)
+
+- **P5.1** Derive the autocomplete catalogue from the signatures; `EfxAutocomplete` keeps its API.
+- **P5.2** Build `efx-cli`, `eforms-sdk-analyzer` and `eforms-notice-viewer` against the branch from read-only clones and run their tests.
+- **P5.3** `CHANGELOG.md` entries in both repositories; final numbers in `progress.md`.
+
+**Gate 5.** All green, consumers build and pass. Yannis reviews the branches, merges them into the forks, and opens the upstream pull requests himself, SDK first.
+
+### Size
+
+Rough deltas: phase 1 adds about 1,500 lines of tests; phase 2 adds about 800 lines of model and removes about 1,500 from the expression translator; phase 3 removes about 1,100 lines of grammar and about 2,500 lines of translator while adding about 900; phases 4 and 5 are small. Phases 2 and 3 are the long ones and will span several sessions of the implementing thread; `progress.md` carries the state between sessions.
+
+## Rules of engagement for the implementing thread
+
+These rules are Yannis's standing conditions, not suggestions. They bind every session that works on this plan.
+
+1. **Where to work.** Only on `feature/untyped-grammar` in `rousso/eForms-SDK` and `rousso/efx-toolkit-java`. Never on `efx-2`, `develop`, any OP-TED repository, or `rousso/eforms-core-java`, which is built and read only. Pushing to those two branches is approved by this plan; any other branch, pull request, merge, tag or force-push needs Yannis's word in the thread, every time.
+2. **Order.** Phases in order; a phase closes only when its gate passes. Every session starts by reading `plan.md` and `progress.md` and ends by updating `progress.md`.
+3. **Commits.** One commit per work item, the message starting with the item id (`P2.3`), the full test suite run before each commit. Pushed history is never rewritten.
+4. **Output is sacred.** Any difference in the corpus output, or any test whose expectation would have to change beyond those listed in this plan, stops the work on that item; it is written up in `progress.md` and put to Yannis before anything else is done.
+5. **Java 11.** The toolkit compiles with source and target 11: no records, switch expressions, text blocks, pattern matching or sealed types. `var` is fine.
+6. **Code quality.** Follow the toolkit's existing patterns and package layout and extend them; do not rewrite what works. Model concepts as classes: a signature is an object, not a switch statement. No utility or helper grab bags, no long methods, no reflection tricks, no suppressed warnings, no commented-out code, no TODO left behind. Javadoc on every new public type and method in the house style. New code is covered by tests. The public API does not change. Run the `simplify` and `code-review` skills before closing a phase and apply what they find.
+7. **When to stop and ask.** A gate fails for a reason this plan does not cover; a decision about the language is needed; a change would touch `sdk1`, the public API, or `pom.xml` beyond the listed lines; anything that cannot be undone.
+8. **Progress.** `progress.md` is the single record: per work item its status, the gate results with their numbers (test count, corpus comparison, timings, profiler summary), the commit ids of both repositories at each gate, decisions taken, and open questions for Yannis.
+
+### Build recipe
+
+The toolkit must build against the modified grammar, so every session installs the SDK branch locally (`mvn install -DskipTests`, 2.0.0-SNAPSHOT) and then builds and tests the toolkit with `mvn test`. The other dependencies, `eforms-core-java` 1.10.0-SNAPSHOT and `eforms-sdk` 1.16.0-SNAPSHOT, come from `central.sonatype.com`, which Yannis's cloud environment named rousso allows (added 31 October; the implementing thread must run in that environment). Fallback if the host is unreachable: install `rousso/eforms-core-java` at `develop` and a worktree of the SDK's `release/1.16.0` (1.16.0) locally, and run `mvn test -Dversion.eforms-sdk-1=1.16.0`. The corpus test runs with the `corpus` tag enabled and compares `target/corpus/` with the baseline directory named in `progress.md`. The profiler report comes from `EfxTranslatorOptions` with the profiler enabled and an output path.
+
+## Risks and the questions that were answered
+
+Yannis answered all four questions on 30 and 31 October. The last one is recorded below; the other three are recorded in the sections they concern: the grammar section for the numeric index, the errors section for the messages, phase 0 for `rules.efx`. The rest of this section is the risks the plan already contains.
+
+### Questions answered
+
+1. **Listener or visitor** for expressions in phase 3. Option A keeps the listener everywhere, as today. Option B adds a visitor for the expression subtree, composed into the template and rules translators, which stay listeners. The table under the heading of that name compares them. Decided on 31 October: option B, the visitor.
+
+### Risks
+
+- **Silent acceptance.** The typed grammar rejected some expressions that no test and no corpus line exercises. The invalid-operation table of phase 1 is the net, and gate 1 asks Yannis to review it for that reason.
+- **Repository coupling.** The toolkit branch does not build in CI until the SDK grammar is published; the pull requests must say so, and upstream the SDK merges first. `progress.md` names the matching commits at every gate.
+- **Performance.** The parser is the suspected bottleneck, not the proven one. The phase-0 baseline (301 s for the 52 templates) and the phase-3 benchmark decide; if the gain is small, the profiler report shows where the time goes, and the cleaner grammar stands on its own.
+- **Multilingual fields.** `MultilingualString` widens to `String` in the resolver; outputs that depend on the distinction, such as `preferred-language-text`, are covered by the corpus and by the 5 tests on `FIELD_IS_MULTILINGUAL`.
+- **Behaviour changes by design.** Casts go, three promotion cases become valid, and a bracket after a reference becomes an XPath predicate whatever its content. All three are language changes and belong in the EFX documentation site, which is outside these repositories and is Yannis's.
+- **Several sessions.** Phases 2 and 3 are too long for one session of the implementing thread. The plan and progress files are the only state that survives between sessions, which is why rule 8 above is strict.
+
+## Allowed changes to output and test expectations
+
+These are the only output differences and test-expectation changes this plan permits. Anything else stops the work on that item (rule 4).
+
+| What | Where | Why |
+|---|---|---|
+| 3 corpus lines change from `(path[filter]/value)[1]` to `path[filter][1]/value` | `view-templates/28.efx` line 175; `view-templates/30.efx` lines 213 and 249 (`BT-191-Tender[OPT-321-Tender == $tenderid][1]`) | A bracket after a reference becomes an XPath predicate on the node path (grammar section). Phase 3 |
+| 4 indexer tests on fields change their expected XPath the same way | `EfxExpressionTranslatorV2Test`: `testIndexer_WithNonRepeatableField`, `testIndexer_WithNonRepeatableFieldAndPredicate`, `testIndexer_WithRepeatableField`, `testIndexer_WithRepeatableFieldAndPredicate` | Same rule. Phase 3 |
+| 3 promotion tests invert: the expressions become valid | `LateBoundTypeResolutionTest`: `count($x)` with a scalar variable, `count(?f())` with a scalar function, `'test' in $f` with a context variable; today they expect `IDENTIFIER_IS_SCALAR` | Uniform scalar-to-sequence promotion. Phase 1 (inverted) and phase 2 (code removed) |
+| 1 cast test is removed | The single test that uses `(type) expression` cast syntax | Casts leave the language. Phase 3 |
+| 13 tests that assert a bare `ParseCancellationException` keep passing in phase 3 and are tightened to the specific exception | `EfxExpressionTranslatorV2Test` and neighbours | Rejections move from the parser to the toolkit. Phase 4 |
+| `rules.efx` translates after the resolver fix | `validation/rules.efx`, 75 maximum-length rules on multilingual fields | Toolkit defect fixed in P0.5; the baseline is captured after the fix |
+
+## Facts established during the design, for the implementing sessions
+
+**Repositories and versions.** Toolkit `develop` was at `89e0821`, SDK `efx-2` at `abd9d85` when the branches were created. Toolkit `pom.xml`: version `2.0.0-SNAPSHOT`, `version.eforms-sdk-1` = `1.16.0-SNAPSHOT`, `version.eforms-sdk-2` = `2.0.0-SNAPSHOT`, snapshot repository `https://central.sonatype.com/repository/maven-snapshots`, Java source and target 11. The toolkit unpacks `Efx.g4` and `EfxLexer.g4` from the eforms-sdk jars (`unpack-sdk-grammars` in the pom). CI (`.github/workflows/build.yml`) runs `mvn clean install` on every push and will be red on the toolkit branch until the SDK grammar is published; say so in the pull request.
+
+**Corpus.** The SDK branch holds 52 view templates (`view-templates/*.efx`) and 4 rules files (`validation/stage-1a.efx`, `stage-1b.efx`, `stage-2a.efx`, `rules.efx`; `rules.efx` is 17,177 of the corpus's 32,209 lines and starts with `#include "stage-1a.efx"`, which shifts the parser's line numbers by 24). The eforms-sdk 2.0.0-SNAPSHOT jar bundles `eforms-sdk/view-templates/*.efx`, `eforms-sdk/validation/*.efx`, `eforms-sdk/fields/fields.json`, the codelists and the notice types. Measured on 30 October 2026 with the typed grammar: the 52 templates take 301 s with a warm JVM and 360 s cold; the three stage files take under a second; the output is deterministic across runs and about 6.9 MB. The corpus uses 7,603 boolean predicates on references, exactly 3 numeric indexes on fields (all literal, listed above), 82 `)[` indexes on parenthesised sequences and 56 `$variable[` indexes.
+
+**Translating the corpus from Java.** `new eu.europa.ted.eforms.sdk.SdkSymbolResolver("eforms-sdk-2.0", root)` expects `root/2.0/fields/fields.json`, so point `root` at a directory whose `2.0` entry is the SDK checkout (a symlink works). A `TranslatorDependencyFactory` for the corpus returns that resolver, `ComponentFactory.getScriptGenerator(sdkVersion, qualifier, options)`, the test tree's `MarkupGeneratorMock`, `ComponentFactory.getValidatorGenerator(sdkVersion, qualifier, options)` and `ThrowingErrorListener.INSTANCE`. Then `EfxTranslator.translateTemplate(factory, "eforms-sdk-2.0", path, new EfxTranslatorOptions("udf", DecimalFormat.EFX_DEFAULT))` gives the template output and `EfxTranslator.translateRules(factory, "eforms-sdk-2.0", path, options)` gives a `Map<String, String>` of outputs per rules file. Use `-Xmx3g` or more.
+
+**Single expressions in tests.** `EfxTestsBase.translateExpressionWithContext(context, expression)` wraps the expression as `{context} ${expression}` (EFX-1 style); the EFX-2 form is `WITH context COMPUTE expression`. The mock SDK (`src/test/resources/json/sdk2-fields.json`, loaded by `DependencyFactoryMock.INSTANCE` from the working directory `efx-toolkit-java`) defines `ND-Root`, `BT-00-Text`, `BT-00-Number`, `BT-00-Text-Multilingual`, `BT-00-Repeatable-Text`, `BT-00-Text-In-Repeatable-Node` and the rest of the `BT-00-*` family.
+
+**The rules.efx defect (P0.5).** `XPathSymbolResolver.isFieldRepeatableFromContext(SdkField, SdkField context)` returns true for every multilingual field before it looks at the context, so `getRelativePathOfField` hands the translator a `MultilingualStringSequencePath` for the path `.`; `EfxExpressionTranslatorV2.fieldMayReturnMultipleValues` has the correct rule (a field is scalar inside its own context) but receives a sequence path already. Reproduce with `WITH BT-01(d)-Procedure COMPUTE string-length(BT-01(d)-Procedure) <= 400` against the real SDK, or with `BT-00-Text-Multilingual` as its own context in the mock. Outside its own context the field is rightly rejected with `FIELD_IS_MULTILINGUAL`.
+
+**Why promotion cannot live in the typed grammar.** Adding `numericExpression` as an alternative of `numericSequence` makes the two rules mutually left-recursive (`numericExpression` already has `numericSequence '[' indexer ']'`), which ANTLR 4.13 rejects with error 119. The restriction was a structural limit of the typed design, not a language decision.
+
+**Today's toolkit, in numbers.** 1,550 tests green on `develop`. `EfxExpressionTranslatorV2` has 464 exit methods, 328 of them per-type or late-bound; 162 of the 522 expression listener methods are never executed by a test. Error-code assertions in the tests: `FIELD_MAY_REPEAT` 12, `FIELD_IS_MULTILINGUAL` 5, `IDENTIFIER_IS_SCALAR` 3, `IDENTIFIER_IS_SEQUENCE` 2, `NODE_CONTEXT_AS_VALUE` 3, `INCOMPATIBLE_OPERANDS` 3, `CANNOT_CONVERT` 2, `DICTIONARY_IS_SEQUENCE` 1. The eleven files coupled to the generated parser: `model/types/EfxTypeTokenLookup`, `sdk1/EfxExpressionTranslatorV1`, `sdk1/EfxTemplateTranslatorV1`, `sdk2/EfxComputeDependencyExtractor`, `sdk2/EfxDebugLexer`, `sdk2/EfxErrorStrategy`, `sdk2/EfxExpressionTranslatorV2`, `sdk2/EfxRulesTranslatorV2`, `sdk2/EfxTemplateTranslatorV2`, `sdk2/EfxValidationDependencyExtractor`, `util/EfxProfilerReportGenerator`.
+
+## Notes for Yannis, outside this plan
+
+- Three language changes belong in the EFX documentation site: casts are removed, scalar-to-sequence promotion is uniform, and a bracket after a reference is an XPath predicate whatever its content.
+- Upstream pull requests to OP-TED are opened by Yannis himself, SDK first, after he has reviewed and merged the branches into his forks.
