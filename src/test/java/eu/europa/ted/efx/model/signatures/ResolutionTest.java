@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 
 import eu.europa.ted.efx.EfxTranslatorOptions;
 import eu.europa.ted.efx.exceptions.InvalidUsageException;
+import eu.europa.ted.efx.exceptions.TranslatorConfigurationException;
 import eu.europa.ted.efx.interfaces.ScriptGenerator;
 import eu.europa.ted.efx.model.expressions.Expression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
@@ -243,6 +244,13 @@ class ResolutionTest {
   void testResolution_HasNoMismatch() {
     Resolution resolution = ArithmeticOperators.PLUS.resolve(List.of(NUMBER, NUMBER));
     assertThrows(IllegalStateException.class, resolution::getMismatch);
+  }
+
+  @Test
+  void testAmbiguousBuiltIn_IsAConfigurationError() {
+    TranslatorConfigurationException exception = assertThrows(TranslatorConfigurationException.class,
+        () -> AmbiguousBuiltIn.INSTANCE.resolve(List.of(TEXT)));
+    assertEquals(TranslatorConfigurationException.ErrorCode.AMBIGUOUS_OVERLOADS, exception.getErrorCode());
   }
 
   @Test

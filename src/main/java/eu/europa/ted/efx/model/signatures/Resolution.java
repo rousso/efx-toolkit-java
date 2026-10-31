@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.OptionalInt;
 
+import eu.europa.ted.efx.exceptions.TranslatorConfigurationException;
 import eu.europa.ted.efx.interfaces.ScriptGenerator;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 
@@ -26,7 +27,8 @@ import eu.europa.ted.efx.model.expressions.TypedExpression;
  *
  * <p>An overload applies when it takes the number of arguments and, once {@code T} is bound, every
  * argument converts to its parameter. At most one overload of a built-in applies to any arguments;
- * the catalogue's unit tests prove it for every built-in.</p>
+ * the catalogue's unit tests prove it for every built-in, and a resolution that finds more than one
+ * raises a {@link TranslatorConfigurationException}.</p>
  */
 public final class Resolution {
 
@@ -46,6 +48,7 @@ public final class Resolution {
    * @param builtIn the built-in called
    * @param arguments the translated arguments of the call
    * @return the resolution
+   * @throws TranslatorConfigurationException if more than one overload applies, a defect of the catalogue
    */
   static Resolution of(final BuiltIn builtIn, final List<? extends TypedExpression> arguments) {
     List<Overload> applicable = new ArrayList<>();
@@ -60,8 +63,10 @@ public final class Resolution {
         }
       }
     }
-    assert applicable.size() <= 1 : "Overloads " + applicable + " of '" + builtIn.getName()
-        + "' all apply to the same arguments";
+    if (applicable.size() > 1) {
+      throw TranslatorConfigurationException.ambiguousOverloads(builtIn.getName(), applicable.toString(),
+          Mismatch.describe(arguments));
+    }
     if (applicable.isEmpty()) {
       return new Resolution(null, null, new Mismatch(builtIn, arguments, rejections));
     }

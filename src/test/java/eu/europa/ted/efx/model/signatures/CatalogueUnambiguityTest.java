@@ -21,6 +21,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -65,7 +66,8 @@ import eu.europa.ted.efx.model.expressions.sequence.TimeSequencePath;
  *
  * <p>The argument types are every expression class a translated argument can have: each value
  * primitive (with multilingual text and dynamic) as a single value and as a sequence, each as a
- * value and as a path, and the node paths.</p>
+ * value and as a path, and the node paths. A deliberately ambiguous built-in shows that the check
+ * finds what it looks for.</p>
  */
 class CatalogueUnambiguityTest {
 
@@ -93,12 +95,27 @@ class CatalogueUnambiguityTest {
   @ParameterizedTest(name = "{0}")
   @MethodSource("builtIns")
   void testBuiltIn_IsUnambiguous(final BuiltIn builtIn) {
-    List<String> ambiguities = arities(builtIn)
-        .flatMap(CatalogueUnambiguityTest::combinations)
-        .filter(arguments -> applicable(builtIn, arguments).size() > 1)
+    assertEquals(List.of(), ambiguities(builtIn)
         .map(arguments -> describe(arguments) + " -> " + applicable(builtIn, arguments))
-        .collect(Collectors.toList());
-    assertEquals(List.of(), ambiguities);
+        .collect(Collectors.toList()));
+  }
+
+  @Test
+  void testAmbiguousBuiltIn_IsCaught() {
+    assertEquals(
+        List.of("(StringExpression)", "(MultilingualStringExpression)", "(StringPath)",
+            "(MultilingualStringPath)"),
+        ambiguities(AmbiguousBuiltIn.INSTANCE).map(CatalogueUnambiguityTest::describe)
+            .collect(Collectors.toList()));
+  }
+
+  /**
+   * Lists every combination of arguments to which more than one overload of a built-in applies.
+   */
+  private static Stream<List<TypedExpression>> ambiguities(final BuiltIn builtIn) {
+    return arities(builtIn)
+        .flatMap(CatalogueUnambiguityTest::combinations)
+        .filter(arguments -> applicable(builtIn, arguments).size() > 1);
   }
 
   private static Stream<Integer> arities(final BuiltIn builtIn) {
