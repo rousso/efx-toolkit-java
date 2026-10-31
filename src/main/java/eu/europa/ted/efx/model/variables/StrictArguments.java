@@ -13,52 +13,42 @@
  */
 package eu.europa.ted.efx.model.variables;
 
-import java.util.Objects;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
-import eu.europa.ted.efx.exceptions.InvalidArgumentException;
-import eu.europa.ted.efx.interfaces.TypeChecker;
+import eu.europa.ted.efx.model.ParsedEntity;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 
-public class StrictArguments extends ParsedArguments {
+/**
+ * The arguments of an invocation of a declared function or template, collected in order as they
+ * are translated. Collecting checks nothing: once the invocation is complete, the translator
+ * matches the arguments against the parameters of the declaration, which checks their number and
+ * their types.
+ */
+public class StrictArguments implements ParsedEntity {
 
     public final transient Parametrised identifier;
 
+    private final List<TypedExpression> values = new ArrayList<>();
+
     public StrictArguments(Parametrised identifier) {
-        super();
         this.identifier = identifier;
     }
 
-    public boolean addArgument(TypedExpression argument) {
-        int position = this.size(); // Get the current position of the argument
-        if (position >= identifier.parameters.size()) {
-            throw InvalidArgumentException.argumentNumberMismatch(this.identifier, this.identifier.parameters.size());
-        }
-
-        var actualType = argument.getClass();
-        var expectedType = this.identifier.parameters.get(position).getParameterType();
-        if (!TypeChecker.V2.canConvert(actualType, expectedType)) {
-            throw InvalidArgumentException.argumentTypeMismatch(position, this.identifier, expectedType, actualType);
-        }
-        return this.add(new ParsedArgument(this.identifier.parameters.get(position), argument));
+    /**
+     * Collects the next argument of the invocation.
+     *
+     * @param argument the translated argument
+     */
+    public void addArgument(TypedExpression argument) {
+        this.values.add(argument);
     }
 
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (!super.equals(obj)) {
-            return false;
-        }
-        if (!(obj instanceof StrictArguments)) {
-            return false;
-        }
-        StrictArguments other = (StrictArguments) obj;
-        return Objects.equals(this.identifier, other.identifier);
-    }
-
-    @Override
-    public int hashCode() {
-        return 31 * super.hashCode() + Objects.hash(this.identifier);
+    /**
+     * @return the arguments collected so far, in order
+     */
+    public List<TypedExpression> getValues() {
+        return Collections.unmodifiableList(this.values);
     }
 }

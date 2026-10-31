@@ -681,6 +681,17 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
   }
 
   @Test
+  void testDisplayTemplate_DatePlusDuration_IsDisplayedAsADate() {
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01() -> { text('deadline: ')eval(format-date((PathNode/StartDateField/xs:date(text()) + xs:dayTimeDuration('P3D')), '[D01]/[M01]/[Y0001]')) }",
+            "MAIN:",
+            "for-each(/*).call(body01())"),
+        translateTemplate("display deadline: ${BT-00-StartDate + P3D};"));
+  }
+
+  @Test
   void testDisplayTemplate_WithTimeFunction() {
     assertEquals(
         lines(
@@ -2841,6 +2852,42 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
         "let template:param-validation-template(text:$param1, number:$param2) display Valid parameters;",
         "invoke param-validation-template('test');");
     assertThrows(InvalidArgumentException.class, () -> translateTemplate(template));
+  }
+
+  @Test
+  void testTemplateDefinition_InvalidNoArguments() {
+    var template = lines(
+        "let template:greeting(text:$name) display Hello ${$name};",
+        "invoke greeting();");
+    InvalidArgumentException ex =
+        assertThrows(InvalidArgumentException.class, () -> translateTemplate(template));
+    assertEquals(InvalidArgumentException.ErrorCode.ARGUMENT_NUMBER_MISMATCH, ex.getErrorCode());
+    assertEquals("Argument number mismatch in call to template 'greeting'. Expected 1 but got 0.",
+        ex.getMessage());
+  }
+
+  @Test
+  void testFunctionDeclaration_InvalidNoArguments() {
+    var template = lines(
+        "let text:?greeting(text:$name) = concat('Hello ', $name);",
+        "display ${?greeting()};");
+    InvalidArgumentException ex =
+        assertThrows(InvalidArgumentException.class, () -> translateTemplate(template));
+    assertEquals(InvalidArgumentException.ErrorCode.ARGUMENT_NUMBER_MISMATCH, ex.getErrorCode());
+    assertEquals("Argument number mismatch in call to function 'greeting'. Expected 1 but got 0.",
+        ex.getMessage());
+  }
+
+  @Test
+  void testFunctionDeclaration_InvalidTooManyArguments_ReportsTheirNumber() {
+    var template = lines(
+        "let text:?greeting(text:$name) = concat('Hello ', $name);",
+        "display ${?greeting('a', 'b', 'c')};");
+    InvalidArgumentException ex =
+        assertThrows(InvalidArgumentException.class, () -> translateTemplate(template));
+    assertEquals(InvalidArgumentException.ErrorCode.ARGUMENT_NUMBER_MISMATCH, ex.getErrorCode());
+    assertEquals("Argument number mismatch in call to function 'greeting'. Expected 1 but got 3.",
+        ex.getMessage());
   }
 
   // #endregion IllegalArgumentException ---------------------------------------

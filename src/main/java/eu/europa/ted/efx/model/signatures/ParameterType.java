@@ -13,6 +13,8 @@
  */
 package eu.europa.ted.efx.model.signatures;
 
+import java.util.Optional;
+
 import eu.europa.ted.efx.model.expressions.PathExpression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.expressions.scalar.BooleanExpression;
@@ -39,6 +41,10 @@ import eu.europa.ted.efx.model.types.EfxDataType;
  * type variable {@link #T} in a cardinality, or a path such as {@link #PATH}. A signature that
  * mentions {@code T} is generic: it is bound to a value primitive before its arguments are
  * checked, and only the parameter types of a bound signature accept and convert arguments.</p>
+ *
+ * <p>Outside a signature, {@link #T} and {@link #T_SEQUENCE} also give the type of a value that a
+ * late-bound composite, such as a conditional or a list, takes from one of its operands:
+ * {@link #boundBy} binds them as a signature is bound.</p>
  *
  * <p>The constants are named after the type vocabulary of the autocomplete catalogue.</p>
  */
@@ -96,6 +102,17 @@ public interface ParameterType {
   ParameterType MULTILINGUAL_FIELD = new PathParameterType(MultilingualStringSequencePath.class);
 
   /**
+   * Gives the parameter type of a value expression class, such as the class of a parameter
+   * declared in an EFX file.
+   *
+   * @param expressionType a scalar or sequence class of one value primitive
+   * @return the parameter type that accepts what converts to that class
+   */
+  static ParameterType of(final Class<? extends TypedExpression> expressionType) {
+    return new ConcreteParameterType(expressionType);
+  }
+
+  /**
    * Tells whether this parameter type is the type variable {@code T}, in either cardinality.
    *
    * @return {@code true} for {@link #T} and {@link #T_SEQUENCE}
@@ -111,7 +128,19 @@ public interface ParameterType {
   ParameterType bind(Class<? extends EfxDataType.Primitive> primitive);
 
   /**
-   * Gives the expression class an argument is converted to. Only a bound parameter type has one.
+   * Gives the parameter type this one stands for once an argument binds {@code T}, as a generic
+   * signature is bound by the argument at the first position of {@code T}.
+   *
+   * @param argument the argument that binds {@code T}
+   * @return the concrete type for a type variable, or nothing if the argument cannot bind
+   *         {@code T} (a node); this parameter type for any other
+   */
+  Optional<ParameterType> boundBy(TypedExpression argument);
+
+  /**
+   * Gives the expression class an argument is converted to. For a type variable, whose arguments
+   * are only converted once it is bound, it is the class of every value or every sequence it
+   * stands for.
    *
    * @return the expression class of this parameter type
    */
@@ -125,6 +154,17 @@ public interface ParameterType {
    * @return {@code true} if the argument converts to {@link #getExpressionType()}
    */
   boolean accepts(TypedExpression argument);
+
+  /**
+   * Tells whether this parameter type accepts the values of an argument, whatever the argument's
+   * cardinality: whether a single value of the primitive the argument binds {@code T} to converts
+   * to it. An argument rejected by a parameter type that accepts its values is a sequence where a
+   * single value is required.
+   *
+   * @param argument the translated argument
+   * @return {@code true} if a single value of the argument's primitive converts to this type
+   */
+  boolean acceptsValuesOf(TypedExpression argument);
 
   /**
    * Converts an accepted argument to {@link #getExpressionType()}, as

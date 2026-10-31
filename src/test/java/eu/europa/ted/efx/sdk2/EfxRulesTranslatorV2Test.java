@@ -188,6 +188,23 @@ class EfxRulesTranslatorV2Test extends EfxTestsBase {
     assertAllOutputs(testName, outputFiles);
   }
 
+  @Test
+  void testAssert_RepeatableCondition_NamesTheField() {
+    String rules = lines(
+        "---- STAGE 1a ----",
+        "",
+        "WITH ND-Root",
+        "    ASSERT (BT-00-Repeatable-Indicator)",
+        "    AS ERROR R-K7P-M2Q",
+        "    FOR BT-00-Text IN 1");
+    TypeMismatchException exception = assertThrows(TypeMismatchException.class,
+        () -> translator.translateRules(rules));
+    assertEquals(TypeMismatchException.ErrorCode.FIELD_MAY_REPEAT, exception.getErrorCode());
+    assertEquals("line 4:12 Type mismatch. Field 'BT-00-Repeatable-Indicator' may return multiple"
+        + " values from context 'ND-Root', but is used as a scalar. Use a sequence expression"
+        + " or change the context.", exception.getMessage());
+  }
+
   //#endregion ASSERT and REPORT tests
 
   //#region WHEN/OTHERWISE tests
@@ -761,7 +778,7 @@ class EfxRulesTranslatorV2Test extends EfxTestsBase {
     String rules = readInput("testApiCall_TypeMismatch_InArithmeticExpression");
     TypeMismatchException exception = assertThrows(TypeMismatchException.class,
         () -> translator.translateRules(rules));
-    assertEquals(TypeMismatchException.ErrorCode.CANNOT_CONVERT, exception.getErrorCode());
+    assertEquals(TypeMismatchException.ErrorCode.INCOMPATIBLE_OPERANDS, exception.getErrorCode());
   }
 
   @Test

@@ -655,6 +655,66 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
         "ND-Root", "2020-01-02Z - BT-00-StartDate");
   }
 
+  // The operators take the overload their operands match, whichever grammar alternative read them,
+  // so a date and a duration add and subtract as add-duration and subtract-duration do, and a
+  // duration multiplies by a number on either side.
+
+  @Test
+  void testDateAddition_UsingFieldReferenceOnTheLeft() {
+    testExpressionTranslationWithContext(
+        "(PathNode/StartDateField/xs:date(text()) + xs:dayTimeDuration('P3D'))",
+        "ND-Root", "BT-00-StartDate + P3D");
+  }
+
+  @Test
+  void testDateAddition_UsingFieldReferenceOnTheRight() {
+    testExpressionTranslationWithContext(
+        "(PathNode/StartDateField/xs:date(text()) + xs:dayTimeDuration('P3D'))",
+        "ND-Root", "P3D + BT-00-StartDate");
+  }
+
+  @Test
+  void testDateAddition_UsingDurationFieldOnTheLeft() {
+    testExpressionTranslationWithContext(
+        "(PathNode/StartDateField/xs:date(text()) + (for $F in PathNode/DurationField return (if ($F/@unitCode='WEEK') then xs:dayTimeDuration(concat('P', $F/number() * 7, 'D')) else if ($F/@unitCode='DAY') then xs:dayTimeDuration(concat('P', $F/number(), 'D')) else if ($F/@unitCode='YEAR') then xs:yearMonthDuration(concat('P', $F/number(), 'Y')) else if ($F/@unitCode='MONTH') then xs:yearMonthDuration(concat('P', $F/number(), 'M')) else ())))",
+        "ND-Root", "BT-00-Duration + BT-00-StartDate");
+  }
+
+  @Test
+  void testDateMinusDuration_UsingFieldReferenceOnTheLeft() {
+    testExpressionTranslationWithContext(
+        "(PathNode/StartDateField/xs:date(text()) - xs:dayTimeDuration('P3D'))",
+        "ND-Root", "BT-00-StartDate - P3D");
+  }
+
+  @Test
+  void testDateMinusDuration_UsingFieldReferenceOnTheRight() {
+    testExpressionTranslationWithContext(
+        "(xs:date('2020-01-01Z') - (for $F in PathNode/DurationField return (if ($F/@unitCode='WEEK') then xs:dayTimeDuration(concat('P', $F/number() * 7, 'D')) else if ($F/@unitCode='DAY') then xs:dayTimeDuration(concat('P', $F/number(), 'D')) else if ($F/@unitCode='YEAR') then xs:yearMonthDuration(concat('P', $F/number(), 'Y')) else if ($F/@unitCode='MONTH') then xs:yearMonthDuration(concat('P', $F/number(), 'M')) else ())))",
+        "ND-Root", "2020-01-01Z - BT-00-Duration");
+  }
+
+  @Test
+  void testDurationMultiplication_LateBoundDurationTimesNumber() {
+    testExpressionTranslationWithContext(
+        "(2 * (for $F in PathNode/DurationField return (if ($F/@unitCode='WEEK') then xs:dayTimeDuration(concat('P', $F/number() * 7, 'D')) else if ($F/@unitCode='DAY') then xs:dayTimeDuration(concat('P', $F/number(), 'D')) else if ($F/@unitCode='YEAR') then xs:yearMonthDuration(concat('P', $F/number(), 'Y')) else if ($F/@unitCode='MONTH') then xs:yearMonthDuration(concat('P', $F/number(), 'M')) else ())))",
+        "ND-Root", "BT-00-Duration * 2");
+  }
+
+  @Test
+  void testDurationMultiplication_NumberTimesLateBoundDuration_AsAValue() {
+    testExpressionTranslationWithContext(
+        "(2 * (for $F in PathNode/DurationField return (if ($F/@unitCode='WEEK') then xs:dayTimeDuration(concat('P', $F/number() * 7, 'D')) else if ($F/@unitCode='DAY') then xs:dayTimeDuration(concat('P', $F/number(), 'D')) else if ($F/@unitCode='YEAR') then xs:yearMonthDuration(concat('P', $F/number(), 'Y')) else if ($F/@unitCode='MONTH') then xs:yearMonthDuration(concat('P', $F/number(), 'M')) else ())))",
+        "ND-Root", "2 * BT-00-Duration");
+  }
+
+  @Test
+  void testDurationMultiplication_LateBoundDurationTimesCastNumber() {
+    testExpressionTranslationWithContext(
+        "(PathNode/NumberField/number() * (for $F in PathNode/DurationField return (if ($F/@unitCode='WEEK') then xs:dayTimeDuration(concat('P', $F/number() * 7, 'D')) else if ($F/@unitCode='DAY') then xs:dayTimeDuration(concat('P', $F/number(), 'D')) else if ($F/@unitCode='YEAR') then xs:yearMonthDuration(concat('P', $F/number(), 'Y')) else if ($F/@unitCode='MONTH') then xs:yearMonthDuration(concat('P', $F/number(), 'M')) else ())))",
+        "ND-Root", "BT-00-Duration * (number)BT-00-Number");
+  }
+
   @Test
   void testBooleanLiteralExpression_Always() {
     testExpressionTranslationWithContext("true()", "BT-00-Text", "ALWAYS");

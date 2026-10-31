@@ -59,7 +59,8 @@ class CatalogueResultTypesTest {
     List<TypedExpression> arguments = IntStream.range(0, arity(bound))
         .mapToObj(position -> placeholder(bound.parameterAt(position).getType()))
         .collect(Collectors.toList());
-    TypedExpression result = overload.compose(SCRIPT, overload.getSignature().convert(arguments));
+    TypedExpression result = overload.compose(SCRIPT,
+        overload.getSignature().match(arguments).getArguments());
     assertTrue(bound.getResult().getExpressionType().isInstance(result),
         () -> name + " " + bound + " returned " + result.getClass().getSimpleName());
   }

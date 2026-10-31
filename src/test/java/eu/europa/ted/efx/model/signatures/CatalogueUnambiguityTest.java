@@ -150,8 +150,7 @@ class CatalogueUnambiguityTest {
   private static List<Overload> applicable(final BuiltIn builtIn,
       final List<TypedExpression> arguments) {
     return builtIn.getOverloads().stream()
-        .filter(overload -> overload.getSignature().takes(arguments.size()))
-        .filter(overload -> overload.getSignature().firstRejectedPosition(arguments).isEmpty())
+        .filter(overload -> overload.getSignature().match(arguments).isMatched())
         .collect(Collectors.toList());
   }
 }

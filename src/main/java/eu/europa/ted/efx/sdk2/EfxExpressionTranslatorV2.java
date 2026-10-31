@@ -13,16 +13,11 @@
  */
 package eu.europa.ted.efx.sdk2;
 
-import static java.util.Map.entry;
-
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Deque;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -74,6 +69,24 @@ import eu.europa.ted.efx.model.expressions.sequence.NumericSequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.SequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.StringSequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.TimeSequenceExpression;
+import eu.europa.ted.efx.model.signatures.ArithmeticOperators;
+import eu.europa.ted.efx.model.signatures.BuiltIn;
+import eu.europa.ted.efx.model.signatures.BuiltIns;
+import eu.europa.ted.efx.model.signatures.ConditionOperators;
+import eu.europa.ted.efx.model.signatures.ConversionFunctions;
+import eu.europa.ted.efx.model.signatures.DateTimeFunctions;
+import eu.europa.ted.efx.model.signatures.LogicalOperators;
+import eu.europa.ted.efx.model.signatures.Match;
+import eu.europa.ted.efx.model.signatures.Mismatch;
+import eu.europa.ted.efx.model.signatures.Mismatch.Rejection;
+import eu.europa.ted.efx.model.signatures.NumericFunctions;
+import eu.europa.ted.efx.model.signatures.ParameterType;
+import eu.europa.ted.efx.model.signatures.Parameters;
+import eu.europa.ted.efx.model.signatures.PatternMatch;
+import eu.europa.ted.efx.model.signatures.Resolution;
+import eu.europa.ted.efx.model.signatures.SequenceFunctions;
+import eu.europa.ted.efx.model.signatures.StringFunctions;
+import eu.europa.ted.efx.model.signatures.TemplateFunctions;
 import eu.europa.ted.efx.model.types.EfxDataType;
 import eu.europa.ted.efx.model.types.EfxTypeLattice;
 import eu.europa.ted.efx.model.types.FieldTypes;
@@ -82,6 +95,7 @@ import eu.europa.ted.efx.model.variables.Function;
 import eu.europa.ted.efx.model.variables.StrictArguments;
 import eu.europa.ted.efx.model.variables.ParsedParameter;
 import eu.europa.ted.efx.model.variables.Variable;
+import eu.europa.ted.efx.model.variables.Parametrised;
 import eu.europa.ted.efx.sdk2.EfxParser.*;
 
 /**
@@ -130,15 +144,6 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
   protected ScriptGenerator script;
 
   private LinkedList<String> expressionArguments = new LinkedList<>();
-
-  /**
-   * Tracks the expected cardinality (scalar vs. sequence) as the tree walker enters late-bound
-   * expression nodes. Methods that resolve field, variable, function, or dictionary references
-   * consult the top of this stack to determine whether to push a scalar or sequence expression.
-   *
-   * @see #currentCardinalityResolutionContext()
-   */
-  private final Deque<CardinalityResolutionContext> cardinalityResolutionStack = new ArrayDeque<>();
 
   protected EfxExpressionTranslatorV2() {}
 
@@ -398,157 +403,139 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
 
   @Override
   public void exitLogicalAndCondition(LogicalAndConditionContext ctx) {
-    this.exitLogicalAndCondition();
+    this.exitOperation(ctx, LogicalOperators.AND);
   }
 
   @Override
   public void exitLateBoundLogicalAndConditionRight(LateBoundLogicalAndConditionRightContext ctx) {
-    this.exitLogicalAndCondition();
+    this.exitOperation(ctx, LogicalOperators.AND);
   }
 
   @Override
   public void exitLateBoundLogicalAndConditionLeft(LateBoundLogicalAndConditionLeftContext ctx) {
-    this.exitLogicalAndCondition();
+    this.exitOperation(ctx, LogicalOperators.AND);
   }
 
   @Override
   public void exitLateBoundLogicalAndCondition(LateBoundLogicalAndConditionContext ctx) {
-    this.exitLogicalAndCondition();
-  }
-
-  private void exitLogicalAndCondition() {
-    BooleanExpression right = this.stack.pop(BooleanExpression.class);
-    BooleanExpression left = this.stack.pop(BooleanExpression.class);
-    this.stack.push(this.script.composeLogicalAnd(left, right));
+    this.exitOperation(ctx, LogicalOperators.AND);
   }
 
   @Override
   public void exitLogicalOrCondition(LogicalOrConditionContext ctx) {
-    this.exitLogicalOrCondition();
+    this.exitOperation(ctx, LogicalOperators.OR);
   }
 
   @Override
   public void exitLateBoundLogicalOrConditionRight(LateBoundLogicalOrConditionRightContext ctx) {
-    this.exitLogicalOrCondition();
+    this.exitOperation(ctx, LogicalOperators.OR);
   }
 
   @Override
   public void exitLateBoundLogicalOrConditionLeft(LateBoundLogicalOrConditionLeftContext ctx) {
-    this.exitLogicalOrCondition();
+    this.exitOperation(ctx, LogicalOperators.OR);
   }
 
   @Override
   public void exitLateBoundLogicalOrCondition(LateBoundLogicalOrConditionContext ctx) {
-    this.exitLogicalOrCondition();
-  }
-
-  private void exitLogicalOrCondition() {
-    BooleanExpression right = this.stack.pop(BooleanExpression.class);
-    BooleanExpression left = this.stack.pop(BooleanExpression.class);
-    this.stack.push(this.script.composeLogicalOr(left, right));
+    this.exitOperation(ctx, LogicalOperators.OR);
   }
 
   // #region Boolean expressions - Comparisons --------------------------------
 
   @Override
   public void exitStringComparison(StringComparisonContext ctx) {
-    this.exitComparison(ctx.operator.getText(), StringExpression.class);
+    this.exitOperation(ctx, this.operatorNamed(ctx.operator));
   }
 
   @Override
   public void exitLateBoundStringComparisonLeft(LateBoundStringComparisonLeftContext ctx) {
-    this.exitComparison(ctx.operator.getText(), StringExpression.class);
+    this.exitOperation(ctx, this.operatorNamed(ctx.operator));
   }
 
   @Override
   public void exitLateBoundStringComparisonRight(LateBoundStringComparisonRightContext ctx) {
-    this.exitComparison(ctx.operator.getText(), StringExpression.class);
+    this.exitOperation(ctx, this.operatorNamed(ctx.operator));
   }
 
   @Override
   public void exitNumericComparison(NumericComparisonContext ctx) {
-    this.exitComparison(ctx.operator.getText(), NumericExpression.class);
+    this.exitOperation(ctx, this.operatorNamed(ctx.operator));
   }
 
   @Override
   public void exitLateBoundNumericComparisonLeft(LateBoundNumericComparisonLeftContext ctx) {
-    this.exitComparison(ctx.operator.getText(), NumericExpression.class);
+    this.exitOperation(ctx, this.operatorNamed(ctx.operator));
   }
 
   @Override
   public void exitLateBoundNumericComparisonRight(LateBoundNumericComparisonRightContext ctx) {
-    this.exitComparison(ctx.operator.getText(), NumericExpression.class);
+    this.exitOperation(ctx, this.operatorNamed(ctx.operator));
   }
 
   @Override
   public void exitBooleanComparison(BooleanComparisonContext ctx) {
-    this.exitComparison(ctx.operator.getText(), BooleanExpression.class);
+    this.exitOperation(ctx, this.operatorNamed(ctx.operator));
   }
 
   @Override
   public void exitLateBoundBooleanComparisonLeft(LateBoundBooleanComparisonLeftContext ctx) {
-    this.exitComparison(ctx.operator.getText(), BooleanExpression.class);
+    this.exitOperation(ctx, this.operatorNamed(ctx.operator));
   }
 
   @Override
   public void exitLateBoundBooleanComparisonRight(LateBoundBooleanComparisonRightContext ctx) {
-    this.exitComparison(ctx.operator.getText(), BooleanExpression.class);
+    this.exitOperation(ctx, this.operatorNamed(ctx.operator));
   }
 
   @Override
   public void exitDateComparison(DateComparisonContext ctx) {
-    this.exitComparison(ctx.operator.getText(), DateExpression.class);
+    this.exitOperation(ctx, this.operatorNamed(ctx.operator));
   }
 
   @Override
   public void exitLateBoundDateComparisonLeft(LateBoundDateComparisonLeftContext ctx) {
-    this.exitComparison(ctx.operator.getText(), DateExpression.class);
+    this.exitOperation(ctx, this.operatorNamed(ctx.operator));
   }
 
   @Override
   public void exitLateBoundDateComparisonRight(LateBoundDateComparisonRightContext ctx) {
-    this.exitComparison(ctx.operator.getText(), DateExpression.class);
+    this.exitOperation(ctx, this.operatorNamed(ctx.operator));
   }
 
   @Override
   public void exitTimeComparison(TimeComparisonContext ctx) {
-    this.exitComparison(ctx.operator.getText(), TimeExpression.class);
+    this.exitOperation(ctx, this.operatorNamed(ctx.operator));
   }
 
   @Override
   public void exitLateBoundTimeComparisonLeft(LateBoundTimeComparisonLeftContext ctx) {
-    this.exitComparison(ctx.operator.getText(), TimeExpression.class);
+    this.exitOperation(ctx, this.operatorNamed(ctx.operator));
   }
 
   @Override
   public void exitLateBoundTimeComparisonRight(LateBoundTimeComparisonRightContext ctx) {
-    this.exitComparison(ctx.operator.getText(), TimeExpression.class);
+    this.exitOperation(ctx, this.operatorNamed(ctx.operator));
   }
 
   @Override
   public void exitDurationComparison(DurationComparisonContext ctx) {
-    this.exitComparison(ctx.operator.getText(), DurationExpression.class);
+    this.exitOperation(ctx, this.operatorNamed(ctx.operator));
   }
 
   @Override
   public void exitLateBoundDurationComparisonLeft(LateBoundDurationComparisonLeftContext ctx) {
-    this.exitComparison(ctx.operator.getText(), DurationExpression.class);
+    this.exitOperation(ctx, this.operatorNamed(ctx.operator));
   }
 
   @Override
   public void exitLateBoundDurationComparisonRight(LateBoundDurationComparisonRightContext ctx) {
-    this.exitComparison(ctx.operator.getText(), DurationExpression.class);
+    this.exitOperation(ctx, this.operatorNamed(ctx.operator));
   }
 
   @Override
   public void exitLateBoundComparison(LateBoundComparisonContext ctx) {
-    this.exitComparison(ctx.operator.getText(), this.resolveScalarType(this.stack.peekType(-1)));
-  }
-
-  private <T extends ScalarExpression> void exitComparison(String operator, Class<T> type) {
-    T right = this.stack.pop(type);
-    T left = this.stack.pop(type);
-    this.stack.push(this.script.composeComparisonOperation(left, operator, right));
+    this.exitOperation(ctx, this.operatorNamed(ctx.operator));
   }
 
   // #endregion Boolean expressions - Comparisons -----------------------------
@@ -557,276 +544,201 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
 
   @Override
   public void exitStringEmptyFunction(StringEmptyFunctionContext ctx) {
-    StringExpression expression = this.stack.pop(StringExpression.class);
-    this.stack.push(this.script.composeComparisonOperation(expression, "==",
-        this.script.getStringLiteralFromUnquotedString("")));
+    this.exitCall(ctx, StringFunctions.EMPTY);
   }
 
   @Override
   public void exitPresenceCondition(PresenceConditionContext ctx) {
-    PathExpression reference = this.stack.pop(PathExpression.class);
-    if (ctx.modifier != null && ctx.modifier.getType() == EfxLexer.Not) {
-      this.stack.push(this.script.composeLogicalNot(this.script.composeExistsCondition(reference)));
-    } else {
-      this.stack.push(this.script.composeExistsCondition(reference));
-    }
+    this.exitCall(ctx, ctx.modifier == null ? ConditionOperators.IS_PRESENT : ConditionOperators.IS_NOT_PRESENT);
   }
 
   @Override
   public void exitStringUniqueValueCondition(StringUniqueValueConditionContext ctx) {
-    this.exitUniqueValueCondition(ctx.modifier, StringExpression.class, StringSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IS_UNIQUE_IN : ConditionOperators.IS_NOT_UNIQUE_IN);
   }
 
   @Override
   public void exitLateBoundStringUniqueValueConditionRight(LateBoundStringUniqueValueConditionRightContext ctx) {
-    this.exitUniqueValueCondition(ctx.modifier, StringExpression.class, StringSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IS_UNIQUE_IN : ConditionOperators.IS_NOT_UNIQUE_IN);
   }
 
   @Override
   public void exitLateBoundStringUniqueValueConditionLeft(LateBoundStringUniqueValueConditionLeftContext ctx) {
-    this.exitUniqueValueCondition(ctx.modifier, StringExpression.class, StringSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IS_UNIQUE_IN : ConditionOperators.IS_NOT_UNIQUE_IN);
   }
 
   @Override
   public void exitNumericUniqueValueCondition(NumericUniqueValueConditionContext ctx) {
-    this.exitUniqueValueCondition(ctx.modifier, NumericExpression.class, NumericSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IS_UNIQUE_IN : ConditionOperators.IS_NOT_UNIQUE_IN);
   }
 
   @Override
   public void exitLateBoundNumericUniqueValueConditionRight(LateBoundNumericUniqueValueConditionRightContext ctx) {
-    this.exitUniqueValueCondition(ctx.modifier, NumericExpression.class, NumericSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IS_UNIQUE_IN : ConditionOperators.IS_NOT_UNIQUE_IN);
   }
 
   @Override
   public void exitLateBoundNumericUniqueValueConditionLeft(LateBoundNumericUniqueValueConditionLeftContext ctx) {
-    this.exitUniqueValueCondition(ctx.modifier, NumericExpression.class, NumericSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IS_UNIQUE_IN : ConditionOperators.IS_NOT_UNIQUE_IN);
   }
 
   @Override
   public void exitBooleanUniqueValueCondition(BooleanUniqueValueConditionContext ctx) {
-    this.exitUniqueValueCondition(ctx.modifier, BooleanExpression.class, BooleanSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IS_UNIQUE_IN : ConditionOperators.IS_NOT_UNIQUE_IN);
   }
 
   @Override
   public void exitLateBoundBooleanUniqueValueConditionRight(LateBoundBooleanUniqueValueConditionRightContext ctx) {
-    this.exitUniqueValueCondition(ctx.modifier, BooleanExpression.class, BooleanSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IS_UNIQUE_IN : ConditionOperators.IS_NOT_UNIQUE_IN);
   }
 
   @Override
   public void exitLateBoundBooleanUniqueValueConditionLeft(LateBoundBooleanUniqueValueConditionLeftContext ctx) {
-    this.exitUniqueValueCondition(ctx.modifier, BooleanExpression.class, BooleanSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IS_UNIQUE_IN : ConditionOperators.IS_NOT_UNIQUE_IN);
   }
 
   @Override
   public void exitDateUniqueValueCondition(DateUniqueValueConditionContext ctx) {
-    this.exitUniqueValueCondition(ctx.modifier, DateExpression.class, DateSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IS_UNIQUE_IN : ConditionOperators.IS_NOT_UNIQUE_IN);
   }
 
   @Override
   public void exitLateBoundDateUniqueValueConditionRight(LateBoundDateUniqueValueConditionRightContext ctx) {
-    this.exitUniqueValueCondition(ctx.modifier, DateExpression.class, DateSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IS_UNIQUE_IN : ConditionOperators.IS_NOT_UNIQUE_IN);
   }
 
   @Override
   public void exitLateBoundDateUniqueValueConditionLeft(LateBoundDateUniqueValueConditionLeftContext ctx) {
-    this.exitUniqueValueCondition(ctx.modifier, DateExpression.class, DateSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IS_UNIQUE_IN : ConditionOperators.IS_NOT_UNIQUE_IN);
   }
 
   @Override
   public void exitTimeUniqueValueCondition(TimeUniqueValueConditionContext ctx) {
-    this.exitUniqueValueCondition(ctx.modifier, TimeExpression.class, TimeSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IS_UNIQUE_IN : ConditionOperators.IS_NOT_UNIQUE_IN);
   }
 
   @Override
   public void exitLateBoundTimeUniqueValueConditionRight(LateBoundTimeUniqueValueConditionRightContext ctx) {
-    this.exitUniqueValueCondition(ctx.modifier, TimeExpression.class, TimeSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IS_UNIQUE_IN : ConditionOperators.IS_NOT_UNIQUE_IN);
   }
 
   @Override
   public void exitLateBoundTimeUniqueValueConditionLeft(LateBoundTimeUniqueValueConditionLeftContext ctx) {
-    this.exitUniqueValueCondition(ctx.modifier, TimeExpression.class, TimeSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IS_UNIQUE_IN : ConditionOperators.IS_NOT_UNIQUE_IN);
   }
 
   @Override
   public void exitDurationUniqueValueCondition(DurationUniqueValueConditionContext ctx) {
-    this.exitUniqueValueCondition(ctx.modifier, DurationExpression.class, DurationSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IS_UNIQUE_IN : ConditionOperators.IS_NOT_UNIQUE_IN);
   }
 
   @Override
   public void exitLateBoundDurationUniqueValueConditionRight(LateBoundDurationUniqueValueConditionRightContext ctx) {
-    this.exitUniqueValueCondition(ctx.modifier, DurationExpression.class, DurationSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IS_UNIQUE_IN : ConditionOperators.IS_NOT_UNIQUE_IN);
   }
 
   @Override
   public void exitLateBoundDurationUniqueValueConditionLeft(LateBoundDurationUniqueValueConditionLeftContext ctx) {
-    this.exitUniqueValueCondition(ctx.modifier, DurationExpression.class, DurationSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IS_UNIQUE_IN : ConditionOperators.IS_NOT_UNIQUE_IN);
   }
 
   @Override
   public void exitLateBoundUniqueValueCondition(LateBoundUniqueValueConditionContext ctx) {
-    TypedExpression needle = this.stack.peekType(-1);
-    this.exitUniqueValueCondition(ctx.modifier, this.resolveScalarType(needle), this.resolveSequenceType(needle));
-  }
-
-  private void exitUniqueValueCondition(Token modifier,
-      Class<? extends ScalarExpression> scalarType, Class<? extends SequenceExpression> sequenceType) {
-    SequenceExpression haystack = this.stack.pop(sequenceType);
-    ScalarExpression needle = this.stack.pop(scalarType);
-    BooleanExpression condition = this.dispatchComposeUniqueValueCondition(needle, haystack);
-    if (modifier != null && modifier.getType() == EfxLexer.Not) {
-      condition = this.script.composeLogicalNot(condition);
-    }
-    this.stack.push(condition);
-  }
-
-  private BooleanExpression dispatchComposeUniqueValueCondition(ScalarExpression needle,
-      SequenceExpression haystack) {
-    if (needle instanceof NumericExpression) {
-      return this.script.composeUniqueValueCondition(
-          (NumericExpression) needle, (NumericSequenceExpression) haystack);
-    } else if (needle instanceof BooleanExpression) {
-      return this.script.composeUniqueValueCondition(
-          (BooleanExpression) needle, (BooleanSequenceExpression) haystack);
-    } else if (needle instanceof DateExpression) {
-      return this.script.composeUniqueValueCondition(
-          (DateExpression) needle, (DateSequenceExpression) haystack);
-    } else if (needle instanceof TimeExpression) {
-      return this.script.composeUniqueValueCondition(
-          (TimeExpression) needle, (TimeSequenceExpression) haystack);
-    } else if (needle instanceof DurationExpression) {
-      return this.script.composeUniqueValueCondition(
-          (DurationExpression) needle, (DurationSequenceExpression) haystack);
-    } else if (needle instanceof StringExpression) {
-      return this.script.composeUniqueValueCondition(
-          (StringExpression) needle, (StringSequenceExpression) haystack);
-    } else {
-      throw TranslatorConfigurationException.missingTypeMapping(
-          needle.getDataType(), "dispatchComposeUniqueValueCondition");
-    }
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IS_UNIQUE_IN : ConditionOperators.IS_NOT_UNIQUE_IN);
   }
 
   @Override
   public void exitStringSequenceEmptinessCondition(
       StringSequenceEmptinessConditionContext ctx) {
-    this.exitSequenceEmptinessCondition(StringSequenceExpression.class, ctx.modifier);
+    this.exitCall(ctx, ctx.modifier == null ? ConditionOperators.IS_EMPTY : ConditionOperators.IS_NOT_EMPTY);
   }
 
   @Override
   public void exitBooleanSequenceEmptinessCondition(
       BooleanSequenceEmptinessConditionContext ctx) {
-    this.exitSequenceEmptinessCondition(BooleanSequenceExpression.class, ctx.modifier);
+    this.exitCall(ctx, ctx.modifier == null ? ConditionOperators.IS_EMPTY : ConditionOperators.IS_NOT_EMPTY);
   }
 
   @Override
   public void exitNumericSequenceEmptinessCondition(
       NumericSequenceEmptinessConditionContext ctx) {
-    this.exitSequenceEmptinessCondition(NumericSequenceExpression.class, ctx.modifier);
+    this.exitCall(ctx, ctx.modifier == null ? ConditionOperators.IS_EMPTY : ConditionOperators.IS_NOT_EMPTY);
   }
 
   @Override
   public void exitDateSequenceEmptinessCondition(
       DateSequenceEmptinessConditionContext ctx) {
-    this.exitSequenceEmptinessCondition(DateSequenceExpression.class, ctx.modifier);
+    this.exitCall(ctx, ctx.modifier == null ? ConditionOperators.IS_EMPTY : ConditionOperators.IS_NOT_EMPTY);
   }
 
   @Override
   public void exitTimeSequenceEmptinessCondition(
       TimeSequenceEmptinessConditionContext ctx) {
-    this.exitSequenceEmptinessCondition(TimeSequenceExpression.class, ctx.modifier);
+    this.exitCall(ctx, ctx.modifier == null ? ConditionOperators.IS_EMPTY : ConditionOperators.IS_NOT_EMPTY);
   }
 
   @Override
   public void exitDurationSequenceEmptinessCondition(
       DurationSequenceEmptinessConditionContext ctx) {
-    this.exitSequenceEmptinessCondition(DurationSequenceExpression.class, ctx.modifier);
+    this.exitCall(ctx, ctx.modifier == null ? ConditionOperators.IS_EMPTY : ConditionOperators.IS_NOT_EMPTY);
   }
 
   @Override
   public void exitLateBoundEmptinessCondition(LateBoundEmptinessConditionContext ctx) {
-    this.exitSequenceEmptinessCondition(
-        this.resolveSequenceType(this.stack.peekType()), ctx.modifier);
-  }
-
-  private <T extends SequenceExpression> void exitSequenceEmptinessCondition(
-      Class<T> sequenceType, Token modifier) {
-    final T sequence = this.stack.pop(sequenceType);
-    BooleanExpression condition = this.script.composeEmptySequenceCondition(sequence);
-    if (modifier != null && modifier.getType() == EfxLexer.Not) {
-      condition = this.script.composeLogicalNot(condition);
-    }
-    this.stack.push(condition);
+    this.exitCall(ctx, ctx.modifier == null ? ConditionOperators.IS_EMPTY : ConditionOperators.IS_NOT_EMPTY);
   }
 
   @Override
   public void exitStringSequenceDistinctCondition(
       StringSequenceDistinctConditionContext ctx) {
-    this.exitSequenceDistinctCondition(StringSequenceExpression.class, ctx.modifier);
+    this.exitCall(ctx, ctx.modifier == null ? ConditionOperators.HAS_DUPLICATES : ConditionOperators.HAS_NO_DUPLICATES);
   }
 
   @Override
   public void exitBooleanSequenceDistinctCondition(
       BooleanSequenceDistinctConditionContext ctx) {
-    this.exitSequenceDistinctCondition(BooleanSequenceExpression.class, ctx.modifier);
+    this.exitCall(ctx, ctx.modifier == null ? ConditionOperators.HAS_DUPLICATES : ConditionOperators.HAS_NO_DUPLICATES);
   }
 
   @Override
   public void exitNumericSequenceDistinctCondition(
       NumericSequenceDistinctConditionContext ctx) {
-    this.exitSequenceDistinctCondition(NumericSequenceExpression.class, ctx.modifier);
+    this.exitCall(ctx, ctx.modifier == null ? ConditionOperators.HAS_DUPLICATES : ConditionOperators.HAS_NO_DUPLICATES);
   }
 
   @Override
   public void exitDateSequenceDistinctCondition(
       DateSequenceDistinctConditionContext ctx) {
-    this.exitSequenceDistinctCondition(DateSequenceExpression.class, ctx.modifier);
+    this.exitCall(ctx, ctx.modifier == null ? ConditionOperators.HAS_DUPLICATES : ConditionOperators.HAS_NO_DUPLICATES);
   }
 
   @Override
   public void exitTimeSequenceDistinctCondition(
       TimeSequenceDistinctConditionContext ctx) {
-    this.exitSequenceDistinctCondition(TimeSequenceExpression.class, ctx.modifier);
+    this.exitCall(ctx, ctx.modifier == null ? ConditionOperators.HAS_DUPLICATES : ConditionOperators.HAS_NO_DUPLICATES);
   }
 
   @Override
   public void exitDurationSequenceDistinctCondition(
       DurationSequenceDistinctConditionContext ctx) {
-    this.exitSequenceDistinctCondition(DurationSequenceExpression.class, ctx.modifier);
+    this.exitCall(ctx, ctx.modifier == null ? ConditionOperators.HAS_DUPLICATES : ConditionOperators.HAS_NO_DUPLICATES);
   }
 
   @Override
   public void exitLateBoundDistinctCondition(LateBoundDistinctConditionContext ctx) {
-    this.exitSequenceDistinctCondition(
-        this.resolveSequenceType(this.stack.peekType()), ctx.modifier);
-  }
-
-  private <T extends SequenceExpression> void exitSequenceDistinctCondition(
-      Class<T> sequenceType, Token modifier) {
-    final T sequence = this.stack.pop(sequenceType);
-    BooleanExpression condition = this.script.composeIsDistinctCondition(sequence);
-    if (modifier == null || modifier.getType() != EfxLexer.No) {
-      condition = this.script.composeLogicalNot(condition);
-    }
-    this.stack.push(condition);
+    this.exitCall(ctx, ctx.modifier == null ? ConditionOperators.HAS_DUPLICATES : ConditionOperators.HAS_NO_DUPLICATES);
   }
 
   @Override
   public void exitLikePatternCondition(LikePatternConditionContext ctx) {
-    this.exitLikePatternCondition(ctx.modifier, ctx.pattern.getText());
+    final String pattern = ctx.pattern.getText();
+    this.exitCall(ctx, ctx.modifier == null ? PatternMatch.like(pattern) : PatternMatch.notLike(pattern));
   }
 
   @Override
   public void exitLateBoundLikePatternCondition(LateBoundLikePatternConditionContext ctx) {
-    this.exitLikePatternCondition(ctx.modifier, ctx.pattern.getText());
-  }
-
-  private void exitLikePatternCondition(Token modifier, String pattern) {
-    EfxRegexValidator.validate(pattern);
-    StringExpression expression = this.stack.pop(StringExpression.class);
-    BooleanExpression condition = this.script.composePatternMatchCondition(expression, pattern);
-    if (modifier != null && modifier.getType() == EfxLexer.Not) {
-      condition = this.script.composeLogicalNot(condition);
-    }
-    this.stack.push(condition);
+    final String pattern = ctx.pattern.getText();
+    this.exitCall(ctx, ctx.modifier == null ? PatternMatch.like(pattern) : PatternMatch.notLike(pattern));
   }
 
   // #endregion Boolean expressions - Conditions ------------------------------
@@ -835,109 +747,97 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
 
   @Override
   public void exitStringInListCondition(StringInListConditionContext ctx) {
-    this.exitInListCondition(ctx.modifier, StringExpression.class, StringSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IN : ConditionOperators.NOT_IN);
   }
 
   @Override
   public void exitLateBoundStringInListConditionRight(LateBoundStringInListConditionRightContext ctx) {
-    this.exitInListCondition(ctx.modifier, StringExpression.class, StringSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IN : ConditionOperators.NOT_IN);
   }
 
   @Override
   public void exitLateBoundStringInListConditionLeft(LateBoundStringInListConditionLeftContext ctx) {
-    this.exitInListCondition(ctx.modifier, StringExpression.class, StringSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IN : ConditionOperators.NOT_IN);
   }
 
   @Override
   public void exitBooleanInListCondition(BooleanInListConditionContext ctx) {
-    this.exitInListCondition(ctx.modifier, BooleanExpression.class, BooleanSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IN : ConditionOperators.NOT_IN);
   }
 
   @Override
   public void exitLateBoundBooleanInListConditionRight(LateBoundBooleanInListConditionRightContext ctx) {
-    this.exitInListCondition(ctx.modifier, BooleanExpression.class, BooleanSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IN : ConditionOperators.NOT_IN);
   }
 
   @Override
   public void exitLateBoundBooleanInListConditionLeft(LateBoundBooleanInListConditionLeftContext ctx) {
-    this.exitInListCondition(ctx.modifier, BooleanExpression.class, BooleanSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IN : ConditionOperators.NOT_IN);
   }
 
   @Override
   public void exitNumberInListCondition(NumberInListConditionContext ctx) {
-    this.exitInListCondition(ctx.modifier, NumericExpression.class, NumericSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IN : ConditionOperators.NOT_IN);
   }
 
   @Override
   public void exitLateBoundNumberInListConditionRight(LateBoundNumberInListConditionRightContext ctx) {
-    this.exitInListCondition(ctx.modifier, NumericExpression.class, NumericSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IN : ConditionOperators.NOT_IN);
   }
 
   @Override
   public void exitLateBoundNumberInListConditionLeft(LateBoundNumberInListConditionLeftContext ctx) {
-    this.exitInListCondition(ctx.modifier, NumericExpression.class, NumericSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IN : ConditionOperators.NOT_IN);
   }
 
   @Override
   public void exitDateInListCondition(DateInListConditionContext ctx) {
-    this.exitInListCondition(ctx.modifier, DateExpression.class, DateSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IN : ConditionOperators.NOT_IN);
   }
 
   @Override
   public void exitLateBoundDateInListConditionRight(LateBoundDateInListConditionRightContext ctx) {
-    this.exitInListCondition(ctx.modifier, DateExpression.class, DateSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IN : ConditionOperators.NOT_IN);
   }
 
   @Override
   public void exitLateBoundDateInListConditionLeft(LateBoundDateInListConditionLeftContext ctx) {
-    this.exitInListCondition(ctx.modifier, DateExpression.class, DateSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IN : ConditionOperators.NOT_IN);
   }
 
   @Override
   public void exitTimeInListCondition(TimeInListConditionContext ctx) {
-    this.exitInListCondition(ctx.modifier, TimeExpression.class, TimeSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IN : ConditionOperators.NOT_IN);
   }
 
   @Override
   public void exitLateBoundTimeInListConditionRight(LateBoundTimeInListConditionRightContext ctx) {
-    this.exitInListCondition(ctx.modifier, TimeExpression.class, TimeSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IN : ConditionOperators.NOT_IN);
   }
 
   @Override
   public void exitLateBoundTimeInListConditionLeft(LateBoundTimeInListConditionLeftContext ctx) {
-    this.exitInListCondition(ctx.modifier, TimeExpression.class, TimeSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IN : ConditionOperators.NOT_IN);
   }
 
   @Override
   public void exitDurationInListCondition(DurationInListConditionContext ctx) {
-    this.exitInListCondition(ctx.modifier, DurationExpression.class, DurationSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IN : ConditionOperators.NOT_IN);
   }
 
   @Override
   public void exitLateBoundDurationInListConditionRight(LateBoundDurationInListConditionRightContext ctx) {
-    this.exitInListCondition(ctx.modifier, DurationExpression.class, DurationSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IN : ConditionOperators.NOT_IN);
   }
 
   @Override
   public void exitLateBoundDurationInListConditionLeft(LateBoundDurationInListConditionLeftContext ctx) {
-    this.exitInListCondition(ctx.modifier, DurationExpression.class, DurationSequenceExpression.class);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IN : ConditionOperators.NOT_IN);
   }
 
   @Override
   public void exitLateBoundInListCondition(LateBoundInListConditionContext ctx) {
-    TypedExpression expression = this.stack.peekType(-1);
-    this.exitInListCondition(ctx.modifier, this.resolveScalarType(expression), this.resolveSequenceType(expression));
-  }
-
-  private void exitInListCondition(
-      Token modifier, Class<? extends ScalarExpression> expressionType, Class<? extends SequenceExpression> listType) {
-    SequenceExpression list = this.stack.pop(listType);
-    ScalarExpression expression = this.stack.pop(expressionType);
-    BooleanExpression condition = this.script.composeContainsCondition(expression, list);
-    if (modifier != null && modifier.getType() == EfxLexer.Not) {
-      condition = this.script.composeLogicalNot(condition);
-    }
-    this.stack.push(condition);
+    this.exitOperation(ctx, ctx.modifier == null ? ConditionOperators.IN : ConditionOperators.NOT_IN);
   }
 
   // #endregion Boolean expressions - List membership conditions -----------------
@@ -958,16 +858,16 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
 
   @Override
   public void exitQuantifiedExpression(QuantifiedExpressionContext ctx) {
-    this.exitQuantifiedExpression(ctx.Every() != null);
+    this.exitQuantifiedExpression(ctx.Every() != null, ctx.booleanExpression());
   }
 
   @Override
   public void exitLateBoundQuantifiedExpression(LateBoundQuantifiedExpressionContext ctx) {
-    this.exitQuantifiedExpression(ctx.Every() != null);
+    this.exitQuantifiedExpression(ctx.Every() != null, ctx.lateBoundScalar());
   }
 
-  private void exitQuantifiedExpression(boolean isEvery) {
-    BooleanExpression booleanExpression = this.stack.pop(BooleanExpression.class);
+  private void exitQuantifiedExpression(boolean isEvery, ParserRuleContext condition) {
+    BooleanExpression booleanExpression = this.popOperand(condition, BooleanExpression.class);
     if (isEvery) {
       this.stack.push(this.script.composeAllSatisfy(this.stack.pop(IteratorListExpression.class),
           booleanExpression));
@@ -984,48 +884,42 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
 
   @Override
   public void exitAdditiveExpression(AdditiveExpressionContext ctx) {
-    this.exitNumericOperation(ctx.operator.getText());
+    this.exitOperation(ctx, this.operatorNamed(ctx.operator));
   }
 
   @Override
   public void exitLateBoundAdditiveExpressionLeft(LateBoundAdditiveExpressionLeftContext ctx) {
-    this.exitNumericOperation(ctx.operator.getText());
+    this.exitOperation(ctx, this.operatorNamed(ctx.operator));
   }
 
   @Override
   public void exitLateBoundAdditiveExpressionRight(LateBoundAdditiveExpressionRightContext ctx) {
-    this.exitNumericOperation(ctx.operator.getText());
+    this.exitOperation(ctx, this.operatorNamed(ctx.operator));
   }
 
   @Override
   public void exitLateBoundAdditiveExpression(LateBoundAdditiveExpressionContext ctx) {
-    this.dispatchComposeLateBoundAdditiveExpression(ctx);
+    this.exitOperation(ctx, this.operatorNamed(ctx.operator));
   }
 
   @Override
   public void exitMultiplicativeExpression(MultiplicativeExpressionContext ctx) {
-    this.exitNumericOperation(ctx.operator.getText());
+    this.exitOperation(ctx, this.operatorNamed(ctx.operator));
   }
 
   @Override
   public void exitLateBoundMultiplicativeExpressionLeft(LateBoundMultiplicativeExpressionLeftContext ctx) {
-    this.exitNumericOperation(ctx.operator.getText());
+    this.exitOperation(ctx, this.operatorNamed(ctx.operator));
   }
 
   @Override
   public void exitLateBoundMultiplicativeExpressionRight(LateBoundMultiplicativeExpressionRightContext ctx) {
-    this.exitNumericOperation(ctx.operator.getText());
+    this.exitOperation(ctx, this.operatorNamed(ctx.operator));
   }
 
   @Override
   public void exitLateBoundMultiplicativeExpression(LateBoundMultiplicativeExpressionContext ctx) {
-    this.dispatchComposeLateBoundMultiplication(ctx);
-  }
-
-  private void exitNumericOperation(String operator) {
-    NumericExpression right = this.stack.pop(NumericExpression.class);
-    NumericExpression left = this.stack.pop(NumericExpression.class);
-    this.stack.push(this.script.composeNumericOperation(left, operator, right));
+    this.exitOperation(ctx, this.operatorNamed(ctx.operator));
   }
 
   @Override
@@ -1040,114 +934,72 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
 
   @Override
   public void exitDurationAdditionExpression(DurationAdditionExpressionContext ctx) {
-    this.exitDurationAddition();
+    this.exitOperation(ctx, ArithmeticOperators.PLUS);
   }
 
   @Override
   public void exitLateBoundDurationAdditionExpressionLeft(LateBoundDurationAdditionExpressionLeftContext ctx) {
-    this.exitDurationAddition();
+    this.exitOperation(ctx, ArithmeticOperators.PLUS);
   }
 
   @Override
   public void exitLateBoundDurationAdditionExpressionRight(LateBoundDurationAdditionExpressionRightContext ctx) {
-    this.exitDurationAddition();
-  }
-
-  private void exitDurationAddition() {
-    DurationExpression right = this.stack.pop(DurationExpression.class);
-    DurationExpression left = this.stack.pop(DurationExpression.class);
-    this.stack.push(this.script.composeAddition(left, right));
+    this.exitOperation(ctx, ArithmeticOperators.PLUS);
   }
 
   @Override
   public void exitDurationSubtractionExpression(DurationSubtractionExpressionContext ctx) {
-    this.exitDurationSubtraction();
+    this.exitOperation(ctx, ArithmeticOperators.MINUS);
   }
 
   @Override
   public void exitLateBoundDurationSubtractionExpressionLeft(LateBoundDurationSubtractionExpressionLeftContext ctx) {
-    this.exitDurationSubtraction();
+    this.exitOperation(ctx, ArithmeticOperators.MINUS);
   }
 
   @Override
   public void exitLateBoundDurationSubtractionExpressionRight(LateBoundDurationSubtractionExpressionRightContext ctx) {
-    this.exitDurationSubtraction();
-  }
-
-  private void exitDurationSubtraction() {
-    DurationExpression right = this.stack.pop(DurationExpression.class);
-    DurationExpression left = this.stack.pop(DurationExpression.class);
-    this.stack.push(this.script.composeSubtraction(left, right));
+    this.exitOperation(ctx, ArithmeticOperators.MINUS);
   }
 
   @Override
   public void exitDurationMultiplicationExpressionLeft(DurationMultiplicationExpressionLeftContext ctx) {
-    this.exitDurationMultiplication();
+    this.exitOperation(ctx, ArithmeticOperators.MULTIPLY);
   }
 
   @Override
   public void exitLateBoundDurationMultiplicationExpressionLeft(LateBoundDurationMultiplicationExpressionLeftContext ctx) {
-    this.exitDurationMultiplication();
+    this.exitOperation(ctx, ArithmeticOperators.MULTIPLY);
   }
 
   @Override
   public void exitDurationMultiplicationExpressionRight(DurationMultiplicationExpressionRightContext ctx) {
-    this.exitReversedDurationMultiplication();
+    this.exitOperation(ctx, ArithmeticOperators.MULTIPLY);
   }
 
   @Override
   public void exitLateBoundDurationMultiplicationExpressionRight(LateBoundDurationMultiplicationExpressionRightContext ctx) {
-    this.exitDurationMultiplication();
+    this.exitOperation(ctx, ArithmeticOperators.MULTIPLY);
   }
 
   @Override
   public void exitLateBoundReversedDurationMultiplicationExpression(LateBoundReversedDurationMultiplicationExpressionContext ctx) {
-    this.exitReversedDurationMultiplication();
-  }
-
-  private void exitDurationMultiplication() {
-    DurationExpression duration = this.stack.pop(DurationExpression.class);
-    NumericExpression number = this.stack.pop(NumericExpression.class);
-    this.stack.push(this.script.composeMultiplication(number, duration));
-  }
-
-  private void exitReversedDurationMultiplication() {
-    NumericExpression number = this.stack.pop(NumericExpression.class);
-    DurationExpression duration = this.stack.pop(DurationExpression.class);
-    this.stack.push(this.script.composeMultiplication(number, duration));
+    this.exitOperation(ctx, ArithmeticOperators.MULTIPLY);
   }
 
   @Override
   public void exitDateSubtractionExpression(DateSubtractionExpressionContext ctx) {
-    this.exitDateSubtraction();
+    this.exitOperation(ctx, ArithmeticOperators.MINUS);
   }
 
   @Override
   public void exitLateBoundDateSubtractionExpressionLeft(LateBoundDateSubtractionExpressionLeftContext ctx) {
-    this.exitDateSubtraction();
+    this.exitOperation(ctx, ArithmeticOperators.MINUS);
   }
 
   @Override
   public void exitLateBoundDateSubtractionExpressionRight(LateBoundDateSubtractionExpressionRightContext ctx) {
-    this.exitDateSubtraction();
-  }
-
-  private void exitDateSubtraction() {
-    DateExpression startDate = this.stack.pop(DateExpression.class);
-    DateExpression endDate = this.stack.pop(DateExpression.class);
-    this.stack.push(this.script.composeSubtraction(startDate, endDate));
-  }
-
-  private void exitDateDurationAddition() {
-    DurationExpression duration = this.stack.pop(DurationExpression.class);
-    DateExpression date = this.stack.pop(DateExpression.class);
-    this.stack.push(this.script.composeAddition(date, duration));
-  }
-
-  private void exitDateDurationSubtraction() {
-    DurationExpression duration = this.stack.pop(DurationExpression.class);
-    DateExpression date = this.stack.pop(DateExpression.class);
-    this.stack.push(this.script.composeSubtraction(date, duration));
+    this.exitOperation(ctx, ArithmeticOperators.MINUS);
   }
 
   // #endregion Duration Expressions ------------------------------------------
@@ -1163,60 +1015,51 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
 
   @Override
   public void exitStringList(StringListContext ctx) {
-    this.exitList(ctx.stringExpression().size() + ctx.lateBoundScalar().size(),
-        StringExpression.class, StringSequenceExpression.class);
+    this.exitList(ctx, StringExpression.class, StringSequenceExpression.class);
   }
 
   @Override
   public void exitBooleanList(BooleanListContext ctx) {
-    this.exitList(ctx.booleanExpression().size() + ctx.lateBoundScalar().size(),
-        BooleanExpression.class, BooleanSequenceExpression.class);
+    this.exitList(ctx, BooleanExpression.class, BooleanSequenceExpression.class);
   }
 
   @Override
   public void exitNumericList(NumericListContext ctx) {
-    this.exitList(ctx.numericExpression().size() + ctx.lateBoundScalar().size(),
-        NumericExpression.class, NumericSequenceExpression.class);
+    this.exitList(ctx, NumericExpression.class, NumericSequenceExpression.class);
   }
 
   @Override
   public void exitDateList(DateListContext ctx) {
-    this.exitList(ctx.dateExpression().size() + ctx.lateBoundScalar().size(),
-        DateExpression.class, DateSequenceExpression.class);
+    this.exitList(ctx, DateExpression.class, DateSequenceExpression.class);
   }
 
   @Override
   public void exitTimeList(TimeListContext ctx) {
-    this.exitList(ctx.timeExpression().size() + ctx.lateBoundScalar().size(),
-        TimeExpression.class, TimeSequenceExpression.class);
+    this.exitList(ctx, TimeExpression.class, TimeSequenceExpression.class);
   }
 
   @Override
   public void exitDurationList(DurationListContext ctx) {
-    this.exitList(ctx.durationExpression().size() + ctx.lateBoundScalar().size(),
-        DurationExpression.class, DurationSequenceExpression.class);
+    this.exitList(ctx, DurationExpression.class, DurationSequenceExpression.class);
   }
 
-  private <T extends ScalarExpression> void exitList(int listSize,
-      Class<T> expressionType, Class<? extends SequenceExpression> listType) {
-    if (this.stack.empty() || listSize == 0) {
-      this.stack.push(this.script.composeList(Collections.emptyList(), listType));
-      return;
+  /**
+   * Translates a list: each item is an operand that must be a single value of the list's primitive.
+   */
+  private <T extends ScalarExpression> void exitList(final ParserRuleContext list,
+      final Class<T> itemType, final Class<? extends SequenceExpression> listType) {
+    final List<ParserRuleContext> items = list.getRuleContexts(ParserRuleContext.class);
+    final LinkedList<T> values = new LinkedList<>();
+    for (int position = items.size() - 1; position >= 0; position--) {
+      values.addFirst(this.popOperand(items.get(position), itemType));
     }
-
-    List<T> list = new ArrayList<>();
-    for (int i = 0; i < listSize; i++) {
-      list.add(0, this.stack.pop(expressionType));
-    }
-    this.stack.push(this.script.composeList(list, listType));
+    this.stack.push(this.script.composeList(values, listType));
   }
 
   @Override
   public void exitLateBoundList(LateBoundListContext ctx) {
-    int listSize = ctx.lateBoundScalar().size();
-    Class<? extends ScalarExpression> scalarType = this.resolveScalarType(this.stack.peekType());
-    Class<? extends SequenceExpression> sequenceType = this.resolveSequenceType(this.stack.peekType());
-    this.exitList(listSize, scalarType, sequenceType);
+    final TypedExpression last = this.stack.peekType();
+    this.exitList(ctx, this.scalarTypeOf(last), this.sequenceTypeOf(last));
   }
 
   // #endregion List Expressions ----------------------------------------------
@@ -1272,10 +1115,10 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
   private void exitLateBoundParenthesizedExpression() {
     TypedExpression inner = this.stack.peekType();
     if (inner instanceof SequenceExpression) {
-      Class<? extends SequenceExpression> type = this.resolveSequenceType(inner);
+      Class<? extends SequenceExpression> type = this.sequenceTypeOf(inner);
       this.stack.push(this.composeParenthesizedExpression(this.stack.pop(type), type));
     } else {
-      Class<? extends ScalarExpression> type = this.resolveScalarType(inner);
+      Class<? extends ScalarExpression> type = this.scalarTypeOf(inner);
       this.stack.push(this.composeParenthesizedExpression(this.stack.pop(type), type));
     }
   }
@@ -1294,103 +1137,109 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
 
   @Override
   public void exitConditionalBooleanExpression(ConditionalBooleanExpressionContext ctx) {
-    this.exitConditionalExpression(BooleanExpression.class);
+    this.exitConditionalExpression(ctx, BooleanExpression.class);
   }
 
   @Override
   public void exitLateBoundConditionalBooleanExpressionLeft(LateBoundConditionalBooleanExpressionLeftContext ctx) {
-    this.exitConditionalExpression(BooleanExpression.class);
+    this.exitConditionalExpression(ctx, BooleanExpression.class);
   }
 
   @Override
   public void exitLateBoundConditionalBooleanExpressionRight(LateBoundConditionalBooleanExpressionRightContext ctx) {
-    this.exitConditionalExpression(BooleanExpression.class);
+    this.exitConditionalExpression(ctx, BooleanExpression.class);
   }
 
   @Override
   public void exitConditionalNumericExpression(ConditionalNumericExpressionContext ctx) {
-    this.exitConditionalExpression(NumericExpression.class);
+    this.exitConditionalExpression(ctx, NumericExpression.class);
   }
 
   @Override
   public void exitLateBoundConditionalNumericExpressionLeft(LateBoundConditionalNumericExpressionLeftContext ctx) {
-    this.exitConditionalExpression(NumericExpression.class);
+    this.exitConditionalExpression(ctx, NumericExpression.class);
   }
 
   @Override
   public void exitLateBoundConditionalNumericExpressionRight(LateBoundConditionalNumericExpressionRightContext ctx) {
-    this.exitConditionalExpression(NumericExpression.class);
+    this.exitConditionalExpression(ctx, NumericExpression.class);
   }
 
   @Override
   public void exitConditionalStringExpression(ConditionalStringExpressionContext ctx) {
-    this.exitConditionalExpression(StringExpression.class);
+    this.exitConditionalExpression(ctx, StringExpression.class);
   }
 
   @Override
   public void exitLateBoundConditionalStringExpressionLeft(LateBoundConditionalStringExpressionLeftContext ctx) {
-    this.exitConditionalExpression(StringExpression.class);
+    this.exitConditionalExpression(ctx, StringExpression.class);
   }
 
   @Override
   public void exitLateBoundConditionalStringExpressionRight(LateBoundConditionalStringExpressionRightContext ctx) {
-    this.exitConditionalExpression(StringExpression.class);
+    this.exitConditionalExpression(ctx, StringExpression.class);
   }
 
   @Override
   public void exitConditionalDateExpression(ConditionalDateExpressionContext ctx) {
-    this.exitConditionalExpression(DateExpression.class);
+    this.exitConditionalExpression(ctx, DateExpression.class);
   }
 
   @Override
   public void exitLateBoundConditionalDateExpressionLeft(LateBoundConditionalDateExpressionLeftContext ctx) {
-    this.exitConditionalExpression(DateExpression.class);
+    this.exitConditionalExpression(ctx, DateExpression.class);
   }
 
   @Override
   public void exitLateBoundConditionalDateExpressionRight(LateBoundConditionalDateExpressionRightContext ctx) {
-    this.exitConditionalExpression(DateExpression.class);
+    this.exitConditionalExpression(ctx, DateExpression.class);
   }
 
   @Override
   public void exitConditionalTimeExpression(ConditionalTimeExpressionContext ctx) {
-    this.exitConditionalExpression(TimeExpression.class);
+    this.exitConditionalExpression(ctx, TimeExpression.class);
   }
 
   @Override
   public void exitLateBoundConditionalTimeExpressionLeft(LateBoundConditionalTimeExpressionLeftContext ctx) {
-    this.exitConditionalExpression(TimeExpression.class);
+    this.exitConditionalExpression(ctx, TimeExpression.class);
   }
 
   @Override
   public void exitLateBoundConditionalTimeExpressionRight(LateBoundConditionalTimeExpressionRightContext ctx) {
-    this.exitConditionalExpression(TimeExpression.class);
+    this.exitConditionalExpression(ctx, TimeExpression.class);
   }
 
   @Override
   public void exitConditionalDurationExpression(ConditionalDurationExpressionContext ctx) {
-    this.exitConditionalExpression(DurationExpression.class);
+    this.exitConditionalExpression(ctx, DurationExpression.class);
   }
 
   @Override
   public void exitLateBoundConditionalDurationExpressionLeft(LateBoundConditionalDurationExpressionLeftContext ctx) {
-    this.exitConditionalExpression(DurationExpression.class);
+    this.exitConditionalExpression(ctx, DurationExpression.class);
   }
 
   @Override
   public void exitLateBoundConditionalDurationExpressionRight(LateBoundConditionalDurationExpressionRightContext ctx) {
-    this.exitConditionalExpression(DurationExpression.class);
+    this.exitConditionalExpression(ctx, DurationExpression.class);
   }
 
   @Override
   public void exitLateBoundConditionalExpression(LateBoundConditionalExpressionContext ctx) {
-    this.exitConditionalExpression(this.resolveScalarType(this.stack.peekType(-1)));
+    this.exitConditionalExpression(ctx, this.scalarTypeOf(this.stack.peekType(-1)));
   }
 
-  private <T extends ScalarExpression> void exitConditionalExpression(Class<T> type) {
-    T whenFalse = this.stack.pop(type);
-    T whenTrue = this.stack.pop(type);
-    BooleanExpression condition = this.stack.pop(BooleanExpression.class);
+  /**
+   * Translates a conditional: its three child rules are the condition and the two branches, which
+   * must be single values of the conditional's primitive.
+   */
+  private <T extends ScalarExpression> void exitConditionalExpression(
+      final ParserRuleContext conditional, final Class<T> type) {
+    final List<ParserRuleContext> operands = conditional.getRuleContexts(ParserRuleContext.class);
+    final T whenFalse = this.popOperand(operands.get(2), type);
+    final T whenTrue = this.popOperand(operands.get(1), type);
+    final BooleanExpression condition = this.popOperand(operands.get(0), BooleanExpression.class);
     this.stack.push(this.script.composeConditionalExpression(condition, whenTrue, whenFalse, type));
   }
 
@@ -1648,7 +1497,7 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
     TypedExpression body = this.stack.pop(TypedExpression.class);
     IteratorListExpression iterators = this.stack.pop(IteratorListExpression.class);
 
-    this.composeForExpression(iterators, body, ctx.Distinct() != null, this.resolveSequenceType(body));
+    this.composeForExpression(iterators, body, ctx.Distinct() != null, this.sequenceTypeOf(body));
     this.stack.popStackFrame();
   }
 
@@ -1806,7 +1655,7 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
   @Override
   public void exitFieldContext(FieldContextContext ctx) {
     if (ctx.indexer() != null) {
-      NumericExpression index = this.stack.pop(NumericExpression.class);
+      NumericExpression index = this.popOperand(ctx.indexer(), NumericExpression.class);
       final TypedExpression top = this.stack.peekType();
       if (!(top instanceof PathExpression)) {
         throw TypeMismatchException.cannotConvert(ctx, PathExpression.class, top.getClass());
@@ -1874,10 +1723,13 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
   }
 
   /**
-   * After the predicate is parsed we need to switch back to the previous context.
+   * After the predicate is parsed, its value is taken as the condition it is, and we switch back to
+   * the previous context. The value is taken first, so that a field of the predicate that may
+   * repeat is reported with the context the predicate reads it from.
    */
   @Override
   public void exitPredicate(PredicateContext ctx) {
+    this.stack.push(this.popOperand(ctx, BooleanExpression.class));
     this.efxContext.pop();
   }
 
@@ -1888,15 +1740,13 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
   @Override
   public void exitScalarFromFieldReference(ScalarFromFieldReferenceContext ctx) {
     PathExpression path = this.stack.pop(PathExpression.class);
-    String fieldId = getFieldId(ctx.fieldReference());
-    this.resolveAndPushFieldReference(this.composeFieldValueReference(fieldId, path), fieldId);
+    this.stack.push(this.composeFieldValueReference(getFieldId(ctx.fieldReference()), path));
   }
 
   @Override
   public void exitSequenceFromFieldReference(SequenceFromFieldReferenceContext ctx) {
     PathExpression path = this.stack.pop(PathExpression.class);
-    String fieldId = getFieldId(ctx.fieldReference());
-    this.resolveAndPushFieldReference(this.composeFieldValueReference(fieldId, path), fieldId);
+    this.stack.push(this.composeFieldValueReference(getFieldId(ctx.fieldReference()), path));
   }
 
   /**
@@ -1964,45 +1814,24 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
     final PathExpression field = this.stack.pop(PathExpression.class);
     final PathExpression attribute =
         this.script.composeFieldAttributeReference(field, ctx.attributeName.getText(), StringPath.class);
-    this.resolveAndPushFieldReference(continuing(field, attribute), getFieldId(ctx.fieldReference()));
-  }
-
-  /**
-   * Pushes the value of a field or attribute reference. The value has the cardinality the symbol
-   * resolver gave the reference's path. Inside a late-bound expression, a sequence where a single value
-   * is required is an error, and a single value where a sequence is required is promoted to one.
-   *
-   * @param value the value of the field or attribute reference
-   * @param fieldId the identifier of the field, named by the error
-   */
-  private void resolveAndPushFieldReference(PathExpression value, String fieldId) {
-    switch (this.currentCardinalityResolutionContext()) {
-      case RESOLVE_SCALAR:
-        if (value instanceof SequenceExpression) {
-          throw this.fieldMayReturnMultipleValuesException(fieldId);
-        }
-        this.stack.push(value);
-        break;
-      case RESOLVE_SEQUENCE:
-        this.stack.push(value.asSequence());
-        break;
-      case RESOLVED:
-      case RESOLVE_EITHER:
-        this.stack.push(value);
-        break;
-    }
+    this.stack.push(continuing(field, attribute));
   }
 
   /**
    * Creates the appropriate exception for a field that may return multiple values but is used
    * as a scalar. Returns {@link TypeMismatchException#fieldIsMultilingual} for multilingual fields,
    * or {@link TypeMismatchException#fieldMayRepeat} for structurally repeatable fields.
+   *
+   * @param ctx the reference to the field, a field, attribute or raw value reference
+   * @param fieldId the identifier of the field
+   * @return the exception, which names the field and, if it may repeat, the current context
    */
-  private TypeMismatchException fieldMayReturnMultipleValuesException(String fieldId) {
+  TypeMismatchException fieldMayReturnMultipleValuesException(final ParserRuleContext ctx,
+      final String fieldId) {
     if (FieldTypes.TEXT_MULTILINGUAL.getName().equals(this.symbols.getTypeOfField(fieldId))) {
-      return TypeMismatchException.fieldIsMultilingual(this.stack.peekParserContext(), fieldId);
+      return TypeMismatchException.fieldIsMultilingual(ctx, fieldId);
     }
-    return TypeMismatchException.fieldMayRepeat(this.stack.peekParserContext(), fieldId, this.efxContext.symbol());
+    return TypeMismatchException.fieldMayRepeat(ctx, fieldId, this.efxContext.symbol());
   }
 
   // #endregion Value References ----------------------------------------------
@@ -2132,33 +1961,18 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
   }
 
   /**
-   * Resolves and pushes a variable reference. Inside a late-bound expression, a sequence where a
-   * single value is required is an error, and a single value where a sequence is required is
-   * promoted to one. Context variables (bound by {@code for context:}) are always scalar; node
-   * context variables cannot be used as values. Regular variables have explicit cardinality from
-   * their declaration.
+   * Resolves and pushes a variable reference, typed by its declaration. Context variables (bound by
+   * {@code for context:}) are single values of their field; node context variables cannot be used
+   * as values.
    *
    * @param ctx the variable reference context
    */
   protected void resolveAndPushVariableReference(VariableReferenceContext ctx) {
     String variableName = ctx.variableName.getText();
     Context variableContext = this.efxContext.getContextFromVariable(variableName);
-
-    if (variableContext != null) {
-      if (variableContext.isNodeContext()) {
-        throw TypeMismatchException.nodeContextUsedAsValue(ctx, variableName, variableContext.symbol());
-      }
-    } else {
-      Optional<TypedExpression> refExpr = this.stack.getParameter(variableName)
-          .or(() -> this.stack.getVariable(variableName).map(v -> v.referenceExpression));
-      boolean isSequence = EfxTypeLattice.isSequence(
-          refExpr.orElseThrow(() -> InvalidIdentifierException.undeclaredIdentifier(ctx, variableName)).getDataType());
-      if (isSequence
-          && this.currentCardinalityResolutionContext() == CardinalityResolutionContext.RESOLVE_SCALAR) {
-        throw TypeMismatchException.identifierIsSequence(ctx, variableName);
-      }
+    if (variableContext != null && variableContext.isNodeContext()) {
+      throw TypeMismatchException.nodeContextUsedAsValue(ctx, variableName, variableContext.symbol());
     }
-
     this.stack.pushIdentifierReference(variableName);
   }
 
@@ -2170,37 +1984,37 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
 
   @Override
   public void exitStringAtSequenceIndex(StringAtSequenceIndexContext ctx) {
-    this.exitSequenceAtIndex(StringExpression.class, StringSequenceExpression.class);
+    this.exitSequenceAtIndex(ctx.indexer(), StringExpression.class, StringSequenceExpression.class);
   }
 
   @Override
   public void exitNumericAtSequenceIndex(NumericAtSequenceIndexContext ctx) {
-    this.exitSequenceAtIndex(NumericExpression.class, NumericSequenceExpression.class);
+    this.exitSequenceAtIndex(ctx.indexer(), NumericExpression.class, NumericSequenceExpression.class);
   }
 
   @Override
   public void exitBooleanAtSequenceIndex(BooleanAtSequenceIndexContext ctx) {
-    this.exitSequenceAtIndex(BooleanExpression.class, BooleanSequenceExpression.class);
+    this.exitSequenceAtIndex(ctx.indexer(), BooleanExpression.class, BooleanSequenceExpression.class);
   }
 
   @Override
   public void exitDateAtSequenceIndex(DateAtSequenceIndexContext ctx) {
-    this.exitSequenceAtIndex(DateExpression.class, DateSequenceExpression.class);
+    this.exitSequenceAtIndex(ctx.indexer(), DateExpression.class, DateSequenceExpression.class);
   }
 
   @Override
   public void exitTimeAtSequenceIndex(TimeAtSequenceIndexContext ctx) {
-    this.exitSequenceAtIndex(TimeExpression.class, TimeSequenceExpression.class);
+    this.exitSequenceAtIndex(ctx.indexer(), TimeExpression.class, TimeSequenceExpression.class);
   }
 
   @Override
   public void exitDurationAtSequenceIndex(DurationAtSequenceIndexContext ctx) {
-    this.exitSequenceAtIndex(DurationExpression.class, DurationSequenceExpression.class);
+    this.exitSequenceAtIndex(ctx.indexer(), DurationExpression.class, DurationSequenceExpression.class);
   }
 
-  private <T extends SequenceExpression> void exitSequenceAtIndex(
+  private <T extends SequenceExpression> void exitSequenceAtIndex(IndexerContext indexer,
       Class<? extends ScalarExpression> itemType, Class<T> listType) {
-    NumericExpression index = this.stack.pop(NumericExpression.class);
+    NumericExpression index = this.popOperand(indexer, NumericExpression.class);
 
     var addParenthesis = this.stack.peek() instanceof PathExpression;
 
@@ -2215,76 +2029,11 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
   @Override
   public void exitLateBoundScalarAtSequenceIndex(LateBoundScalarAtSequenceIndexContext ctx) {
     TypedExpression sequence = this.stack.peekType(-1);
-    this.exitSequenceAtIndex(this.resolveScalarType(sequence), this.resolveSequenceType(sequence));
+    this.exitSequenceAtIndex(ctx.indexer(), this.scalarTypeOf(sequence), this.sequenceTypeOf(sequence));
   }
-
-
 
 
   // #endregion New in EFX-2: Indexers ---------------------------------------
-
-  // #region Type resolution -------------------------------------------------
-
-  private static final Map<Class<? extends EfxDataType>, Class<? extends TypedExpression>> efxDataTypeToScalarExpressionMap = Map.ofEntries(
-      entry(EfxDataType.String.class, StringExpression.class),
-      entry(EfxDataType.MultilingualString.class, StringExpression.class),
-      entry(EfxDataType.Boolean.class, BooleanExpression.class),
-      entry(EfxDataType.Number.class, NumericExpression.class),
-      entry(EfxDataType.Date.class, DateExpression.class),
-      entry(EfxDataType.Time.class, TimeExpression.class),
-      entry(EfxDataType.Duration.class, DurationExpression.class));
-
-  private static final Map<Class<? extends EfxDataType>, Class<? extends TypedExpression>> efxDataTypeToSequenceExpressionMap = Map.ofEntries(
-      entry(EfxDataType.String.class, StringSequenceExpression.class),
-      entry(EfxDataType.MultilingualString.class, StringSequenceExpression.class),
-      entry(EfxDataType.Boolean.class, BooleanSequenceExpression.class),
-      entry(EfxDataType.Number.class, NumericSequenceExpression.class),
-      entry(EfxDataType.Date.class, DateSequenceExpression.class),
-      entry(EfxDataType.Time.class, TimeSequenceExpression.class),
-      entry(EfxDataType.Duration.class, DurationSequenceExpression.class));
-
-  private Class<? extends ScalarExpression> resolveScalarType(TypedExpression expression) {
-    Class<? extends EfxDataType> primitive = EfxTypeLattice.toPrimitive(expression.getDataType());
-    return efxDataTypeToScalarExpressionMap.get(primitive).asSubclass(ScalarExpression.class);
-  }
-
-  protected Class<? extends ScalarExpression> resolveScalarType(Class<? extends EfxDataType> primitiveType) {
-    Class<? extends TypedExpression> expressionType = efxDataTypeToScalarExpressionMap.get(primitiveType);
-    if (expressionType == null || !ScalarExpression.class.isAssignableFrom(expressionType)) {
-      throw TranslatorConfigurationException.missingTypeMapping(primitiveType, "resolveScalarType");
-    }
-    return expressionType.asSubclass(ScalarExpression.class);
-  }
-
-  private Class<? extends SequenceExpression> resolveSequenceType(TypedExpression expression) {
-    Class<? extends EfxDataType> primitive = EfxTypeLattice.toPrimitive(expression.getDataType());
-    return efxDataTypeToSequenceExpressionMap.get(primitive).asSubclass(SequenceExpression.class);
-  }
-
-  private Class<? extends SequenceExpression> resolveSequenceType(Class<? extends EfxDataType> primitiveType) {
-    Class<? extends TypedExpression> expressionType = efxDataTypeToSequenceExpressionMap.get(primitiveType);
-    if (expressionType == null || !SequenceExpression.class.isAssignableFrom(expressionType)) {
-      throw TranslatorConfigurationException.missingTypeMapping(primitiveType, "resolveSequenceType");
-    }
-    return expressionType.asSubclass(SequenceExpression.class);
-  }
-
-  private boolean isNumeric(TypedExpression expression) {
-    return EfxDataType.Number.class.isAssignableFrom(
-        EfxTypeLattice.toPrimitive(expression.getDataType()));
-  }
-
-  private boolean isDuration(TypedExpression expression) {
-    return EfxDataType.Duration.class.isAssignableFrom(
-        EfxTypeLattice.toPrimitive(expression.getDataType()));
-  }
-
-  private boolean isDate(TypedExpression expression) {
-    return EfxDataType.Date.class.isAssignableFrom(
-        EfxTypeLattice.toPrimitive(expression.getDataType()));
-  }
-
-  // #endregion Type resolution ------------------------------------------------
 
   // #region New in EFX-2: Function invocation ------------------------------
 
@@ -2303,15 +2052,36 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
     this.stack.push(functionArguments);                                       // push the updated list of arguments
   }
 
+  /**
+   * Matches the arguments of the invocation against the parameters the function declares, and
+   * leaves them for the expression that composes the invocation.
+   */
   @Override
-  public void exitArgumentList(ArgumentListContext ctx) {
-    var arguments = this.stack.pop(StrictArguments.class); // pop the function arguments
-    var countExpectedArguments = arguments.identifier.parameters.size();
-    var countPassedArguments = arguments.size();
-    if (countExpectedArguments != countPassedArguments) { // check if the number of passed arguments is correct
-      throw InvalidArgumentException.argumentNumberMismatch(arguments.identifier, countExpectedArguments, countPassedArguments);
+  public void exitFunctionInvocation(FunctionInvocationContext ctx) {
+    this.stack.push(this.popMatchedArguments());
+  }
+
+  /**
+   * Pops the arguments of an invocation of a declared function or template, and matches them
+   * against the parameters of the declaration, as the arguments of a built-in are matched against
+   * its overloads.
+   *
+   * @return the arguments, each converted to the class of its parameter
+   * @throws InvalidArgumentException if the number of arguments or the type of one does not match
+   */
+  protected ParsedArguments popMatchedArguments() {
+    final StrictArguments arguments = this.stack.pop(StrictArguments.class);
+    final Parametrised declaration = arguments.identifier;
+    final Match match = Parameters.of(declaration.parameters).match(arguments.getValues());
+    if (match.isCountMismatch()) {
+      throw InvalidArgumentException.argumentNumberMismatch(declaration,
+          declaration.parameters.size(), arguments.getValues().size());
     }
-    this.stack.push(arguments); // push the list of arguments back to the stack
+    if (!match.isMatched()) {
+      throw InvalidArgumentException.argumentTypeMismatch(match.getPosition(), declaration,
+          match.getRequired().getExpressionType(), match.getArgument().getClass());
+    }
+    return new ParsedArguments(declaration.parameters, match.getArguments().getValues());
   }
 
   @Override
@@ -2361,29 +2131,19 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
   }
 
   /**
-   * Resolves and pushes a function invocation. Inside a late-bound expression, a sequence function
-   * where a single value is required is an error, and a scalar function where a sequence is
-   * required is promoted to one. The appropriate expression type map (scalar or sequence) is
-   * selected automatically based on the function's declared return cardinality.
+   * Resolves and pushes a function invocation, typed by the declaration of the function: a single
+   * value or a sequence of the primitive of its value.
    *
    * @param ctx the function invocation context
    */
   private void resolveAndPushFunctionInvocation(FunctionInvocationContext ctx) {
-    var arguments = this.stack.pop(StrictArguments.class);
-    var function = (Function) arguments.identifier;
-    String functionName = ctx.functionName.getText();
-    boolean isSequence = EfxTypeLattice.isSequence(function.dataType);
-
-    if (isSequence
-        && this.currentCardinalityResolutionContext() == CardinalityResolutionContext.RESOLVE_SCALAR) {
-      throw TypeMismatchException.identifierIsSequence(ctx, functionName);
-    }
-
-    var baseType = EfxTypeLattice.toPrimitive(function.dataType);
-    var expressionType = isSequence
-        ? this.resolveSequenceType(baseType) : this.resolveScalarType(baseType);
-    this.stack.push(this.script.composeFunctionInvocation(functionName,
-        arguments.getArgumentValues(), expressionType));
+    final ParsedArguments arguments = this.stack.pop(ParsedArguments.class);
+    final Function function = this.stack.getFunction(ctx.functionName.getText());
+    final ParameterType result = EfxTypeLattice.isSequence(function.dataType)
+        ? ParameterType.T_SEQUENCE
+        : ParameterType.T;
+    this.stack.push(this.script.composeFunctionInvocation(ctx.functionName.getText(),
+        arguments.getArgumentValues(), this.typeOf(result, function.expression)));
   }
 
   // #endregion New in EFX-2: Function invocation -----------------------------
@@ -2468,33 +2228,27 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
 
   @Override
   public void exitNotFunction(NotFunctionContext ctx) {
-    this.stack.push(this.script.composeLogicalNot(this.stack.pop(BooleanExpression.class)));
+    this.exitCall(ctx, LogicalOperators.NOT);
   }
 
   @Override
   public void exitBooleanFromNumberFunction(BooleanFromNumberFunctionContext ctx) {
-    this.stack.push(this.script.composeToBooleanConversion(this.stack.pop(NumericExpression.class)));
+    this.exitCall(ctx, ConversionFunctions.TO_INDICATOR);
   }
 
   @Override
   public void exitContainsFunction(ContainsFunctionContext ctx) {
-    final StringExpression needle = this.stack.pop(StringExpression.class);
-    final StringExpression haystack = this.stack.pop(StringExpression.class);
-    this.stack.push(this.script.composeContainsCondition(haystack, needle));
+    this.exitCall(ctx, StringFunctions.CONTAINS);
   }
 
   @Override
   public void exitStartsWithFunction(StartsWithFunctionContext ctx) {
-    final StringExpression startsWith = this.stack.pop(StringExpression.class);
-    final StringExpression text = this.stack.pop(StringExpression.class);
-    this.stack.push(this.script.composeStartsWithCondition(text, startsWith));
+    this.exitCall(ctx, StringFunctions.STARTS_WITH);
   }
 
   @Override
   public void exitEndsWithFunction(EndsWithFunctionContext ctx) {
-    final StringExpression endsWith = this.stack.pop(StringExpression.class);
-    final StringExpression text = this.stack.pop(StringExpression.class);
-    this.stack.push(this.script.composeEndsWithCondition(text, endsWith));
+    this.exitCall(ctx, StringFunctions.ENDS_WITH);
   }
 
   // #endregion Boolean functions ---------------------------------------------
@@ -2579,11 +2333,6 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
     if (!(top instanceof PathExpression)) {
       throw TypeMismatchException.cannotConvert(ctx, PathExpression.class, top.getClass());
     }
-    if (top instanceof SequenceExpression
-        && this.currentCardinalityResolutionContext() == CardinalityResolutionContext.RESOLVE_SCALAR) {
-      final String fieldId = getFieldId(ctx.fieldContext());
-      throw this.fieldMayReturnMultipleValuesException(fieldId);
-    }
     final PathExpression fieldPath = (PathExpression) this.stack.pop(top.getClass());
     this.stack.push(this.script.composeFieldRawValueReference(fieldPath));
   }
@@ -2655,103 +2404,97 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
 
   @Override
   public void exitLateBoundSequenceEqualFunction(LateBoundSequenceEqualFunctionContext ctx) {
-    this.exitSequenceEqualFunction(this.resolveSequenceType(this.stack.peekType(-1)));
+    this.exitCall(ctx, SequenceFunctions.SEQUENCE_EQUAL);
   }
 
   @Override
   public void exitStringSequenceEqualFunction(StringSequenceEqualFunctionContext ctx) {
-    this.exitSequenceEqualFunction(StringSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.SEQUENCE_EQUAL);
   }
 
   @Override
   public void exitLateBoundStringSequenceEqualLeft(LateBoundStringSequenceEqualLeftContext ctx) {
-    this.exitSequenceEqualFunction(StringSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.SEQUENCE_EQUAL);
   }
 
   @Override
   public void exitLateBoundStringSequenceEqualRight(LateBoundStringSequenceEqualRightContext ctx) {
-    this.exitSequenceEqualFunction(StringSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.SEQUENCE_EQUAL);
   }
 
   @Override
   public void exitBooleanSequenceEqualFunction(BooleanSequenceEqualFunctionContext ctx) {
-    this.exitSequenceEqualFunction(BooleanSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.SEQUENCE_EQUAL);
   }
 
   @Override
   public void exitLateBoundBooleanSequenceEqualLeft(LateBoundBooleanSequenceEqualLeftContext ctx) {
-    this.exitSequenceEqualFunction(BooleanSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.SEQUENCE_EQUAL);
   }
 
   @Override
   public void exitLateBoundBooleanSequenceEqualRight(LateBoundBooleanSequenceEqualRightContext ctx) {
-    this.exitSequenceEqualFunction(BooleanSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.SEQUENCE_EQUAL);
   }
 
   @Override
   public void exitNumericSequenceEqualFunction(NumericSequenceEqualFunctionContext ctx) {
-    this.exitSequenceEqualFunction(NumericSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.SEQUENCE_EQUAL);
   }
 
   @Override
   public void exitLateBoundNumericSequenceEqualLeft(LateBoundNumericSequenceEqualLeftContext ctx) {
-    this.exitSequenceEqualFunction(NumericSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.SEQUENCE_EQUAL);
   }
 
   @Override
   public void exitLateBoundNumericSequenceEqualRight(LateBoundNumericSequenceEqualRightContext ctx) {
-    this.exitSequenceEqualFunction(NumericSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.SEQUENCE_EQUAL);
   }
 
   @Override
   public void exitDateSequenceEqualFunction(DateSequenceEqualFunctionContext ctx) {
-    this.exitSequenceEqualFunction(DateSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.SEQUENCE_EQUAL);
   }
 
   @Override
   public void exitLateBoundDateSequenceEqualLeft(LateBoundDateSequenceEqualLeftContext ctx) {
-    this.exitSequenceEqualFunction(DateSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.SEQUENCE_EQUAL);
   }
 
   @Override
   public void exitLateBoundDateSequenceEqualRight(LateBoundDateSequenceEqualRightContext ctx) {
-    this.exitSequenceEqualFunction(DateSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.SEQUENCE_EQUAL);
   }
 
   @Override
   public void exitTimeSequenceEqualFunction(TimeSequenceEqualFunctionContext ctx) {
-    this.exitSequenceEqualFunction(TimeSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.SEQUENCE_EQUAL);
   }
 
   @Override
   public void exitLateBoundTimeSequenceEqualLeft(LateBoundTimeSequenceEqualLeftContext ctx) {
-    this.exitSequenceEqualFunction(TimeSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.SEQUENCE_EQUAL);
   }
 
   @Override
   public void exitLateBoundTimeSequenceEqualRight(LateBoundTimeSequenceEqualRightContext ctx) {
-    this.exitSequenceEqualFunction(TimeSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.SEQUENCE_EQUAL);
   }
 
   @Override
   public void exitDurationSequenceEqualFunction(DurationSequenceEqualFunctionContext ctx) {
-    this.exitSequenceEqualFunction(DurationSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.SEQUENCE_EQUAL);
   }
 
   @Override
   public void exitLateBoundDurationSequenceEqualLeft(LateBoundDurationSequenceEqualLeftContext ctx) {
-    this.exitSequenceEqualFunction(DurationSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.SEQUENCE_EQUAL);
   }
 
   @Override
   public void exitLateBoundDurationSequenceEqualRight(LateBoundDurationSequenceEqualRightContext ctx) {
-    this.exitSequenceEqualFunction(DurationSequenceExpression.class);
-  }
-
-  private <T extends SequenceExpression> void exitSequenceEqualFunction(Class<T> sequenceType) {
-    final T two = this.stack.pop(sequenceType);
-    final T one = this.stack.pop(sequenceType);
-    this.stack.push(this.script.composeSequenceEqualFunction(one, two));
+    this.exitCall(ctx, SequenceFunctions.SEQUENCE_EQUAL);
   }
 
   // #endregion Sequence-equal -------------------------------------------------
@@ -2760,142 +2503,132 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
 
   @Override
   public void exitLateBoundCountFunction(LateBoundCountFunctionContext ctx) {
-    this.stack.push(this.script.composeCountOperation(
-        this.stack.pop(this.resolveSequenceType(this.stack.peekType()))));
+    this.exitCall(ctx, NumericFunctions.COUNT);
   }
 
   @Override
   public void exitCountStringsFunction(CountStringsFunctionContext ctx) {
-    this.stack.push(this.script.composeCountOperation(this.stack.pop(StringSequenceExpression.class)));
+    this.exitCall(ctx, NumericFunctions.COUNT);
   }
 
   @Override
   public void exitCountBooleansFunction(CountBooleansFunctionContext ctx) {
-    this.stack.push(this.script.composeCountOperation(this.stack.pop(BooleanSequenceExpression.class)));
+    this.exitCall(ctx, NumericFunctions.COUNT);
   }
 
   @Override
   public void exitCountNumbersFunction(CountNumbersFunctionContext ctx) {
-    this.stack.push(this.script.composeCountOperation(this.stack.pop(NumericSequenceExpression.class)));
+    this.exitCall(ctx, NumericFunctions.COUNT);
   }
 
   @Override
   public void exitCountDatesFunction(CountDatesFunctionContext ctx) {
-    this.stack.push(this.script.composeCountOperation(this.stack.pop(DateSequenceExpression.class)));
+    this.exitCall(ctx, NumericFunctions.COUNT);
   }
 
   @Override
   public void exitCountTimesFunction(CountTimesFunctionContext ctx) {
-    this.stack.push(this.script.composeCountOperation(this.stack.pop(TimeSequenceExpression.class)));
+    this.exitCall(ctx, NumericFunctions.COUNT);
   }
 
   @Override
   public void exitCountDurationsFunction(CountDurationsFunctionContext ctx) {
-    this.stack.push(this.script.composeCountOperation(this.stack.pop(DurationSequenceExpression.class)));
+    this.exitCall(ctx, NumericFunctions.COUNT);
   }
 
   @Override
   public void exitLateBoundCountDuplicatesFunction(LateBoundCountDuplicatesFunctionContext ctx) {
-    this.stack.push(this.script.composeCountDuplicatesFunction(
-        this.stack.pop(this.resolveSequenceType(this.stack.peekType()))));
+    this.exitCall(ctx, SequenceFunctions.COUNT_DUPLICATES);
   }
 
   @Override
   public void exitCountDuplicatesStringsFunction(CountDuplicatesStringsFunctionContext ctx) {
-    this.stack.push(this.script.composeCountDuplicatesFunction(this.stack.pop(StringSequenceExpression.class)));
+    this.exitCall(ctx, SequenceFunctions.COUNT_DUPLICATES);
   }
 
   @Override
   public void exitCountDuplicatesBooleansFunction(CountDuplicatesBooleansFunctionContext ctx) {
-    this.stack.push(this.script.composeCountDuplicatesFunction(this.stack.pop(BooleanSequenceExpression.class)));
+    this.exitCall(ctx, SequenceFunctions.COUNT_DUPLICATES);
   }
 
   @Override
   public void exitCountDuplicatesNumbersFunction(CountDuplicatesNumbersFunctionContext ctx) {
-    this.stack.push(this.script.composeCountDuplicatesFunction(this.stack.pop(NumericSequenceExpression.class)));
+    this.exitCall(ctx, SequenceFunctions.COUNT_DUPLICATES);
   }
 
   @Override
   public void exitCountDuplicatesDatesFunction(CountDuplicatesDatesFunctionContext ctx) {
-    this.stack.push(this.script.composeCountDuplicatesFunction(this.stack.pop(DateSequenceExpression.class)));
+    this.exitCall(ctx, SequenceFunctions.COUNT_DUPLICATES);
   }
 
   @Override
   public void exitCountDuplicatesTimesFunction(CountDuplicatesTimesFunctionContext ctx) {
-    this.stack.push(this.script.composeCountDuplicatesFunction(this.stack.pop(TimeSequenceExpression.class)));
+    this.exitCall(ctx, SequenceFunctions.COUNT_DUPLICATES);
   }
 
   @Override
   public void exitCountDuplicatesDurationsFunction(CountDuplicatesDurationsFunctionContext ctx) {
-    this.stack.push(this.script.composeCountDuplicatesFunction(this.stack.pop(DurationSequenceExpression.class)));
+    this.exitCall(ctx, SequenceFunctions.COUNT_DUPLICATES);
   }
 
   @Override
   public void exitNumberFromStringFunction(NumberFromStringFunctionContext ctx) {
-    this.stack.push(this.script.composeToNumberConversion(this.stack.pop(StringExpression.class)));
+    this.exitCall(ctx, ConversionFunctions.TO_NUMBER);
   }
 
   @Override
   public void exitNumberFromBooleanFunction(NumberFromBooleanFunctionContext ctx) {
-    this.stack.push(this.script.composeToNumberConversion(this.stack.pop(BooleanExpression.class)));
+    this.exitCall(ctx, ConversionFunctions.TO_NUMBER);
   }
 
   @Override
   public void exitLateBoundToNumberFunction(LateBoundToNumberFunctionContext ctx) {
-    Class<? extends ScalarExpression> type = this.resolveScalarType(this.stack.peekType());
-    if (StringExpression.class.isAssignableFrom(type)) {
-      this.stack.push(this.script.composeToNumberConversion(this.stack.pop(StringExpression.class)));
-    } else if (BooleanExpression.class.isAssignableFrom(type)) {
-      this.stack.push(this.script.composeToNumberConversion(this.stack.pop(BooleanExpression.class)));
-    } else {
-      throw TypeMismatchException.cannotConvert(ctx, StringExpression.class, type);
-    }
+    this.exitCall(ctx, ConversionFunctions.TO_NUMBER);
   }
 
   @Override
   public void exitSumFunction(SumFunctionContext ctx) {
-    this.stack.push(this.script.composeSumOperation(this.stack.pop(NumericSequenceExpression.class)));
+    this.exitCall(ctx, NumericFunctions.SUM);
   }
 
   @Override
   public void exitMinFunction(MinFunctionContext ctx) {
-    this.stack.push(this.script.composeMinFunction(this.stack.pop(NumericSequenceExpression.class)));
+    this.exitCall(ctx, NumericFunctions.MIN);
   }
 
   @Override
   public void exitMaxFunction(MaxFunctionContext ctx) {
-    this.stack.push(this.script.composeMaxFunction(this.stack.pop(NumericSequenceExpression.class)));
+    this.exitCall(ctx, NumericFunctions.MAX);
   }
 
   @Override
   public void exitAverageFunction(AverageFunctionContext ctx) {
-    this.stack.push(this.script.composeAvgFunction(this.stack.pop(NumericSequenceExpression.class)));
+    this.exitCall(ctx, NumericFunctions.AVERAGE);
   }
 
   @Override
   public void exitStringLengthFunction(StringLengthFunctionContext ctx) {
-    this.stack
-        .push(this.script.composeStringLengthCalculation(this.stack.pop(StringExpression.class)));
+    this.exitCall(ctx, StringFunctions.STRING_LENGTH);
   }
 
   @Override
   public void exitAbsoluteFunction(AbsoluteFunctionContext ctx) {
-    this.stack.push(this.script.composeAbsFunction(this.stack.pop(NumericExpression.class)));
+    this.exitCall(ctx, NumericFunctions.ABSOLUTE);
   }
 
   @Override
   public void exitRoundFunction(RoundFunctionContext ctx) {
-    this.stack.push(this.script.composeRoundFunction(this.stack.pop(NumericExpression.class)));
+    this.exitCall(ctx, NumericFunctions.ROUND);
   }
 
   @Override
   public void exitRoundDownFunction(RoundDownFunctionContext ctx) {
-    this.stack.push(this.script.composeFloorFunction(this.stack.pop(NumericExpression.class)));
+    this.exitCall(ctx, NumericFunctions.ROUND_DOWN);
   }
 
   @Override
   public void exitRoundUpFunction(RoundUpFunctionContext ctx) {
-    this.stack.push(this.script.composeCeilingFunction(this.stack.pop(NumericExpression.class)));
+    this.exitCall(ctx, NumericFunctions.ROUND_UP);
   }
 
   // #endregion Numeric functions ---------------------------------------------
@@ -2904,217 +2637,167 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
 
   @Override
   public void exitSubstringFunction(SubstringFunctionContext ctx) {
-    // Use Comma count instead of ctx.length label, because the label only matches
-    // numericExpression and is null when the length argument is a lateBoundScalar.
-    final NumericExpression length =
-        ctx.Comma().size() > 1 ? this.stack.pop(NumericExpression.class) : null;
-    final NumericExpression start = this.stack.pop(NumericExpression.class);
-    final StringExpression text = this.stack.pop(StringExpression.class);
-    if (length != null) {
-      this.stack.push(this.script.composeSubstringExtraction(text, start, length));
-    } else {
-      this.stack.push(this.script.composeSubstringExtraction(text, start));
-    }
+    this.exitCall(ctx, StringFunctions.SUBSTRING);
   }
 
   @Override
   public void exitSubstringBeforeFunction(SubstringBeforeFunctionContext ctx) {
-    final StringExpression delimiter = this.stack.pop(StringExpression.class);
-    final StringExpression text = this.stack.pop(StringExpression.class);
-    this.stack.push(this.script.composeSubstringBeforeFunction(text, delimiter));
+    this.exitCall(ctx, StringFunctions.SUBSTRING_BEFORE);
   }
 
   @Override
   public void exitSubstringAfterFunction(SubstringAfterFunctionContext ctx) {
-    final StringExpression delimiter = this.stack.pop(StringExpression.class);
-    final StringExpression text = this.stack.pop(StringExpression.class);
-    this.stack.push(this.script.composeSubstringAfterFunction(text, delimiter));
+    this.exitCall(ctx, StringFunctions.SUBSTRING_AFTER);
   }
 
   @Override
   public void exitNumberToStringFunction(NumberToStringFunctionContext ctx) {
-    this.stack.push(this.script.composeToStringConversion(this.stack.pop(NumericExpression.class)));
+    this.exitCall(ctx, ConversionFunctions.TO_TEXT);
   }
 
   @Override
   public void exitBooleanToStringFunction(BooleanToStringFunctionContext ctx) {
-    this.stack.push(this.script.composeToStringConversion(this.stack.pop(BooleanExpression.class)));
+    this.exitCall(ctx, ConversionFunctions.TO_TEXT);
   }
 
   @Override
   public void exitDateToStringFunction(DateToStringFunctionContext ctx) {
-    this.stack.push(this.script.composeToStringConversion(this.stack.pop(DateExpression.class)));
+    this.exitCall(ctx, ConversionFunctions.TO_TEXT);
   }
 
   @Override
   public void exitTimeToStringFunction(TimeToStringFunctionContext ctx) {
-    this.stack.push(this.script.composeToStringConversion(this.stack.pop(TimeExpression.class)));
+    this.exitCall(ctx, ConversionFunctions.TO_TEXT);
   }
 
   @Override
   public void exitDurationToStringFunction(DurationToStringFunctionContext ctx) {
-    this.stack.push(this.script.composeToStringConversion(this.stack.pop(DurationExpression.class)));
+    this.exitCall(ctx, ConversionFunctions.TO_TEXT);
   }
 
   @Override
   public void exitLateBoundToStringFunction(LateBoundToStringFunctionContext ctx) {
-    Class<? extends ScalarExpression> type = this.resolveScalarType(this.stack.peekType());
-    if (NumericExpression.class.isAssignableFrom(type)) {
-      this.stack.push(this.script.composeToStringConversion(this.stack.pop(NumericExpression.class)));
-    } else if (BooleanExpression.class.isAssignableFrom(type)) {
-      this.stack.push(this.script.composeToStringConversion(this.stack.pop(BooleanExpression.class)));
-    } else if (DateExpression.class.isAssignableFrom(type)) {
-      this.stack.push(this.script.composeToStringConversion(this.stack.pop(DateExpression.class)));
-    } else if (TimeExpression.class.isAssignableFrom(type)) {
-      this.stack.push(this.script.composeToStringConversion(this.stack.pop(TimeExpression.class)));
-    } else if (DurationExpression.class.isAssignableFrom(type)) {
-      this.stack.push(this.script.composeToStringConversion(this.stack.pop(DurationExpression.class)));
-    } else {
-      throw TypeMismatchException.cannotConvert(ctx, NumericExpression.class, type);
-    }
+    this.exitCall(ctx, ConversionFunctions.TO_TEXT);
   }
 
   @Override
   public void exitConcatFunction(ConcatFunctionContext ctx) {
-    // Count both stringExpression and lateBoundScalar children, because each
-    // pushes a StringExpression to the stack.
-    final int childCount = ctx.stringExpression().size() + ctx.lateBoundScalar().size();
-    if (this.stack.empty() || childCount == 0) {
-      this.stack.push(this.script.composeStringConcatenation(Collections.emptyList()));
-      return;
-    }
-
-    List<StringExpression> list = new ArrayList<>();
-    for (int i = 0; i < childCount; i++) {
-      list.add(0, this.stack.pop(StringExpression.class));
-    }
-    this.stack.push(this.script.composeStringConcatenation(list));
+    this.exitCall(ctx, StringFunctions.CONCAT);
   }
 
   @Override
   public void exitFormatNumberFunction(FormatNumberFunctionContext ctx) {
-    throw InvalidUsageException.templateOnlyFunction(ctx, "format-number");
+    this.exitCall(ctx, TemplateFunctions.FORMAT_NUMBER);
   }
 
   @Override
   public void exitLateBoundFormatShortFunction(LateBoundFormatShortFunctionContext ctx) {
-    throw InvalidUsageException.templateOnlyFunction(ctx, "format-short");
+    this.exitCall(ctx, TemplateFunctions.FORMAT_SHORT);
   }
 
   @Override
   public void exitFormatShortDateFunction(FormatShortDateFunctionContext ctx) {
-    throw InvalidUsageException.templateOnlyFunction(ctx, "format-short");
+    this.exitCall(ctx, TemplateFunctions.FORMAT_SHORT);
   }
 
   @Override
   public void exitFormatShortTimeFunction(FormatShortTimeFunctionContext ctx) {
-    throw InvalidUsageException.templateOnlyFunction(ctx, "format-short");
+    this.exitCall(ctx, TemplateFunctions.FORMAT_SHORT);
   }
 
   @Override
   public void exitLateBoundFormatMediumFunction(LateBoundFormatMediumFunctionContext ctx) {
-    throw InvalidUsageException.templateOnlyFunction(ctx, "format-medium");
+    this.exitCall(ctx, TemplateFunctions.FORMAT_MEDIUM);
   }
 
   @Override
   public void exitFormatMediumDateFunction(FormatMediumDateFunctionContext ctx) {
-    throw InvalidUsageException.templateOnlyFunction(ctx, "format-medium");
+    this.exitCall(ctx, TemplateFunctions.FORMAT_MEDIUM);
   }
 
   @Override
   public void exitFormatMediumTimeFunction(FormatMediumTimeFunctionContext ctx) {
-    throw InvalidUsageException.templateOnlyFunction(ctx, "format-medium");
+    this.exitCall(ctx, TemplateFunctions.FORMAT_MEDIUM);
   }
 
   @Override
   public void exitLateBoundFormatLongFunction(LateBoundFormatLongFunctionContext ctx) {
-    throw InvalidUsageException.templateOnlyFunction(ctx, "format-long");
+    this.exitCall(ctx, TemplateFunctions.FORMAT_LONG);
   }
 
   @Override
   public void exitFormatLongDateFunction(FormatLongDateFunctionContext ctx) {
-    throw InvalidUsageException.templateOnlyFunction(ctx, "format-long");
+    this.exitCall(ctx, TemplateFunctions.FORMAT_LONG);
   }
 
   @Override
   public void exitFormatLongTimeFunction(FormatLongTimeFunctionContext ctx) {
-    throw InvalidUsageException.templateOnlyFunction(ctx, "format-long");
+    this.exitCall(ctx, TemplateFunctions.FORMAT_LONG);
   }
 
   @Override
   public void exitFormatShortDateTimeFunction(FormatShortDateTimeFunctionContext ctx) {
-    throw InvalidUsageException.templateOnlyFunction(ctx, "format-short");
+    this.exitCall(ctx, TemplateFunctions.FORMAT_SHORT);
   }
 
   @Override
   public void exitFormatMediumDateTimeFunction(FormatMediumDateTimeFunctionContext ctx) {
-    throw InvalidUsageException.templateOnlyFunction(ctx, "format-medium");
+    this.exitCall(ctx, TemplateFunctions.FORMAT_MEDIUM);
   }
 
   @Override
   public void exitFormatLongDateTimeFunction(FormatLongDateTimeFunctionContext ctx) {
-    throw InvalidUsageException.templateOnlyFunction(ctx, "format-long");
+    this.exitCall(ctx, TemplateFunctions.FORMAT_LONG);
   }
 
   @Override
   public void exitUpperCaseFunction(UpperCaseFunctionContext ctx) {
-    this.stack.push(this.script.composeToUpperCaseConversion(this.stack.pop(StringExpression.class)));
+    this.exitCall(ctx, StringFunctions.UPPER_CASE);
   }
 
   @Override
   public void exitLowerCaseFunction(LowerCaseFunctionContext ctx) {
-    this.stack.push(this.script.composeToLowerCaseConversion(this.stack.pop(StringExpression.class)));
+    this.exitCall(ctx, StringFunctions.LOWER_CASE);
   }
 
   @Override
   public void exitNormalizeSpaceFunction(NormalizeSpaceFunctionContext ctx) {
-    this.stack.push(this.script.composeNormalizeSpaceFunction(this.stack.pop(StringExpression.class)));
+    this.exitCall(ctx, StringFunctions.NORMALIZE_SPACE);
   }
 
   @Override
   public void exitTrimFunction(TrimFunctionContext ctx) {
-    this.stack.push(this.script.composeTrimFunction(this.stack.pop(StringExpression.class)));
+    this.exitCall(ctx, StringFunctions.TRIM);
   }
 
   @Override
   public void exitTrimLeftFunction(TrimLeftFunctionContext ctx) {
-    this.stack.push(this.script.composeTrimLeftFunction(this.stack.pop(StringExpression.class)));
+    this.exitCall(ctx, StringFunctions.TRIM_LEFT);
   }
 
   @Override
   public void exitTrimRightFunction(TrimRightFunctionContext ctx) {
-    this.stack.push(this.script.composeTrimRightFunction(this.stack.pop(StringExpression.class)));
+    this.exitCall(ctx, StringFunctions.TRIM_RIGHT);
   }
 
   @Override
   public void exitPadLeftFunction(PadLeftFunctionContext ctx) {
-    final StringExpression padChar = this.stack.pop(StringExpression.class);
-    final NumericExpression length = this.stack.pop(NumericExpression.class);
-    final StringExpression text = this.stack.pop(StringExpression.class);
-    this.stack.push(this.script.composePadLeftFunction(text, length, padChar));
+    this.exitCall(ctx, StringFunctions.PAD_LEFT);
   }
 
   @Override
   public void exitPadRightFunction(PadRightFunctionContext ctx) {
-    final StringExpression padChar = this.stack.pop(StringExpression.class);
-    final NumericExpression length = this.stack.pop(NumericExpression.class);
-    final StringExpression text = this.stack.pop(StringExpression.class);
-    this.stack.push(this.script.composePadRightFunction(text, length, padChar));
+    this.exitCall(ctx, StringFunctions.PAD_RIGHT);
   }
 
   @Override
   public void exitRepeatFunction(RepeatFunctionContext ctx) {
-    final NumericExpression count = this.stack.pop(NumericExpression.class);
-    final StringExpression text = this.stack.pop(StringExpression.class);
-    this.stack.push(this.script.composeRepeatFunction(text, count));
+    this.exitCall(ctx, StringFunctions.REPEAT);
   }
 
   @Override
   public void exitReplaceFunction(ReplaceFunctionContext ctx) {
-    final StringExpression replacement = this.stack.pop(StringExpression.class);
-    final StringExpression search = this.stack.pop(StringExpression.class);
-    final StringExpression text = this.stack.pop(StringExpression.class);
-    this.stack.push(this.script.composeReplaceFunction(text, search, replacement));
+    this.exitCall(ctx, StringFunctions.REPLACE);
   }
 
   @Override
@@ -3122,74 +2805,59 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
     if (ctx.pattern instanceof StringLiteralExpressionContext) {
       EfxRegexValidator.validate(ctx.pattern.getText());
     }
-    final StringExpression replacement = this.stack.pop(StringExpression.class);
-    final StringExpression pattern = this.stack.pop(StringExpression.class);
-    final StringExpression text = this.stack.pop(StringExpression.class);
-    this.stack.push(this.script.composeReplaceRegexFunction(text, pattern, replacement));
+    this.exitCall(ctx, StringFunctions.REPLACE_REGEX);
   }
 
   @Override
   public void exitUrlEncodeFunction(UrlEncodeFunctionContext ctx) {
-    final StringExpression text = this.stack.pop(StringExpression.class);
-    this.stack.push(this.script.composeUrlEncodeFunction(text));
+    this.exitCall(ctx, StringFunctions.URL_ENCODE);
   }
 
   @Override
   public void exitCapitalizeFirstFunction(CapitalizeFirstFunctionContext ctx) {
-    final StringExpression text = this.stack.pop(StringExpression.class);
-    this.stack.push(this.script.composeCapitalizeFirstFunction(text));
+    this.exitCall(ctx, StringFunctions.CAPITALIZE_FIRST);
   }
 
   @Override
   public void exitStringJoinFunction(StringJoinFunctionContext ctx) {
-    final StringExpression separator = this.stack.pop(StringExpression.class);
-    final StringSequenceExpression list = this.stack.pop(StringSequenceExpression.class);
-    this.stack.push(this.script.composeStringJoin(list, separator));
+    this.exitCall(ctx, StringFunctions.STRING_JOIN);
   }
 
   @Override
   public void exitPreferredLanguageFunction(PreferredLanguageFunctionContext ctx) {
-    throw InvalidUsageException.templateOnlyFunction(ctx, "preferred-language");
+    this.exitCall(ctx, TemplateFunctions.PREFERRED_LANGUAGE);
   }
 
   @Override
   public void exitPreferredLanguageTextFunction(PreferredLanguageTextFunctionContext ctx) {
-    throw InvalidUsageException.templateOnlyFunction(ctx, "preferred-language-text");
+    this.exitCall(ctx, TemplateFunctions.PREFERRED_LANGUAGE_TEXT);
   }
 
   @Override
   public void exitFieldPreferredLanguageProperty(FieldPreferredLanguagePropertyContext ctx) {
-    throw InvalidUsageException.templateOnlyFunction(ctx, ":preferredLanguage");
+    this.exitCall(ctx, TemplateFunctions.PREFERRED_LANGUAGE);
   }
 
   @Override
   public void exitFieldPreferredLanguageTextProperty(FieldPreferredLanguageTextPropertyContext ctx) {
-    throw InvalidUsageException.templateOnlyFunction(ctx, ":preferredLanguageText");
+    this.exitCall(ctx, TemplateFunctions.PREFERRED_LANGUAGE_TEXT);
   }
 
   @Override
   public void exitDictionaryLookup(DictionaryLookupContext ctx) {
-    if (this.currentCardinalityResolutionContext() == CardinalityResolutionContext.RESOLVE_SCALAR) {
-      throw TypeMismatchException.dictionaryIsSequence(ctx, ctx.dictionaryName.getText());
-    }
     var dictionary = this.stack.getDictionary(ctx.dictionaryName.getText());
-    this.stack.push(this.script.composeDictionaryLookup(
-        dictionary.name, this.stack.pop(StringExpression.class),
-        dictionary.type));
+    var key = this.popOperand(ctx.getRuleContext(ParserRuleContext.class, 0), StringExpression.class);
+    this.stack.push(this.script.composeDictionaryLookup(dictionary.name, key, dictionary.type));
   }
 
   @Override
   public void exitSplitFunction(SplitFunctionContext ctx) {
-    final StringExpression delimiter = this.stack.pop(StringExpression.class);
-    final StringExpression text = this.stack.pop(StringExpression.class);
-    this.stack.push(this.script.composeSplitFunction(text, delimiter));
+    this.exitCall(ctx, StringFunctions.SPLIT);
   }
 
   @Override
   public void exitIndexOfSubstringFunction(IndexOfSubstringFunctionContext ctx) {
-    final StringExpression substring = this.stack.pop(StringExpression.class);
-    final StringExpression text = this.stack.pop(StringExpression.class);
-    this.stack.push(this.script.composeIndexOfSubstringFunction(text, substring));
+    this.exitCall(ctx, StringFunctions.INDEX_OF_SUBSTRING);
   }
 
   // #endregion String functions ----------------------------------------------
@@ -3198,37 +2866,37 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
 
   @Override
   public void exitDateFromStringFunction(DateFromStringFunctionContext ctx) {
-    this.stack.push(this.script.composeToDateConversion(this.stack.pop(StringExpression.class)));
+    this.exitCall(ctx, ConversionFunctions.TO_DATE);
   }
 
   @Override
   public void exitDatePlusDurationFunction(DatePlusDurationFunctionContext ctx) {
-    this.exitDateDurationAddition();
+    this.exitCall(ctx, DateTimeFunctions.ADD_DURATION);
   }
 
   @Override
   public void exitDateMinusDurationFunction(DateMinusDurationFunctionContext ctx) {
-    this.exitDateDurationSubtraction();
+    this.exitCall(ctx, DateTimeFunctions.SUBTRACT_DURATION);
   }
 
   @Override
   public void exitCurrentDateFunction(CurrentDateFunctionContext ctx) {
-    this.stack.push(this.script.getCurrentDate());
+    this.exitCall(ctx, DateTimeFunctions.CURRENT_DATE);
   }
 
   @Override
   public void exitYearFromDateFunction(YearFromDateFunctionContext ctx) {
-    this.stack.push(this.script.composeYearFunction(this.stack.pop(DateExpression.class)));
+    this.exitCall(ctx, DateTimeFunctions.YEAR);
   }
 
   @Override
   public void exitMonthFromDateFunction(MonthFromDateFunctionContext ctx) {
-    this.stack.push(this.script.composeMonthFunction(this.stack.pop(DateExpression.class)));
+    this.exitCall(ctx, DateTimeFunctions.MONTH);
   }
 
   @Override
   public void exitDayFromDateFunction(DayFromDateFunctionContext ctx) {
-    this.stack.push(this.script.composeDayFunction(this.stack.pop(DateExpression.class)));
+    this.exitCall(ctx, DateTimeFunctions.DAY);
   }
 
   // #endregion Date functions ------------------------------------------------
@@ -3237,27 +2905,27 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
 
   @Override
   public void exitTimeFromStringFunction(TimeFromStringFunctionContext ctx) {
-    this.stack.push(this.script.composeToTimeConversion(this.stack.pop(StringExpression.class)));
+    this.exitCall(ctx, ConversionFunctions.TO_TIME);
   }
 
   @Override
   public void exitCurrentTimeFunction(CurrentTimeFunctionContext ctx) {
-    this.stack.push(this.script.getCurrentTime());
+    this.exitCall(ctx, DateTimeFunctions.CURRENT_TIME);
   }
 
   @Override
   public void exitHoursFromTimeFunction(HoursFromTimeFunctionContext ctx) {
-    this.stack.push(this.script.composeHoursFunction(this.stack.pop(TimeExpression.class)));
+    this.exitCall(ctx, DateTimeFunctions.HOURS);
   }
 
   @Override
   public void exitMinutesFromTimeFunction(MinutesFromTimeFunctionContext ctx) {
-    this.stack.push(this.script.composeMinutesFunction(this.stack.pop(TimeExpression.class)));
+    this.exitCall(ctx, DateTimeFunctions.MINUTES);
   }
 
   @Override
   public void exitSecondsFromTimeFunction(SecondsFromTimeFunctionContext ctx) {
-    this.stack.push(this.script.composeSecondsFunction(this.stack.pop(TimeExpression.class)));
+    this.exitCall(ctx, DateTimeFunctions.SECONDS);
   }
 
   // #endregion Time functions ----------------------------------------------
@@ -3266,30 +2934,28 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
 
   @Override
   public void exitDayTimeDurationFromStringFunction(DayTimeDurationFromStringFunctionContext ctx) {
-    this.stack.push(
-        this.script.composeToDayTimeDurationConversion(this.stack.pop(StringExpression.class)));
+    this.exitCall(ctx, ConversionFunctions.TO_DAY_TIME_DURATION);
   }
 
   @Override
   public void exitYearMonthDurationFromStringFunction(
       YearMonthDurationFromStringFunctionContext ctx) {
-    this.stack.push(
-        this.script.composeToYearMonthDurationConversion(this.stack.pop(StringExpression.class)));
+    this.exitCall(ctx, ConversionFunctions.TO_YEAR_MONTH_DURATION);
   }
 
   @Override
   public void exitYearsFromDurationFunction(YearsFromDurationFunctionContext ctx) {
-    this.stack.push(this.script.composeYearsFromDurationFunction(this.stack.pop(DurationExpression.class)));
+    this.exitCall(ctx, DateTimeFunctions.YEARS);
   }
 
   @Override
   public void exitMonthsFromDurationFunction(MonthsFromDurationFunctionContext ctx) {
-    this.stack.push(this.script.composeMonthsFromDurationFunction(this.stack.pop(DurationExpression.class)));
+    this.exitCall(ctx, DateTimeFunctions.MONTHS);
   }
 
   @Override
   public void exitDaysFromDurationFunction(DaysFromDurationFunctionContext ctx) {
-    this.stack.push(this.script.composeDaysFromDurationFunction(this.stack.pop(DurationExpression.class)));
+    this.exitCall(ctx, DateTimeFunctions.DAYS);
   }
 
   // #endregion Duration Functions --------------------------------------------
@@ -3300,42 +2966,37 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
 
   @Override
   public void exitStringDistinctValuesFunction(StringDistinctValuesFunctionContext ctx) {
-    this.exitDistinctValuesFunction(StringSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.DISTINCT_VALUES);
   }
 
   @Override
   public void exitBooleanDistinctValuesFunction(BooleanDistinctValuesFunctionContext ctx) {
-    this.exitDistinctValuesFunction(BooleanSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.DISTINCT_VALUES);
   }
 
   @Override
   public void exitNumericDistinctValuesFunction(NumericDistinctValuesFunctionContext ctx) {
-    this.exitDistinctValuesFunction(NumericSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.DISTINCT_VALUES);
   }
 
   @Override
   public void exitDateDistinctValuesFunction(DateDistinctValuesFunctionContext ctx) {
-    this.exitDistinctValuesFunction(DateSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.DISTINCT_VALUES);
   }
 
   @Override
   public void exitTimeDistinctValuesFunction(TimeDistinctValuesFunctionContext ctx) {
-    this.exitDistinctValuesFunction(TimeSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.DISTINCT_VALUES);
   }
 
   @Override
   public void exitDurationDistinctValuesFunction(DurationDistinctValuesFunctionContext ctx) {
-    this.exitDistinctValuesFunction(DurationSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.DISTINCT_VALUES);
   }
 
   @Override
   public void exitLateBoundDistinctValuesFunction(LateBoundDistinctValuesFunctionContext ctx) {
-    this.exitDistinctValuesFunction(this.resolveSequenceType(this.stack.peekType()));
-  }
-
-  private <T extends SequenceExpression> void exitDistinctValuesFunction(Class<T> listType) {
-    final T list = this.stack.pop(listType);
-    this.stack.push(this.script.composeDistinctValuesFunction(list, listType));
+    this.exitCall(ctx, SequenceFunctions.DISTINCT_VALUES);
   }
 
   // #endregion Distinct-values ------------------------------------------------
@@ -3344,42 +3005,37 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
 
   @Override
   public void exitStringGetDuplicatesFunction(StringGetDuplicatesFunctionContext ctx) {
-    this.exitGetDuplicatesFunction(StringSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.GET_DUPLICATES);
   }
 
   @Override
   public void exitBooleanGetDuplicatesFunction(BooleanGetDuplicatesFunctionContext ctx) {
-    this.exitGetDuplicatesFunction(BooleanSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.GET_DUPLICATES);
   }
 
   @Override
   public void exitNumericGetDuplicatesFunction(NumericGetDuplicatesFunctionContext ctx) {
-    this.exitGetDuplicatesFunction(NumericSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.GET_DUPLICATES);
   }
 
   @Override
   public void exitDateGetDuplicatesFunction(DateGetDuplicatesFunctionContext ctx) {
-    this.exitGetDuplicatesFunction(DateSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.GET_DUPLICATES);
   }
 
   @Override
   public void exitTimeGetDuplicatesFunction(TimeGetDuplicatesFunctionContext ctx) {
-    this.exitGetDuplicatesFunction(TimeSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.GET_DUPLICATES);
   }
 
   @Override
   public void exitDurationGetDuplicatesFunction(DurationGetDuplicatesFunctionContext ctx) {
-    this.exitGetDuplicatesFunction(DurationSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.GET_DUPLICATES);
   }
 
   @Override
   public void exitLateBoundGetDuplicatesFunction(LateBoundGetDuplicatesFunctionContext ctx) {
-    this.exitGetDuplicatesFunction(this.resolveSequenceType(this.stack.peekType()));
-  }
-
-  private <T extends SequenceExpression> void exitGetDuplicatesFunction(final Class<T> listType) {
-    final T list = this.stack.pop(listType);
-    this.stack.push(this.script.composeGetDuplicatesFunction(list, listType));
+    this.exitCall(ctx, SequenceFunctions.GET_DUPLICATES);
   }
 
   // #endregion Get-duplicates ------------------------------------------------
@@ -3388,103 +3044,97 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
 
   @Override
   public void exitStringUnionFunction(StringUnionFunctionContext ctx) {
-    this.exitUnionFunction(StringSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_UNION);
   }
 
   @Override
   public void exitLateBoundStringUnionLeft(LateBoundStringUnionLeftContext ctx) {
-    this.exitUnionFunction(StringSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_UNION);
   }
 
   @Override
   public void exitLateBoundStringUnionRight(LateBoundStringUnionRightContext ctx) {
-    this.exitUnionFunction(StringSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_UNION);
   }
 
   @Override
   public void exitBooleanUnionFunction(BooleanUnionFunctionContext ctx) {
-    this.exitUnionFunction(BooleanSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_UNION);
   }
 
   @Override
   public void exitLateBoundBooleanUnionLeft(LateBoundBooleanUnionLeftContext ctx) {
-    this.exitUnionFunction(BooleanSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_UNION);
   }
 
   @Override
   public void exitLateBoundBooleanUnionRight(LateBoundBooleanUnionRightContext ctx) {
-    this.exitUnionFunction(BooleanSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_UNION);
   }
 
   @Override
   public void exitNumericUnionFunction(NumericUnionFunctionContext ctx) {
-    this.exitUnionFunction(NumericSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_UNION);
   }
 
   @Override
   public void exitLateBoundNumericUnionLeft(LateBoundNumericUnionLeftContext ctx) {
-    this.exitUnionFunction(NumericSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_UNION);
   }
 
   @Override
   public void exitLateBoundNumericUnionRight(LateBoundNumericUnionRightContext ctx) {
-    this.exitUnionFunction(NumericSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_UNION);
   }
 
   @Override
   public void exitDateUnionFunction(DateUnionFunctionContext ctx) {
-    this.exitUnionFunction(DateSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_UNION);
   }
 
   @Override
   public void exitLateBoundDateUnionLeft(LateBoundDateUnionLeftContext ctx) {
-    this.exitUnionFunction(DateSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_UNION);
   }
 
   @Override
   public void exitLateBoundDateUnionRight(LateBoundDateUnionRightContext ctx) {
-    this.exitUnionFunction(DateSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_UNION);
   }
 
   @Override
   public void exitTimeUnionFunction(TimeUnionFunctionContext ctx) {
-    this.exitUnionFunction(TimeSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_UNION);
   }
 
   @Override
   public void exitLateBoundTimeUnionLeft(LateBoundTimeUnionLeftContext ctx) {
-    this.exitUnionFunction(TimeSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_UNION);
   }
 
   @Override
   public void exitLateBoundTimeUnionRight(LateBoundTimeUnionRightContext ctx) {
-    this.exitUnionFunction(TimeSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_UNION);
   }
 
   @Override
   public void exitDurationUnionFunction(DurationUnionFunctionContext ctx) {
-    this.exitUnionFunction(DurationSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_UNION);
   }
 
   @Override
   public void exitLateBoundDurationUnionLeft(LateBoundDurationUnionLeftContext ctx) {
-    this.exitUnionFunction(DurationSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_UNION);
   }
 
   @Override
   public void exitLateBoundDurationUnionRight(LateBoundDurationUnionRightContext ctx) {
-    this.exitUnionFunction(DurationSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_UNION);
   }
 
   @Override
   public void exitLateBoundUnionFunction(LateBoundUnionFunctionContext ctx) {
-    this.exitUnionFunction(this.resolveSequenceType(this.stack.peekType(-1)));
-  }
-
-  private <T extends SequenceExpression> void exitUnionFunction(Class<T> listType) {
-    final T two = this.stack.pop(listType);
-    final T one = this.stack.pop(listType);
-    this.stack.push(this.script.composeUnionFunction(one, two, listType));
+    this.exitCall(ctx, SequenceFunctions.VALUE_UNION);
   }
 
   // #endregion Union ---------------------------------------------------------
@@ -3493,103 +3143,97 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
 
   @Override
   public void exitStringIntersectFunction(StringIntersectFunctionContext ctx) {
-    this.exitIntersectFunction(StringSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_INTERSECT);
   }
 
   @Override
   public void exitLateBoundStringIntersectLeft(LateBoundStringIntersectLeftContext ctx) {
-    this.exitIntersectFunction(StringSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_INTERSECT);
   }
 
   @Override
   public void exitLateBoundStringIntersectRight(LateBoundStringIntersectRightContext ctx) {
-    this.exitIntersectFunction(StringSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_INTERSECT);
   }
 
   @Override
   public void exitBooleanIntersectFunction(BooleanIntersectFunctionContext ctx) {
-    this.exitIntersectFunction(BooleanSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_INTERSECT);
   }
 
   @Override
   public void exitLateBoundBooleanIntersectLeft(LateBoundBooleanIntersectLeftContext ctx) {
-    this.exitIntersectFunction(BooleanSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_INTERSECT);
   }
 
   @Override
   public void exitLateBoundBooleanIntersectRight(LateBoundBooleanIntersectRightContext ctx) {
-    this.exitIntersectFunction(BooleanSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_INTERSECT);
   }
 
   @Override
   public void exitNumericIntersectFunction(NumericIntersectFunctionContext ctx) {
-    this.exitIntersectFunction(NumericSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_INTERSECT);
   }
 
   @Override
   public void exitLateBoundNumericIntersectLeft(LateBoundNumericIntersectLeftContext ctx) {
-    this.exitIntersectFunction(NumericSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_INTERSECT);
   }
 
   @Override
   public void exitLateBoundNumericIntersectRight(LateBoundNumericIntersectRightContext ctx) {
-    this.exitIntersectFunction(NumericSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_INTERSECT);
   }
 
   @Override
   public void exitDateIntersectFunction(DateIntersectFunctionContext ctx) {
-    this.exitIntersectFunction(DateSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_INTERSECT);
   }
 
   @Override
   public void exitLateBoundDateIntersectLeft(LateBoundDateIntersectLeftContext ctx) {
-    this.exitIntersectFunction(DateSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_INTERSECT);
   }
 
   @Override
   public void exitLateBoundDateIntersectRight(LateBoundDateIntersectRightContext ctx) {
-    this.exitIntersectFunction(DateSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_INTERSECT);
   }
 
   @Override
   public void exitTimeIntersectFunction(TimeIntersectFunctionContext ctx) {
-    this.exitIntersectFunction(TimeSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_INTERSECT);
   }
 
   @Override
   public void exitLateBoundTimeIntersectLeft(LateBoundTimeIntersectLeftContext ctx) {
-    this.exitIntersectFunction(TimeSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_INTERSECT);
   }
 
   @Override
   public void exitLateBoundTimeIntersectRight(LateBoundTimeIntersectRightContext ctx) {
-    this.exitIntersectFunction(TimeSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_INTERSECT);
   }
 
   @Override
   public void exitDurationIntersectFunction(DurationIntersectFunctionContext ctx) {
-    this.exitIntersectFunction(DurationSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_INTERSECT);
   }
 
   @Override
   public void exitLateBoundDurationIntersectLeft(LateBoundDurationIntersectLeftContext ctx) {
-    this.exitIntersectFunction(DurationSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_INTERSECT);
   }
 
   @Override
   public void exitLateBoundDurationIntersectRight(LateBoundDurationIntersectRightContext ctx) {
-    this.exitIntersectFunction(DurationSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_INTERSECT);
   }
 
   @Override
   public void exitLateBoundIntersectFunction(LateBoundIntersectFunctionContext ctx) {
-    this.exitIntersectFunction(this.resolveSequenceType(this.stack.peekType(-1)));
-  }
-
-  private <T extends SequenceExpression> void exitIntersectFunction(Class<T> listType) {
-    final T two = this.stack.pop(listType);
-    final T one = this.stack.pop(listType);
-    this.stack.push(this.script.composeIntersectFunction(one, two, listType));
+    this.exitCall(ctx, SequenceFunctions.VALUE_INTERSECT);
   }
 
   // #endregion Intersect ------------------------------------------------------
@@ -3598,103 +3242,97 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
 
   @Override
   public void exitStringExceptFunction(StringExceptFunctionContext ctx) {
-    this.exitExceptFunction(StringSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_EXCEPT);
   }
 
   @Override
   public void exitLateBoundStringExceptLeft(LateBoundStringExceptLeftContext ctx) {
-    this.exitExceptFunction(StringSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_EXCEPT);
   }
 
   @Override
   public void exitLateBoundStringExceptRight(LateBoundStringExceptRightContext ctx) {
-    this.exitExceptFunction(StringSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_EXCEPT);
   }
 
   @Override
   public void exitBooleanExceptFunction(BooleanExceptFunctionContext ctx) {
-    this.exitExceptFunction(BooleanSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_EXCEPT);
   }
 
   @Override
   public void exitLateBoundBooleanExceptLeft(LateBoundBooleanExceptLeftContext ctx) {
-    this.exitExceptFunction(BooleanSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_EXCEPT);
   }
 
   @Override
   public void exitLateBoundBooleanExceptRight(LateBoundBooleanExceptRightContext ctx) {
-    this.exitExceptFunction(BooleanSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_EXCEPT);
   }
 
   @Override
   public void exitNumericExceptFunction(NumericExceptFunctionContext ctx) {
-    this.exitExceptFunction(NumericSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_EXCEPT);
   }
 
   @Override
   public void exitLateBoundNumericExceptLeft(LateBoundNumericExceptLeftContext ctx) {
-    this.exitExceptFunction(NumericSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_EXCEPT);
   }
 
   @Override
   public void exitLateBoundNumericExceptRight(LateBoundNumericExceptRightContext ctx) {
-    this.exitExceptFunction(NumericSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_EXCEPT);
   }
 
   @Override
   public void exitDateExceptFunction(DateExceptFunctionContext ctx) {
-    this.exitExceptFunction(DateSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_EXCEPT);
   }
 
   @Override
   public void exitLateBoundDateExceptLeft(LateBoundDateExceptLeftContext ctx) {
-    this.exitExceptFunction(DateSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_EXCEPT);
   }
 
   @Override
   public void exitLateBoundDateExceptRight(LateBoundDateExceptRightContext ctx) {
-    this.exitExceptFunction(DateSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_EXCEPT);
   }
 
   @Override
   public void exitTimeExceptFunction(TimeExceptFunctionContext ctx) {
-    this.exitExceptFunction(TimeSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_EXCEPT);
   }
 
   @Override
   public void exitLateBoundTimeExceptLeft(LateBoundTimeExceptLeftContext ctx) {
-    this.exitExceptFunction(TimeSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_EXCEPT);
   }
 
   @Override
   public void exitLateBoundTimeExceptRight(LateBoundTimeExceptRightContext ctx) {
-    this.exitExceptFunction(TimeSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_EXCEPT);
   }
 
   @Override
   public void exitDurationExceptFunction(DurationExceptFunctionContext ctx) {
-    this.exitExceptFunction(DurationSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_EXCEPT);
   }
 
   @Override
   public void exitLateBoundDurationExceptLeft(LateBoundDurationExceptLeftContext ctx) {
-    this.exitExceptFunction(DurationSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_EXCEPT);
   }
 
   @Override
   public void exitLateBoundDurationExceptRight(LateBoundDurationExceptRightContext ctx) {
-    this.exitExceptFunction(DurationSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.VALUE_EXCEPT);
   }
 
   @Override
   public void exitLateBoundExceptFunction(LateBoundExceptFunctionContext ctx) {
-    this.exitExceptFunction(this.resolveSequenceType(this.stack.peekType(-1)));
-  }
-
-  private <T extends SequenceExpression> void exitExceptFunction(Class<T> type) {
-    T two = this.stack.pop(type);
-    T one = this.stack.pop(type);
-    this.stack.push(this.script.composeExceptFunction(one, two, type));
+    this.exitCall(ctx, SequenceFunctions.VALUE_EXCEPT);
   }
 
   // #endregion Except ---------------------------------------------------------
@@ -3703,42 +3341,37 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
 
   @Override
   public void exitStringSortFunction(StringSortFunctionContext ctx) {
-    this.exitSortFunction(StringSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.SORT);
   }
 
   @Override
   public void exitBooleanSortFunction(BooleanSortFunctionContext ctx) {
-    this.exitSortFunction(BooleanSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.SORT);
   }
 
   @Override
   public void exitNumericSortFunction(NumericSortFunctionContext ctx) {
-    this.exitSortFunction(NumericSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.SORT);
   }
 
   @Override
   public void exitDateSortFunction(DateSortFunctionContext ctx) {
-    this.exitSortFunction(DateSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.SORT);
   }
 
   @Override
   public void exitTimeSortFunction(TimeSortFunctionContext ctx) {
-    this.exitSortFunction(TimeSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.SORT);
   }
 
   @Override
   public void exitDurationSortFunction(DurationSortFunctionContext ctx) {
-    this.exitSortFunction(DurationSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.SORT);
   }
 
   @Override
   public void exitLateBoundSortFunction(LateBoundSortFunctionContext ctx) {
-    this.exitSortFunction(this.resolveSequenceType(this.stack.peekType()));
-  }
-
-  private <T extends SequenceExpression> void exitSortFunction(Class<T> listType) {
-    final T list = this.stack.pop(listType);
-    this.stack.push(this.script.composeSortFunction(list, listType));
+    this.exitCall(ctx, SequenceFunctions.SORT);
   }
 
   // #endregion Sort -----------------------------------------------------------
@@ -3747,42 +3380,37 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
 
   @Override
   public void exitLateBoundReverseFunction(LateBoundReverseFunctionContext ctx) {
-    this.exitReverseFunction(this.resolveSequenceType(this.stack.peekType()));
+    this.exitCall(ctx, SequenceFunctions.REVERSE);
   }
 
   @Override
   public void exitStringReverseFunction(StringReverseFunctionContext ctx) {
-    this.exitReverseFunction(StringSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.REVERSE);
   }
 
   @Override
   public void exitBooleanReverseFunction(BooleanReverseFunctionContext ctx) {
-    this.exitReverseFunction(BooleanSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.REVERSE);
   }
 
   @Override
   public void exitNumericReverseFunction(NumericReverseFunctionContext ctx) {
-    this.exitReverseFunction(NumericSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.REVERSE);
   }
 
   @Override
   public void exitDateReverseFunction(DateReverseFunctionContext ctx) {
-    this.exitReverseFunction(DateSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.REVERSE);
   }
 
   @Override
   public void exitTimeReverseFunction(TimeReverseFunctionContext ctx) {
-    this.exitReverseFunction(TimeSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.REVERSE);
   }
 
   @Override
   public void exitDurationReverseFunction(DurationReverseFunctionContext ctx) {
-    this.exitReverseFunction(DurationSequenceExpression.class);
-  }
-
-  private <T extends SequenceExpression> void exitReverseFunction(Class<T> listType) {
-    final T list = this.stack.pop(listType);
-    this.stack.push(this.script.composeReverseFunction(list, listType));
+    this.exitCall(ctx, SequenceFunctions.REVERSE);
   }
 
   // #endregion Reverse --------------------------------------------------------
@@ -3791,53 +3419,37 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
 
   @Override
   public void exitLateBoundSubsequenceFunction(LateBoundSubsequenceFunctionContext ctx) {
-    boolean hasLength = ctx.Comma().size() > 1;
-    int sequenceOffset = hasLength ? -2 : -1;
-    this.exitSubsequenceFunction(hasLength,
-        this.resolveSequenceType(this.stack.peekType(sequenceOffset)));
+    this.exitCall(ctx, SequenceFunctions.SUBSEQUENCE);
   }
 
   @Override
   public void exitStringSubsequenceFunction(StringSubsequenceFunctionContext ctx) {
-    this.exitSubsequenceFunction(ctx.Comma().size() > 1, StringSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.SUBSEQUENCE);
   }
 
   @Override
   public void exitBooleanSubsequenceFunction(BooleanSubsequenceFunctionContext ctx) {
-    this.exitSubsequenceFunction(ctx.Comma().size() > 1, BooleanSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.SUBSEQUENCE);
   }
 
   @Override
   public void exitNumericSubsequenceFunction(NumericSubsequenceFunctionContext ctx) {
-    this.exitSubsequenceFunction(ctx.Comma().size() > 1, NumericSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.SUBSEQUENCE);
   }
 
   @Override
   public void exitDateSubsequenceFunction(DateSubsequenceFunctionContext ctx) {
-    this.exitSubsequenceFunction(ctx.Comma().size() > 1, DateSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.SUBSEQUENCE);
   }
 
   @Override
   public void exitTimeSubsequenceFunction(TimeSubsequenceFunctionContext ctx) {
-    this.exitSubsequenceFunction(ctx.Comma().size() > 1, TimeSequenceExpression.class);
+    this.exitCall(ctx, SequenceFunctions.SUBSEQUENCE);
   }
 
   @Override
   public void exitDurationSubsequenceFunction(DurationSubsequenceFunctionContext ctx) {
-    this.exitSubsequenceFunction(ctx.Comma().size() > 1, DurationSequenceExpression.class);
-  }
-
-  private <T extends SequenceExpression> void exitSubsequenceFunction(boolean hasLength,
-      Class<T> listType) {
-    final NumericExpression length =
-        hasLength ? this.stack.pop(NumericExpression.class) : null;
-    final NumericExpression start = this.stack.pop(NumericExpression.class);
-    final T list = this.stack.pop(listType);
-    if (length != null) {
-      this.stack.push(this.script.composeSubsequenceFunction(list, start, length, listType));
-    } else {
-      this.stack.push(this.script.composeSubsequenceFunction(list, start, listType));
-    }
+    this.exitCall(ctx, SequenceFunctions.SUBSEQUENCE);
   }
 
   // #endregion Subsequence ----------------------------------------------------
@@ -3846,105 +3458,97 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
 
   @Override
   public void exitLateBoundIndexOfFunction(LateBoundIndexOfFunctionContext ctx) {
-    TypedExpression sequence = this.stack.peekType(-1);
-    this.exitIndexOfFunction(this.resolveSequenceType(sequence), this.resolveScalarType(sequence));
+    this.exitCall(ctx, SequenceFunctions.INDEX_OF);
   }
 
   @Override
   public void exitIndexOfStringFunction(IndexOfStringFunctionContext ctx) {
-    this.exitIndexOfFunction(StringSequenceExpression.class, StringExpression.class);
+    this.exitCall(ctx, SequenceFunctions.INDEX_OF);
   }
 
   @Override
   public void exitLateBoundStringIndexOfLeft(LateBoundStringIndexOfLeftContext ctx) {
-    this.exitIndexOfFunction(StringSequenceExpression.class, StringExpression.class);
+    this.exitCall(ctx, SequenceFunctions.INDEX_OF);
   }
 
   @Override
   public void exitLateBoundStringIndexOfRight(LateBoundStringIndexOfRightContext ctx) {
-    this.exitIndexOfFunction(StringSequenceExpression.class, StringExpression.class);
+    this.exitCall(ctx, SequenceFunctions.INDEX_OF);
   }
 
   @Override
   public void exitIndexOfBooleanFunction(IndexOfBooleanFunctionContext ctx) {
-    this.exitIndexOfFunction(BooleanSequenceExpression.class, BooleanExpression.class);
+    this.exitCall(ctx, SequenceFunctions.INDEX_OF);
   }
 
   @Override
   public void exitLateBoundBooleanIndexOfLeft(LateBoundBooleanIndexOfLeftContext ctx) {
-    this.exitIndexOfFunction(BooleanSequenceExpression.class, BooleanExpression.class);
+    this.exitCall(ctx, SequenceFunctions.INDEX_OF);
   }
 
   @Override
   public void exitLateBoundBooleanIndexOfRight(LateBoundBooleanIndexOfRightContext ctx) {
-    this.exitIndexOfFunction(BooleanSequenceExpression.class, BooleanExpression.class);
+    this.exitCall(ctx, SequenceFunctions.INDEX_OF);
   }
 
   @Override
   public void exitIndexOfNumericFunction(IndexOfNumericFunctionContext ctx) {
-    this.exitIndexOfFunction(NumericSequenceExpression.class, NumericExpression.class);
+    this.exitCall(ctx, SequenceFunctions.INDEX_OF);
   }
 
   @Override
   public void exitLateBoundNumericIndexOfLeft(LateBoundNumericIndexOfLeftContext ctx) {
-    this.exitIndexOfFunction(NumericSequenceExpression.class, NumericExpression.class);
+    this.exitCall(ctx, SequenceFunctions.INDEX_OF);
   }
 
   @Override
   public void exitLateBoundNumericIndexOfRight(LateBoundNumericIndexOfRightContext ctx) {
-    this.exitIndexOfFunction(NumericSequenceExpression.class, NumericExpression.class);
+    this.exitCall(ctx, SequenceFunctions.INDEX_OF);
   }
 
   @Override
   public void exitIndexOfDateFunction(IndexOfDateFunctionContext ctx) {
-    this.exitIndexOfFunction(DateSequenceExpression.class, DateExpression.class);
+    this.exitCall(ctx, SequenceFunctions.INDEX_OF);
   }
 
   @Override
   public void exitLateBoundDateIndexOfLeft(LateBoundDateIndexOfLeftContext ctx) {
-    this.exitIndexOfFunction(DateSequenceExpression.class, DateExpression.class);
+    this.exitCall(ctx, SequenceFunctions.INDEX_OF);
   }
 
   @Override
   public void exitLateBoundDateIndexOfRight(LateBoundDateIndexOfRightContext ctx) {
-    this.exitIndexOfFunction(DateSequenceExpression.class, DateExpression.class);
+    this.exitCall(ctx, SequenceFunctions.INDEX_OF);
   }
 
   @Override
   public void exitIndexOfTimeFunction(IndexOfTimeFunctionContext ctx) {
-    this.exitIndexOfFunction(TimeSequenceExpression.class, TimeExpression.class);
+    this.exitCall(ctx, SequenceFunctions.INDEX_OF);
   }
 
   @Override
   public void exitLateBoundTimeIndexOfLeft(LateBoundTimeIndexOfLeftContext ctx) {
-    this.exitIndexOfFunction(TimeSequenceExpression.class, TimeExpression.class);
+    this.exitCall(ctx, SequenceFunctions.INDEX_OF);
   }
 
   @Override
   public void exitLateBoundTimeIndexOfRight(LateBoundTimeIndexOfRightContext ctx) {
-    this.exitIndexOfFunction(TimeSequenceExpression.class, TimeExpression.class);
+    this.exitCall(ctx, SequenceFunctions.INDEX_OF);
   }
 
   @Override
   public void exitIndexOfDurationFunction(IndexOfDurationFunctionContext ctx) {
-    this.exitIndexOfFunction(DurationSequenceExpression.class, DurationExpression.class);
+    this.exitCall(ctx, SequenceFunctions.INDEX_OF);
   }
 
   @Override
   public void exitLateBoundDurationIndexOfLeft(LateBoundDurationIndexOfLeftContext ctx) {
-    this.exitIndexOfFunction(DurationSequenceExpression.class, DurationExpression.class);
+    this.exitCall(ctx, SequenceFunctions.INDEX_OF);
   }
 
   @Override
   public void exitLateBoundDurationIndexOfRight(LateBoundDurationIndexOfRightContext ctx) {
-    this.exitIndexOfFunction(DurationSequenceExpression.class, DurationExpression.class);
-  }
-
-  private <T extends SequenceExpression, S extends ScalarExpression> void exitIndexOfFunction(
-      Class<T> listType, Class<S> valueType) {
-    final S value = this.stack.pop(valueType);
-    final T list = this.stack.pop(listType);
-    this.stack.push(this.script.composeIndexOfFunction(list, value));
+    this.exitCall(ctx, SequenceFunctions.INDEX_OF);
   }
 
   // #endregion Index-of -------------------------------------------------------
@@ -3965,135 +3569,151 @@ public class EfxExpressionTranslatorV2 extends EfxBaseListener
     throw TranslatorConfigurationException.unresolvedIncludeDirective(path);
   }
 
-  // #region Late-bound expression handlers -----------------------------------
-  //
-  // Handlers for late-bound grammar rules that mix late-bound expressions
-  // with typed expressions. Each handler mirrors its typed counterpart, relying on
-  // the CallStack's auto-conversion to coerce late-bound values to the expected type.
-  //
-  // Most late-bound handlers are co-located with their typed counterparts in their
-  // respective regions (Boolean, Numeric, Duration, Conditional, Quantified).
-  // This region contains only the type conversion handlers which don't have a natural
-  // typed counterpart region.
+  // #region Built-ins and operands -------------------------------------------
 
-  // --- Late-bound arithmetic dispatchers ---
-
-  private void dispatchComposeLateBoundAdditiveExpression(LateBoundAdditiveExpressionContext ctx) {
-    TypedExpression right = this.stack.peekType();
-    TypedExpression left = this.stack.peekType(-1);
-
-    String operator = ctx.operator.getText();
-    if (ctx.operator.getType() == EfxLexer.Plus) {
-      if (this.isDuration(right) && this.isDuration(left)) {
-        this.exitDurationAddition();
-      } else if (this.isDuration(right) && this.isDate(left)) {
-        this.exitDateDurationAddition();
-      } else if (this.isNumeric(right) && this.isNumeric(left)) {
-        this.exitNumericOperation(operator);
-      } else {
-        throw TypeMismatchException.incompatibleOperands(ctx, operator, (Expression) left, (Expression) right);
-      }
-    } else if (ctx.operator.getType() == EfxLexer.Minus) {
-      if (this.isDuration(right) && this.isDuration(left)) {
-        this.exitDurationSubtraction();
-      } else if (this.isDuration(right) && this.isDate(left)) {
-        this.exitDateDurationSubtraction();
-      } else if (this.isDate(right) && this.isDate(left)) {
-        this.exitDateSubtraction();
-      } else if (this.isNumeric(right) && this.isNumeric(left)) {
-        this.exitNumericOperation(operator);
-      } else {
-        throw TypeMismatchException.incompatibleOperands(ctx, operator, (Expression) left, (Expression) right);
-      }
-    } else {
-      throw TranslatorConfigurationException.unhandledOperator(operator,
-          "dispatchComposeLateBoundAdditiveExpression");
+  /**
+   * Translates a call of a built-in function, or of a condition with a single operand: pops one
+   * argument for each operand, resolves the built-in against them and pushes the result. The
+   * operands of a call are the child rules of its grammar label, in order.
+   *
+   * <p>A sequence where a single value is required is reported by the reference the operand is
+   * written as; any other argument that does not fit cannot be converted.</p>
+   *
+   * @param call the call
+   * @param builtIn the built-in called
+   */
+  private void exitCall(final ParserRuleContext call, final BuiltIn builtIn) {
+    final Resolution resolution = this.resolve(call, builtIn);
+    if (!resolution.isResolved()) {
+      final Rejection rejection = resolution.getMismatch().getDiagnosis();
+      throw this.sequenceError(call, rejection)
+          .orElseGet(() -> TypeMismatchException.cannotConvert(call,
+              rejection.getRequired().getExpressionType(), rejection.getArgument().getClass()));
     }
-  }
-
-  private void dispatchComposeLateBoundMultiplication(LateBoundMultiplicativeExpressionContext ctx) {
-    TypedExpression right = this.stack.peekType();
-    TypedExpression left = this.stack.peekType(-1);
-
-    String operator = ctx.operator.getText();
-    if (ctx.operator.getType() == EfxLexer.Star && this.isDuration(right) && this.isNumeric(left)) {
-      this.exitDurationMultiplication();
-    } else if (ctx.operator.getType() == EfxLexer.Star && this.isNumeric(right) && this.isDuration(left)) {
-      this.exitReversedDurationMultiplication();
-    } else if (this.isNumeric(right) && this.isNumeric(left)) {
-      this.exitNumericOperation(operator);
-    } else {
-      throw TypeMismatchException.incompatibleOperands(ctx, operator, (Expression) left, (Expression) right);
-    }
-  }
-
-  // #endregion Late-bound expression handlers --------------------------------
-
-  // #region Late-bound cardinality resolution --------------------------------
-
-  @Override
-  public void enterLateBoundScalarReference(LateBoundScalarReferenceContext ctx) {
-    this.cardinalityResolutionStack.push(
-        this.adjustForGrammarAmbiguity(ctx, CardinalityResolutionContext.RESOLVE_SCALAR));
-  }
-
-  @Override
-  public void exitLateBoundScalarReference(LateBoundScalarReferenceContext ctx) {
-    this.cardinalityResolutionStack.pop();
-  }
-
-  @Override
-  public void enterLateBoundSequenceReference(LateBoundSequenceReferenceContext ctx) {
-    this.cardinalityResolutionStack.push(
-        this.adjustForGrammarAmbiguity(ctx, CardinalityResolutionContext.RESOLVE_SEQUENCE));
-  }
-
-  @Override
-  public void exitLateBoundSequenceReference(LateBoundSequenceReferenceContext ctx) {
-    this.cardinalityResolutionStack.pop();
+    this.stack.push(resolution.compose(this.script));
   }
 
   /**
-   * Returns the current cardinality resolution context, or {@code RESOLVED} if the type
-   * resolution stack is empty (i.e. we are outside any late-bound expression).
+   * Translates an infix operator as {@link #exitCall} translates a call, except that operands
+   * that do not fit are incompatible operands of the operator.
+   *
+   * @param operation the operation, whose two child rules are its operands
+   * @param operator the operator
    */
-  private CardinalityResolutionContext currentCardinalityResolutionContext() {
-    return this.cardinalityResolutionStack.isEmpty()
-        ? CardinalityResolutionContext.RESOLVED
-        : this.cardinalityResolutionStack.peek();
+  private void exitOperation(final ParserRuleContext operation, final BuiltIn operator) {
+    final Resolution resolution = this.resolve(operation, operator);
+    if (!resolution.isResolved()) {
+      final Mismatch mismatch = resolution.getMismatch();
+      throw this.sequenceError(operation, mismatch.getDiagnosis())
+          .orElseGet(() -> TypeMismatchException.incompatibleOperands(operation, operator.getName(),
+              mismatch.getArguments().get(0), mismatch.getArguments().get(1)));
+    }
+    this.stack.push(resolution.compose(this.script));
+  }
+
+  private Resolution resolve(final ParserRuleContext call, final BuiltIn builtIn) {
+    if (builtIn.isTemplateOnly() && !this.translatesTemplateOnlyBuiltIns()) {
+      throw InvalidUsageException.templateOnlyFunction(call, builtIn.getName());
+    }
+    return builtIn.resolve(this.popArguments(call.getRuleContexts(ParserRuleContext.class).size()));
+  }
+
+  private List<TypedExpression> popArguments(final int count) {
+    final LinkedList<TypedExpression> arguments = new LinkedList<>();
+    for (int position = 0; position < count; position++) {
+      arguments.addFirst(this.stack.pop(TypedExpression.class));
+    }
+    return arguments;
+  }
+
+  private Optional<TypeMismatchException> sequenceError(final ParserRuleContext call,
+      final Rejection rejection) {
+    if (rejection.getKind() != Rejection.Kind.CARDINALITY) {
+      return Optional.empty();
+    }
+    return OperandOrigin.sequenceErrorOf(
+        call.getRuleContext(ParserRuleContext.class, rejection.getPosition()), this);
   }
 
   /**
-   * Adjusts the cardinality resolution context for grammar ambiguity. When a late-bound
-   * reference node appears as a direct child of {@code lateBoundExpression}, it is ambiguous
-   * whether the expression should resolve to a scalar or a sequence. In that case, this method
-   * returns {@code RESOLVE_EITHER} instead of the default context.
+   * Finds the operator written as a token.
    *
-   * Because ANTLR labeled alternatives replace the parent rule's context, a
-   * {@code lateBoundScalarReference} node IS the {@code lateBoundScalar} node in the parse
-   * tree. So when the grammar path is
-   * {@code lateBoundExpression -> lateBoundScalar -> #lateBoundScalarReference}, the parent of
-   * the reference context is directly {@code LateBoundExpressionContext}.
-   *
-   * @param ctx the late-bound reference parse tree node (scalar or sequence reference)
-   * @param defaultContext the context to use when no ambiguity is detected
-   * @return {@code RESOLVE_EITHER} if the parent is {@code LateBoundExpressionContext},
-   *         otherwise {@code defaultContext}
+   * @param operator the token of a comparison or arithmetic operator
+   * @return the operator of the catalogue that has the token's symbol as its name
    */
-  private CardinalityResolutionContext adjustForGrammarAmbiguity(ParserRuleContext ctx,
-      CardinalityResolutionContext defaultContext) {
-    return (ctx.getParent() instanceof LateBoundExpressionContext)
-        ? CardinalityResolutionContext.RESOLVE_EITHER
-        : defaultContext;
+  private BuiltIn operatorNamed(final Token operator) {
+    return BuiltIns.INSTANCE.find(operator.getText()).orElseThrow(
+        () -> TranslatorConfigurationException.unhandledOperator(operator.getText(), "operatorNamed"));
   }
 
-  private enum CardinalityResolutionContext {
-    RESOLVED,
-    RESOLVE_SCALAR,
-    RESOLVE_SEQUENCE,
-    RESOLVE_EITHER
+  /**
+   * Tells whether the translator translates the built-ins that only templates may call, such as
+   * the formatting functions. An expression alone has no template, so it does not.
+   *
+   * @return {@code false}
+   */
+  protected boolean translatesTemplateOnlyBuiltIns() {
+    return false;
   }
 
-  // #endregion Late-bound cardinality resolution --------------------------------
+  /**
+   * Pops the value of an operand where a value of one class is required: the condition of a clause,
+   * the value of a declaration, or a part of a composite expression such as a list item or the
+   * branch of a conditional. A single value where a sequence is required is promoted to one.
+   *
+   * @param <T> the class of the value required
+   * @param operand the operand, as the parser read it
+   * @param type the class of the value required
+   * @return the value, converted to that class
+   * @throws TypeMismatchException if the value does not fit; a sequence where a single value is
+   *         required is reported by the reference the operand is written as
+   */
+  protected <T extends TypedExpression> T popOperand(final ParserRuleContext operand,
+      final Class<T> type) {
+    final ParameterType required = ParameterType.of(type);
+    final TypedExpression value = this.stack.pop(TypedExpression.class);
+    if (required.accepts(value)) {
+      return type.cast(required.convert(value));
+    }
+    if (required.acceptsValuesOf(value)) {
+      final Optional<TypeMismatchException> sequenceError = OperandOrigin.sequenceErrorOf(operand, this);
+      if (sequenceError.isPresent()) {
+        throw sequenceError.get();
+      }
+    }
+    throw TypeMismatchException.cannotConvert(this.stack.peekParserContext(), type, value.getClass());
+  }
+
+  /**
+   * Gives the class of the single values of a late-bound operand: the one {@code T} is bound to by
+   * the operand.
+   *
+   * @param operand the operand
+   * @return the scalar class of the operand's primitive
+   */
+  private Class<? extends ScalarExpression> scalarTypeOf(final TypedExpression operand) {
+    return this.typeOf(ParameterType.T, operand).asSubclass(ScalarExpression.class);
+  }
+
+  /**
+   * Gives the class of the sequences of a late-bound operand: the one {@code T*} is bound to by
+   * the operand.
+   *
+   * @param operand the operand
+   * @return the sequence class of the operand's primitive
+   */
+  private Class<? extends SequenceExpression> sequenceTypeOf(final TypedExpression operand) {
+    return this.typeOf(ParameterType.T_SEQUENCE, operand).asSubclass(SequenceExpression.class);
+  }
+
+  private Class<? extends TypedExpression> typeOf(final ParameterType typeVariable,
+      final TypedExpression operand) {
+    return typeVariable.boundBy(operand)
+        .orElseThrow(() -> TypeMismatchException.cannotConvert(this.stack.peekParserContext(),
+            typeVariable.getExpressionType(), operand.getClass()))
+        .getExpressionType();
+  }
+
+  // #endregion Built-ins and operands ----------------------------------------
 
 }

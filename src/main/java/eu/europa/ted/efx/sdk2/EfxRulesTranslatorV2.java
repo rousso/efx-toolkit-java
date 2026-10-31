@@ -254,9 +254,9 @@ public class EfxRulesTranslatorV2 extends EfxExpressionTranslatorV2
    * Pops the expression, creates a Variable, and pushes it back.
    * This allows the variable to be declared in the stack for later reference.
    */
-  private void exitVariableInitializer(String variableName,
+  private void exitVariableInitializer(ParserRuleContext initializer, String variableName,
       Class<? extends ScalarExpression> expressionType) {
-    var expression = this.stack.pop(expressionType);
+    var expression = this.popOperand(initializer.getRuleContext(ParserRuleContext.class, 0), expressionType);
     var variable = new Variable(variableName,
         this.script.composeVariableDeclaration(variableName, expression.getClass()),
         expression,
@@ -273,7 +273,7 @@ public class EfxRulesTranslatorV2 extends EfxExpressionTranslatorV2
   @Override
   public void exitStringVariableInitializer(
       StringVariableInitializerContext ctx) {
-    this.exitVariableInitializer(ctx.variableName.getText(), StringExpression.class);
+    this.exitVariableInitializer(ctx, ctx.variableName.getText(), StringExpression.class);
     this.endTrackingDynamicDependencies();
   }
 
@@ -285,7 +285,7 @@ public class EfxRulesTranslatorV2 extends EfxExpressionTranslatorV2
   @Override
   public void exitBooleanVariableInitializer(
       BooleanVariableInitializerContext ctx) {
-    this.exitVariableInitializer(ctx.variableName.getText(), BooleanExpression.class);
+    this.exitVariableInitializer(ctx, ctx.variableName.getText(), BooleanExpression.class);
     this.endTrackingDynamicDependencies();
   }
 
@@ -325,7 +325,7 @@ public class EfxRulesTranslatorV2 extends EfxExpressionTranslatorV2
   @Override
   public void exitNumericVariableInitializer(
       NumericVariableInitializerContext ctx) {
-    this.exitVariableInitializer(ctx.variableName.getText(), NumericExpression.class);
+    this.exitVariableInitializer(ctx, ctx.variableName.getText(), NumericExpression.class);
     this.endTrackingDynamicDependencies();
   }
 
@@ -337,7 +337,7 @@ public class EfxRulesTranslatorV2 extends EfxExpressionTranslatorV2
   @Override
   public void exitDateVariableInitializer(
       DateVariableInitializerContext ctx) {
-    this.exitVariableInitializer(ctx.variableName.getText(), DateExpression.class);
+    this.exitVariableInitializer(ctx, ctx.variableName.getText(), DateExpression.class);
     this.endTrackingDynamicDependencies();
   }
 
@@ -349,7 +349,7 @@ public class EfxRulesTranslatorV2 extends EfxExpressionTranslatorV2
   @Override
   public void exitTimeVariableInitializer(
       TimeVariableInitializerContext ctx) {
-    this.exitVariableInitializer(ctx.variableName.getText(), TimeExpression.class);
+    this.exitVariableInitializer(ctx, ctx.variableName.getText(), TimeExpression.class);
     this.endTrackingDynamicDependencies();
   }
 
@@ -361,7 +361,7 @@ public class EfxRulesTranslatorV2 extends EfxExpressionTranslatorV2
   @Override
   public void exitDurationVariableInitializer(
       DurationVariableInitializerContext ctx) {
-    this.exitVariableInitializer(ctx.variableName.getText(), DurationExpression.class);
+    this.exitVariableInitializer(ctx, ctx.variableName.getText(), DurationExpression.class);
     this.endTrackingDynamicDependencies();
   }
 
@@ -654,7 +654,7 @@ public class EfxRulesTranslatorV2 extends EfxExpressionTranslatorV2
    */
   @Override
   public void exitWhenClause(WhenClauseContext ctx) {
-    var condition = this.stack.pop(BooleanExpression.class);
+    var condition = this.popOperand(ctx.getRuleContext(ParserRuleContext.class, 0), BooleanExpression.class);
     var rule = this.ruleStack.peek(ValidationRule.class);
     var invertedCondition = this.script.composeLogicalNot(condition);
     rule.setCondition(condition, invertedCondition, this.combineWithOrParenthesized(rule.getExpression(), invertedCondition));
@@ -728,7 +728,7 @@ public class EfxRulesTranslatorV2 extends EfxExpressionTranslatorV2
    */
   @Override
   public void exitAssertClause(AssertClauseContext ctx) {
-    var test = this.stack.pop(BooleanExpression.class);
+    var test = this.popOperand(ctx.getRuleContext(ParserRuleContext.class, 0), BooleanExpression.class);
     var rule = this.ruleStack.pop(ValidationRule.class);
     var invertedCondition = rule.getInvertedCondition();
     rule.setExpression(test, invertedCondition == null ? test : this.combineWithOrParenthesized(test, invertedCondition));
@@ -737,7 +737,7 @@ public class EfxRulesTranslatorV2 extends EfxExpressionTranslatorV2
 
   @Override
   public void exitReportClause(ReportClauseContext ctx) {
-    var test = this.stack.pop(BooleanExpression.class);
+    var test = this.popOperand(ctx.getRuleContext(ParserRuleContext.class, 0), BooleanExpression.class);
     var rule = this.ruleStack.pop(ValidationRule.class);
     var invertedCondition = rule.getInvertedCondition();
     rule.setExpression(test, invertedCondition == null ? test : this.combineWithOrParenthesized(test, invertedCondition));
@@ -750,7 +750,7 @@ public class EfxRulesTranslatorV2 extends EfxExpressionTranslatorV2
    */
   @Override
   public void exitOtherwiseAssertClause(OtherwiseAssertClauseContext ctx) {
-    var test = this.stack.pop(BooleanExpression.class);
+    var test = this.popOperand(ctx.getRuleContext(ParserRuleContext.class, 0), BooleanExpression.class);
     var rule = this.ruleStack.pop(ValidationRule.class);
     var invertedCondition = rule.getInvertedCondition();
     rule.setExpression(test, invertedCondition == null ? test : this.combineWithOrParenthesized(test, invertedCondition));
@@ -759,7 +759,7 @@ public class EfxRulesTranslatorV2 extends EfxExpressionTranslatorV2
 
   @Override
   public void exitOtherwiseReportClause(OtherwiseReportClauseContext ctx) {
-    var test = this.stack.pop(BooleanExpression.class);
+    var test = this.popOperand(ctx.getRuleContext(ParserRuleContext.class, 0), BooleanExpression.class);
     var rule = this.ruleStack.pop(ValidationRule.class);
     var invertedCondition = rule.getInvertedCondition();
     rule.setExpression(test, invertedCondition == null ? test : this.combineWithOrParenthesized(test, invertedCondition));

@@ -43,6 +43,13 @@ public final class Arguments {
   }
 
   /**
+   * @return the arguments, in order, each converted to its parameter's class
+   */
+  public List<TypedExpression> getValues() {
+    return this.values;
+  }
+
+  /**
    * Gives the argument at a position as an expression of its parameter's class.
    *
    * @param <T> the expression class of the parameter at that position, or a supertype of it
