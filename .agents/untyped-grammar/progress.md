@@ -3,7 +3,7 @@
 Single record of the work described in `plan.md`. Update it at the end of every session: item status, gate results with their numbers, the commit ids of both repositories, decisions taken, open questions for Yannis.
 
 **Last updated:** 2026-10-31, by the implementing thread (session 1).
-**Current phase:** 1. **Next item:** gate 1 waits for Yannis's review of the invalid-operation table; then P2.1, which needs his answer on `duration + date` (see Open questions).
+**Current phase:** 1. **Next item:** gate 1 waits for Yannis's review of the invalid-operation table; then P2.1.
 
 ## Work items
 
@@ -158,7 +158,7 @@ The split follows the kind of operand, not the rule: a row is a syntax error whe
 - 2026-10-31: Yannis approved two pom.xml additions for P0.4 beyond the plan's listed lines: `<excludedGroups>corpus</excludedGroups>` and a test-scope `eforms-sdk` dependency at `${version.eforms-sdk-2}`.
 - 2026-10-31: the phase 0 review (`simplify`, `code-review`) was applied to the P0.5 code in a second P0.5 commit, since pushed history is not rewritten.
 - 2026-10-31: the corpus test translates the 3 stage files on their own as well as through `rules.efx`, which includes them: 0.2 s, and the plan counts 4 rules files.
-- 2026-10-31, Yannis: `date + duration` and `date - duration` are operators of the language, for any date and duration operands, as in XPath and as two field references already translate today; `add-duration` and `subtract-duration` stay. P2.1 gives the operators their signatures, and phase 3 adds translation tests for the forms the typed grammar rejects (`2020-01-01Z + P1D`, `BT-00-StartDate + P1D`, `2020-01-01Z - P1D`). The `+` and `-` rules of the invalid-operation table now name them; their rows were already outside the table.
+- 2026-10-31, Yannis: `date + duration` and `date - duration` are operators of the language, for any date and duration operands, as in XPath and as two field references already translate today; `add-duration` and `subtract-duration` stay. Asked the same day, Yannis: `+` takes a duration and a date in either order, as XPath does; `duration - date` stays an error. P2.1 gives the operators their signatures, and phase 3 adds translation tests for the forms the typed grammar rejects (`2020-01-01Z + P1D`, `BT-00-StartDate + P1D`, `2020-01-01Z - P1D`, `P1D + 2020-01-01Z`, `BT-00-Duration + BT-00-StartDate`). The `+` and `-` rules of the invalid-operation table now name them; their rows were already outside the table.
 - 2026-10-31: phase 1 review (`simplify`, `code-review`), applied in one P1.2 commit. Kept on purpose: the table's `@MethodSource` (P4.1 gives each row its expected exception, which `@ValueSource` cannot carry); late-bound booleans taken from iterator variables (see the indicator observation); the duration-field XPath written out in each test, as the file already does; one `@Test` per case, the convention of every V2 test class. Gate 1 coverage: every enter/exit method of the three V2 translators runs except the same 9 recorded for P1.1.
 
 ## Corrections to facts in plan.md
@@ -181,9 +181,9 @@ From P1.1:
 
 ## Open questions for Yannis
 
-- Should `duration + date` be accepted as well as `date + duration`, as XPath does? Asked 2026-10-31. P2.1 needs the answer; no row of the invalid-operation table holds either order.
+None.
 
-Answered: 2026-10-31, Yannis approved both pom.xml additions for P0.4. 2026-10-31, `date + duration` and `date - duration` are operators (see Decisions).
+Answered: 2026-10-31, Yannis approved both pom.xml additions for P0.4. 2026-10-31, `date + duration` and `date - duration` are operators, and `duration + date` too (see Decisions).
 
 ## Session log
 
