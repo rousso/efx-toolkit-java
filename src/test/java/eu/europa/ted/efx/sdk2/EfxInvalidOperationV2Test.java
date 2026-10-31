@@ -39,6 +39,9 @@ import eu.europa.ted.efx.exceptions.TypeMismatchException;
  * <p>
  * Binary operations appear in both operand orders, and with literals as well as field references,
  * because the two kinds of operand are rejected along different paths.
+ * <p>
+ * Template-only functions are rejected outside templates whatever their arguments, so their rows
+ * are translated inside a template, where only the arguments can be wrong.
  */
 class EfxInvalidOperationV2Test extends EfxTestsBase {
 
@@ -52,6 +55,14 @@ class EfxInvalidOperationV2Test extends EfxTestsBase {
   void testInvalidOperation_IsRejected(final String expression) {
     ParseCancellationException exception = assertThrows(ParseCancellationException.class,
         () -> translateExpressionWithContext("ND-Root", expression));
+    assertTrue(isSyntaxOrTypeError(exception), exception::toString);
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("invalidTemplateOperations")
+  void testInvalidTemplateOperation_IsRejected(final String expression) {
+    ParseCancellationException exception = assertThrows(ParseCancellationException.class,
+        () -> translateTemplate("{ND-Root} ${" + expression + "}"));
     assertTrue(isSyntaxOrTypeError(exception), exception::toString);
   }
 
@@ -104,6 +115,8 @@ class EfxInvalidOperationV2Test extends EfxTestsBase {
         "1 + P1D",
         "BT-00-Duration + BT-00-Number",
         "P1D + BT-00-Number",
+        "1 + 10:00:00Z",
+        "2020-01-01Z + 1",
 
         // - subtracts two numbers, two durations, two dates, or a duration from a date
         "BT-00-Text - 1",
@@ -118,6 +131,11 @@ class EfxInvalidOperationV2Test extends EfxTestsBase {
         "BT-00-Duration - BT-00-Number",
         "P1D - 2020-01-01Z",
         "BT-00-Duration - BT-00-StartDate",
+        "TRUE - 1",
+        "10:00:00Z - 1",
+        "1 - 'a'",
+        "1 - 10:00:00Z",
+        "1 - P1D",
 
         // * multiplies two numbers, or a number and a duration
         "'a' * 2",
@@ -129,6 +147,8 @@ class EfxInvalidOperationV2Test extends EfxTestsBase {
         "10:00:00Z * 2",
         "P1D * P2D",
         "BT-00-Duration * BT-00-Duration",
+        "2 * TRUE",
+        "2 * 10:00:00Z",
 
         // / and % divide numbers only
         "'a' / 2",
@@ -144,6 +164,14 @@ class EfxInvalidOperationV2Test extends EfxTestsBase {
         "2020-01-01Z % 2",
         "5 % BT-00-StartTime",
         "BT-00-Duration % 2",
+        "2020-01-01Z / 2",
+        "2 / TRUE",
+        "2 / 10:00:00Z",
+        "'a' % 2",
+        "10:00:00Z % 2",
+        "2 % TRUE",
+        "2 % 2020-01-01Z",
+        "2 % P1D",
 
         // and, or and not() take booleans
         "1 and TRUE",
@@ -161,6 +189,18 @@ class EfxInvalidOperationV2Test extends EfxTestsBase {
         "TRUE or P1D",
         "not(2020-01-01Z)",
         "not(10:00:00Z)",
+        "2020-01-01Z and TRUE",
+        "10:00:00Z and TRUE",
+        "P1D and TRUE",
+        "TRUE and 1",
+        "TRUE and 'a'",
+        "TRUE and BT-00-StartTime",
+        "TRUE and P1D",
+        "1 or TRUE",
+        "'a' or TRUE",
+        "P1D or TRUE",
+        "TRUE or 2020-01-01Z",
+        "TRUE or 10:00:00Z",
 
         // like matches text
         "1 like '[0-9]'",
@@ -265,6 +305,11 @@ class EfxInvalidOperationV2Test extends EfxTestsBase {
         "count(ND-RepeatableNode)",
         "ND-SubNode is empty",
         "ND-SubNode has duplicates",
+        "distinct-values(ND-RepeatableNode)",
+        "count-duplicates(ND-RepeatableNode)",
+        "get-duplicates(ND-RepeatableNode)",
+        "sort(ND-RepeatableNode)",
+        "reverse(ND-RepeatableNode)",
 
         // is present applies to a field or node reference
         "1 is present",
@@ -383,6 +428,8 @@ class EfxInvalidOperationV2Test extends EfxTestsBase {
         "split('a', 1)",
         "subtract-duration(1, P1D)",
         "subtract-duration(2020-01-01Z, 1)",
+        "text([1])",
+        "string(BT-00-Repeatable-Number)",
 
         // A built-in function takes the number of arguments it declares
         "upper-case()",
@@ -406,5 +453,33 @@ class EfxInvalidOperationV2Test extends EfxTestsBase {
         "current-date() + 1",
         "year(current-date()) == 'a'",
         "contains('a', 'b') + 1");
+  }
+
+  static Stream<String> invalidTemplateOperations() {
+    return Stream.of(
+        // Each argument of a template-only function has the type its parameter declares
+        "format-number('x', '0.00')",
+        "format-number(1, 2)",
+        "format-number(BT-00-Text, '0.00')",
+        "format-number(BT-00-Number, BT-00-Number)",
+        "format-short(1)",
+        "format-short('a')",
+        "format-short(1, 10:00:00Z)",
+        "format-short(2020-01-01Z, 1)",
+        "format-medium(TRUE)",
+        "format-medium(P1D, 10:00:00Z)",
+        "format-medium(2020-01-01Z, 'a')",
+        "format-long(BT-00-Number)",
+        "format-long(10:00:00Z, 10:00:00Z)",
+        "format-long(BT-00-StartDate, BT-00-StartDate)",
+        "preferred-language('a')",
+        "preferred-language(BT-00-Text)",
+        "preferred-language-text(1)",
+        "preferred-language-text(BT-00-Number)",
+
+        // A template-only function takes the number of arguments it declares
+        "format-number(1)",
+        "format-short()",
+        "preferred-language()");
   }
 }
