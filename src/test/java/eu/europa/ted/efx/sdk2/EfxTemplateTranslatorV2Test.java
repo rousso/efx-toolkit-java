@@ -648,6 +648,70 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
 
   // #endregion Sequence variable declarations ---------------------------------
 
+  // #region Function declarations ---------------------------------------------
+
+  @Test
+  void testDisplayTemplate_WithNumericFunction() {
+    assertEquals(
+        lines(
+            "GLOBALS:",
+            "decimal:twice(decimal:n) -> { $n * 2 }",
+            "TEMPLATES:",
+            "let body01() -> { text('twice: ')eval(for $item in udf:twice(21) return format-number($item, '# ##0,#########')) }",
+            "MAIN:",
+            "for-each(/*).call(body01())"),
+        translateTemplate(lines(
+            "let number:?twice(number:$n) = $n * 2;",
+            "display twice: ${?twice(21)};")));
+  }
+
+  @Test
+  void testDisplayTemplate_WithDateFunction() {
+    assertEquals(
+        lines(
+            "GLOBALS:",
+            "date:nextDay(date:d) -> { ($d + xs:dayTimeDuration('P1D')) }",
+            "TEMPLATES:",
+            "let body01() -> { text('next day: ')eval(format-date(udf:nextDay(xs:date('2024-01-01Z')), '[D01]/[M01]/[Y0001]')) }",
+            "MAIN:",
+            "for-each(/*).call(body01())"),
+        translateTemplate(lines(
+            "let date:?nextDay(date:$d) = add-duration($d, P1D);",
+            "display next day: ${?nextDay(2024-01-01Z)};")));
+  }
+
+  @Test
+  void testDisplayTemplate_WithTimeFunction() {
+    assertEquals(
+        lines(
+            "GLOBALS:",
+            "time:noon() -> { xs:time('12:00:00Z') }",
+            "TEMPLATES:",
+            "let body01() -> { text('noon: ')eval(format-time(udf:noon(), '[H01]:[m01] [Z]')) }",
+            "MAIN:",
+            "for-each(/*).call(body01())"),
+        translateTemplate(lines(
+            "let time:?noon() = 12:00:00Z;",
+            "display noon: ${?noon()};")));
+  }
+
+  @Test
+  void testDisplayTemplate_WithDurationFunction() {
+    assertEquals(
+        lines(
+            "GLOBALS:",
+            "duration:week() -> { xs:dayTimeDuration('P7D') }",
+            "TEMPLATES:",
+            "let body01() -> { text('days: ')eval(for $item in days-from-duration(udf:week()) return format-number($item, '# ##0,#########')) }",
+            "MAIN:",
+            "for-each(/*).call(body01())"),
+        translateTemplate(lines(
+            "let duration:?week() = P1W;",
+            "display days: ${days(?week())};")));
+  }
+
+  // #endregion Function declarations ------------------------------------------
+
   // #region Sequence function declarations ------------------------------------
 
   @Test
