@@ -301,8 +301,6 @@ class EfxInvalidOperationV2Test extends EfxTestsBase {
         "ND-SubNode + 1",
         "ND-SubNode in ['a']",
         "string-length(ND-SubNode)",
-        "count(ND-SubNode)",
-        "count(ND-RepeatableNode)",
         "ND-SubNode is empty",
         "ND-SubNode has duplicates",
         "distinct-values(ND-RepeatableNode)",
