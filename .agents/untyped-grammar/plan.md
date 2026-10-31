@@ -137,14 +137,14 @@ Every operator and built-in takes the same path, and the catalogue is the only p
 
 - **Literals** keep their literal classes (`StringLiteral`, `NumericLiteral` and the rest). Nothing changes.
 - **Field and attribute references** become a path typed by the field's SDK type (`ScalarPath.fromFieldType`, `SequencePath.fromFieldType`) and by one cardinality rule: a sequence when the field is repeatable from the current context or multilingual, unless the field is itself the context; a scalar otherwise. This is today's `RESOLVE_EITHER` branch of `resolveAndPushFieldReference`, applied everywhere. The `RESOLVE_SCALAR` and `RESOLVE_SEQUENCE` branches are not needed: a sequence path in a scalar position is rejected by the operator, and a scalar path in a sequence position is promoted by it.
-- **Node references** become a `NodePath`, scalar or sequence by repeatability. Only path consumers accept them: `is present`, a bracket filter, a context position.
+- **Node references** become a `NodePath`, scalar or sequence by repeatability. Only path consumers accept them: `is present`, a bracket filter, a context position, and `count`, which counts the nodes the reference selects (added to the language by Yannis on 31 October; see the catalogue below).
 - **Variables and parameters** take the type of their declaration, as `CallStack.pushIdentifierReference` already pushes it. A context variable bound by `for context:$c in ...` is a scalar path of its field; a node context variable used as a value stays an error (`NODE_CONTEXT_AS_VALUE`).
 - **Function invocations** `?f(args)` take `Function.dataType` as declared. `StrictArguments` already checks the arguments against the parameters and stays.
 - **Dictionary lookups** are a sequence of the indexed field's type, as today.
 
 ### Paths and values
 
-A reference is pushed as a path, and the two positions that consume a path as such take it: the left side of a bracket and `is present` (context positions use `fieldContext` and `nodeContext` and are not expressions). Everywhere else the reference is dereferenced into its value, which is what `composeFieldValueReference(fieldId, path)` does today in `exitScalarFromFieldReference`. In the listener this is decided in `exitReferenceExpression` from the parent node, the way `adjustForGrammarAmbiguity` reads its parent today; in a visitor the consumer asks for a path or a value explicitly. The next section weighs the two.
+A reference is pushed as a path, and the two positions that consume a path as such take it: the left side of a bracket and `is present` (context positions use `fieldContext` and `nodeContext` and are not expressions). Everywhere else the reference is dereferenced into its value, which is what `composeFieldValueReference(fieldId, path)` does today in `exitScalarFromFieldReference`. In the listener this is decided in `exitReferenceExpression` from the parent node, the way `adjustForGrammarAmbiguity` reads its parent today; in a visitor the consumer asks for a path or a value explicitly. The next section weighs the two. A node reference has no value form: it stays a path wherever it stands, and a consumer that is not a bracket, `is present` or `count` rejects it ("a node has no value").
 
 ### Composite nodes
 
@@ -159,7 +159,7 @@ A reference is pushed as a path, and the two positions that consume a path as su
 
 A new package `eu.europa.ted.efx.model.signatures` holds the operator and function signatures that the typed grammar used to spell out as alternatives, and `ScriptGenerator` as typed overloads. It has four concepts:
 
-- `ParameterType`: a pattern an argument must match. Either a concrete type (`NumberScalar`), a primitive in any cardinality (`Number`), a type variable in a cardinality (`T`, `T*`, with `T` ranging over the value primitives, never `Node`), or `Path`.
+- `ParameterType`: a pattern an argument must match. Either a concrete type (`NumberScalar`), a primitive in any cardinality (`Number`), a type variable in a cardinality (`T`, `T*`, with `T` ranging over the value primitives, never `Node`), or `Path`. Nodes reach one built-in through a concrete type, not through `T`: `count` has a second overload, `count(NodeSequence)` beside `count(T*)`, composed with the same `composeCountOperation`, so `count(ND-RepeatableNode)` gives `count(RepeatableNode)` and `count(ND-RepeatableNode[...])` counts the nodes the predicate keeps; a non-repeatable node counts 0 or 1 by promotion (Yannis, 31 October).
 - `Signature`: an ordered list of parameters, with an optional or variadic tail, and a result type written in the same vocabulary (`Boolean`, `T`, `T*`).
 - `BuiltIn`: a name, which is the grammar token or the operator symbol, and its overloads. Each overload pairs a `Signature` with a `Composer`, a function of the `ScriptGenerator` and the bound arguments that calls the typed compose method, for example `(script, args) -> script.composeToStringConversion(args.numeric(0))`. Operators (`+`, `==`, `and`, `in`, `is empty`, ...) are built-ins with symbolic names.
 - `Resolution`: given a built-in and the actual operand types, picks the overload. An exact match wins; otherwise a match under widening (`MultilingualString` to `String`, `Dynamic` to `Boolean`) and promotion (scalar to sequence); no match is a type error; more than one match is a catalogue defect, caught by a unit test that checks every built-in is unambiguous. Binding converts each argument with `TypedExpression.from`, as `pop(Class)` does today, calls the composer and pushes the result.
@@ -257,7 +257,7 @@ Phases 1, 2, 4 and 5 touch only the toolkit; phase 3 changes the grammar in the 
 ### Phase 3: the untyped grammar (SDK) and the rewiring (toolkit)
 
 - **P3.1** Write the new `Efx.g4` described in the grammar section above; `EfxLexer.g4` unchanged; update `efx-grammar/README.md`; install the SDK branch locally.
-- **P3.2** Toolkit: one method per new grammar label, as a visitor (option B, chosen by Yannis on 31 October), with the composition refactor: a translation-context object shared by the three translators, a walker that stops at expression nodes, and the template and rules translators calling the visitor at their expression sites; one exit method per declaration kind in the template and rules translators; the `EfxErrorStrategy` table; removal of the cast handling and the cast test.
+- **P3.2** Toolkit: one method per new grammar label, as a visitor (option B, chosen by Yannis on 31 October), with the composition refactor: a translation-context object shared by the three translators, a walker that stops at expression nodes, and the template and rules translators calling the visitor at their expression sites; one exit method per declaration kind in the template and rules translators; the `EfxErrorStrategy` table; removal of the cast handling and the cast test; translation tests for what the typed grammar rejects and the decisions of 31 October allow: `count` of a node reference (repeatable, with a predicate, and non-repeatable), `date + duration`, `duration + date`, `date - duration`, and `ND-SubNode[1] is present`.
 - **P3.3** Profiler run over the corpus with `EfxProfilerReportGenerator`: record decisions with full-context fallbacks and ambiguities; the target is none inside expressions.
 - **P3.4** Benchmark: corpus timing against the phase-0 numbers.
 
@@ -313,7 +313,7 @@ Yannis answered all four questions on 30 and 31 October. The last one is recorde
 - **Repository coupling.** The toolkit branch does not build in CI until the SDK grammar is published; the pull requests must say so, and upstream the SDK merges first. `progress.md` names the matching commits at every gate.
 - **Performance.** The parser is the suspected bottleneck, not the proven one. The phase-0 baseline (301 s for the 52 templates) and the phase-3 benchmark decide; if the gain is small, the profiler report shows where the time goes, and the cleaner grammar stands on its own.
 - **Multilingual fields.** `MultilingualString` widens to `String` in the resolver; outputs that depend on the distinction, such as `preferred-language-text`, are covered by the corpus and by the 5 tests on `FIELD_IS_MULTILINGUAL`.
-- **Behaviour changes by design.** Casts go, three promotion cases become valid, and a bracket after a reference becomes an XPath predicate whatever its content. All three are language changes and belong in the EFX documentation site, which is outside these repositories and is Yannis's.
+- **Behaviour changes by design.** Casts go, three promotion cases become valid, a bracket after a reference becomes an XPath predicate whatever its content, and `count` accepts a node reference. All four are language changes and belong in the EFX documentation site, which is outside these repositories and is Yannis's.
 - **Several sessions.** Phases 2 and 3 are too long for one session of the implementing thread. The plan and progress files are the only state that survives between sessions, which is why rule 8 above is strict.
 
 ## Allowed changes to output and test expectations
@@ -327,6 +327,7 @@ These are the only output differences and test-expectation changes this plan per
 | 3 promotion tests invert: the expressions become valid | `LateBoundTypeResolutionTest`: `count($x)` with a scalar variable, `count(?f())` with a scalar function, `'test' in $f` with a context variable; today they expect `IDENTIFIER_IS_SCALAR` | Uniform scalar-to-sequence promotion. Phase 1 (inverted) and phase 2 (code removed) |
 | 1 cast test is removed | The single test that uses `(type) expression` cast syntax | Casts leave the language. Phase 3 |
 | 13 tests that assert a bare `ParseCancellationException` keep passing in phase 3 and are tightened to the specific exception | `EfxExpressionTranslatorV2Test` and neighbours | Rejections move from the parser to the toolkit. Phase 4 |
+| 2 rows leave the invalid-operation table: `count(ND-SubNode)` and `count(ND-RepeatableNode)` become valid | `EfxInvalidOperationV2Test`, rule "A node has no value" | Node counting added to the language (Yannis, 31 October). Table in phase 2, positive tests in phase 3 |
 | `rules.efx` translates after the resolver fix | `validation/rules.efx`, 75 maximum-length rules on multilingual fields | Toolkit defect fixed in P0.5; the baseline is captured after the fix |
 
 ## Facts established during the design, for the implementing sessions
@@ -347,5 +348,5 @@ These are the only output differences and test-expectation changes this plan per
 
 ## Notes for Yannis, outside this plan
 
-- Three language changes belong in the EFX documentation site: casts are removed, scalar-to-sequence promotion is uniform, and a bracket after a reference is an XPath predicate whatever its content.
+- Four language changes belong in the EFX documentation site: casts are removed, scalar-to-sequence promotion is uniform, a bracket after a reference is an XPath predicate whatever its content, and `count` accepts a node reference (decided 31 October; no public interface of the toolkit changes).
 - Upstream pull requests to OP-TED are opened by Yannis himself, SDK first, after he has reviewed and merged the branches into his forks.
