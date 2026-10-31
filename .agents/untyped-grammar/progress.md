@@ -3,7 +3,7 @@
 Single record of the work described in `plan.md`. Update it at the end of every session: item status, gate results with their numbers, the commit ids of both repositories, decisions taken, open questions for Yannis.
 
 **Last updated:** 2026-10-31, by the implementing thread (session 1).
-**Current phase:** 1. **Next item:** gate 1 waits for Yannis's review of the invalid-operation table; then P2.1, which needs his answer on `date + duration` (see Open questions).
+**Current phase:** 1. **Next item:** gate 1 waits for Yannis's review of the invalid-operation table; then P2.1, which needs his answer on `duration + date` (see Open questions).
 
 ## Work items
 
@@ -127,8 +127,8 @@ The split follows the kind of operand, not the rule: a row is a syntax error whe
 | Rule | Rows | Syntax errors today | Type errors today |
 |---|---|---|---|
 | A comparison needs two operands of the same type | 22 | `'a' == 1`, `1 == 'a'`, `'a' < TRUE`, `'a' <= 2020-01-01Z`, `'a' >= P1D`, `1 == TRUE`, `10:00:00Z > 1`, `TRUE == 2020-01-01Z`, `2020-01-01Z == 10:00:00Z`, `P1D > 10:00:00Z` | 12 |
-| + adds two numbers or two durations | 16 | `'a' + 'b'`, `'a' + 1`, `1 + 'a'`, `TRUE + 1`, `2020-01-01Z + 2020-01-02Z`, `10:00:00Z + P1D`, `1 + P1D` | 9 |
-| - subtracts two numbers, two durations, or two dates | 12 | `'a' - 'b'`, `TRUE - FALSE`, `1 - 2020-01-01Z`, `2020-01-01Z - 1`, `11:00:00Z - 10:00:00Z`, `P1D - 2020-01-01Z` | 6 |
+| + adds two numbers, two durations, or a duration to a date | 16 | `'a' + 'b'`, `'a' + 1`, `1 + 'a'`, `TRUE + 1`, `2020-01-01Z + 2020-01-02Z`, `10:00:00Z + P1D`, `1 + P1D` | 9 |
+| - subtracts two numbers, two durations, two dates, or a duration from a date | 12 | `'a' - 'b'`, `TRUE - FALSE`, `1 - 2020-01-01Z`, `2020-01-01Z - 1`, `11:00:00Z - 10:00:00Z`, `P1D - 2020-01-01Z` | 6 |
 | * multiplies two numbers, or a number and a duration | 9 | `'a' * 2`, `TRUE * 2`, `2020-01-01Z * 2`, `10:00:00Z * 2`, `P1D * P2D` | 4 |
 | / and % divide numbers only | 13 | `'a' / 2`, `TRUE / 2`, `2 / 2020-01-01Z`, `P2D / 2`, `2 / P1D`, `5 % 'a'`, `TRUE % 2`, `2020-01-01Z % 2` | 5 |
 | and, or and not() take booleans | 10 | `1 and TRUE`, `TRUE or 'a'`, `2020-01-01Z or TRUE`, `P1D and BT-00-StartTime`, `not(1)` | 5 |
@@ -158,6 +158,7 @@ The split follows the kind of operand, not the rule: a row is a syntax error whe
 - 2026-10-31: Yannis approved two pom.xml additions for P0.4 beyond the plan's listed lines: `<excludedGroups>corpus</excludedGroups>` and a test-scope `eforms-sdk` dependency at `${version.eforms-sdk-2}`.
 - 2026-10-31: the phase 0 review (`simplify`, `code-review`) was applied to the P0.5 code in a second P0.5 commit, since pushed history is not rewritten.
 - 2026-10-31: the corpus test translates the 3 stage files on their own as well as through `rules.efx`, which includes them: 0.2 s, and the plan counts 4 rules files.
+- 2026-10-31, Yannis: `date + duration` and `date - duration` are operators of the language, for any date and duration operands, as in XPath and as two field references already translate today; `add-duration` and `subtract-duration` stay. P2.1 gives the operators their signatures, and phase 3 adds translation tests for the forms the typed grammar rejects (`2020-01-01Z + P1D`, `BT-00-StartDate + P1D`, `2020-01-01Z - P1D`). The `+` and `-` rules of the invalid-operation table now name them; their rows were already outside the table.
 - 2026-10-31: phase 1 review (`simplify`, `code-review`), applied in one P1.2 commit. Kept on purpose: the table's `@MethodSource` (P4.1 gives each row its expected exception, which `@ValueSource` cannot carry); late-bound booleans taken from iterator variables (see the indicator observation); the duration-field XPath written out in each test, as the file already does; one `@Test` per case, the convention of every V2 test class. Gate 1 coverage: every enter/exit method of the three V2 translators runs except the same 9 recorded for P1.1.
 
 ## Corrections to facts in plan.md
@@ -174,15 +175,15 @@ From the phase 0 review, left for P2.2 (the leaf rule implemented in one place):
 From P1.1:
 - Indicator field values translate to the bare node (`PathNode/IndicatorField`), with no conversion to a boolean. Comparisons and `in` work, because a general comparison casts the node, but whatever takes the effective boolean value or compares items with `eq` does not: `if BT-00-Indicator then …` holds when the field says `false`, and `sequence-equal`, `index-of`, `value-union`, `value-intersect` and `value-except` treat the field's values as strings, so `sequence-equal(BT-00-Repeatable-Indicator, [TRUE, FALSE])` is always false and `index-of(BT-00-Repeatable-Indicator, TRUE)` finds nothing (both checked with Saxon). The same on `develop` (`XPathScriptGenerator.composeFieldValueReference`). The new tests take late-bound booleans from iterator variables rather than lock this in. Outside the plan's scope: generated output is sacred.
 - A duration field multiplied by a number is rejected although `P1D * 2` and `2 * P1D` translate: `BT-00-Duration * 2` is a syntax error or a type mismatch in every position, and `2 * BT-00-Duration` is a type mismatch on its own (ANTLR picks the numeric late-bound alternative) but translates inside a duration comparison (`2 * BT-00-Duration > P1D`, which is what the new test uses). A defect of the typed grammar that phase 3 removes; phase 3 should add both forms as tests.
-- `+` and `-` between a date and a duration translate when both operands are references (`BT-00-StartDate + BT-00-Duration`, through the late-bound dispatcher) but are rejected otherwise (`2020-01-01Z + P1D` is a syntax error, `BT-00-StartDate + P1D` a type mismatch); the typed grammar offers only `add-duration` and `subtract-duration`. The corpus uses neither the operators nor the functions. See the open question.
+- `+` and `-` between a date and a duration translate when both operands are references (`BT-00-StartDate + BT-00-Duration`, through the late-bound dispatcher) but are rejected otherwise (`2020-01-01Z + P1D` is a syntax error, `BT-00-StartDate + P1D` a type mismatch); the typed grammar offers only `add-duration` and `subtract-duration`. The corpus uses neither the operators nor the functions. Yannis decided the operators are part of the language (see Decisions).
 - EFX's duration is one type, but it translates to two XPath types that do not mix: `xs:dayTimeDuration` for days and weeks, `xs:yearMonthDuration` for months and years. Two consequences, pinned as they are by the P1.1 tests and the same on `develop`: `BT-00-Duration + P1D` (and `-`) raises a dynamic error when the field's unit is a year or a month, and `sequence-equal` on durations, which sorts both sequences, raises one as soon as a sequence holds both kinds (`Cannot compare xs:yearMonthDuration with xs:dayTimeDuration`, checked with Saxon). A question of the language's duration model, outside the plan's scope: generated output is sacred.
 - The template translator's `exitShorthandFieldValueReferenceFromContextField` cannot run. The lexer emits `$value` only in TEMPLATE mode, where it parses as `contextFieldExpressionBlock` (tested); the grammar's other `$value` alternative, in `expressionBlock`, is reachable only from label blocks, whose LABEL mode never emits the token. Dead since `formattedExpressionBlock` took over `$value`; phase 3 can drop the alternative and its handler.
 
 ## Open questions for Yannis
 
-- Are `date + duration` and `date - duration` operators of the language, beside `add-duration` and `subtract-duration`? Asked 2026-10-31. P1.2 leaves them out of the invalid-operation table, and P2.1 needs the answer for the catalogue.
+- Should `duration + date` be accepted as well as `date + duration`, as XPath does? Asked 2026-10-31. P2.1 needs the answer; no row of the invalid-operation table holds either order.
 
-Answered: 2026-10-31, Yannis approved both pom.xml additions for P0.4.
+Answered: 2026-10-31, Yannis approved both pom.xml additions for P0.4. 2026-10-31, `date + duration` and `date - duration` are operators (see Decisions).
 
 ## Session log
 

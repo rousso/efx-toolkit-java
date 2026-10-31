@@ -87,7 +87,7 @@ class EfxInvalidOperationV2Test extends EfxTestsBase {
         "P1D > 10:00:00Z",
         "BT-00-StartTime <= BT-00-Duration",
 
-        // + adds two numbers or two durations
+        // + adds two numbers, two durations, or a duration to a date
         "'a' + 'b'",
         "BT-00-Text + BT-00-Text",
         "BT-00-Text + 1",
@@ -105,7 +105,7 @@ class EfxInvalidOperationV2Test extends EfxTestsBase {
         "BT-00-Duration + BT-00-Number",
         "P1D + BT-00-Number",
 
-        // - subtracts two numbers, two durations, or two dates
+        // - subtracts two numbers, two durations, two dates, or a duration from a date
         "BT-00-Text - 1",
         "'a' - 'b'",
         "1 - BT-00-Indicator",
