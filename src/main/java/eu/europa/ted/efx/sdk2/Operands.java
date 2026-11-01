@@ -105,6 +105,25 @@ final class Operands {
   }
 
   /**
+   * Gives the value at a position that takes any of several types, unconverted, for a construct
+   * whose own type depends on which it is.
+   *
+   * @param position the position of the operand
+   * @param takes the types the position takes
+   * @param where where the error is reported
+   * @return the value
+   * @throws TypeMismatchException if the value converts to none of those types
+   */
+  TypedExpression valueAt(final int position, final List<ParameterType> takes,
+      final ParserRuleContext where) {
+    final TypedExpression value = this.values.get(position);
+    if (takes.stream().noneMatch(type -> type.accepts(value))) {
+      throw this.rejected(position, takes, where);
+    }
+    return value;
+  }
+
+  /**
    * Gives the error of a value that fits none of the types its position takes. What is wrong with
    * the value is what is least wrong with it for any of those types: its cardinality before its
    * primitive, and its primitive before the path or the value it is not.

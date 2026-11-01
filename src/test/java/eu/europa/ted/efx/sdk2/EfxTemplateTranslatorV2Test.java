@@ -3090,6 +3090,18 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
         translateTemplate("{ND-Root} Values: ${[1,2,BT-00-Number]}"));
   }
 
+  @Test
+  void testExpressionBlock_ConditionalWithRepeatableField() {
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01() -> { text('Values: ')eval((if (PathNode/IndicatorField) then PathNode/RepeatableTextField/normalize-space(text()) else 'a')) }",
+            "MAIN:",
+            "for-each(/*).call(body01())"),
+        translateTemplate(
+            "{ND-Root} Values: ${if BT-00-Indicator then BT-00-Repeatable-Text else 'a'}"));
+  }
+
   // #endregion Repeatable Fields in Expression Blocks -------------------------
 
   // #region IllegalArgumentException ------------------------------------------

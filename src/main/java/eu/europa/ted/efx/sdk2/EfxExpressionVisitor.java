@@ -1143,18 +1143,43 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   }
 
   /**
-   * A conditional: the condition is a boolean, and the two branches single values of the primitive
-   * of the first.
+   * A conditional: the condition is a boolean, and the two branches have one primitive. It gives
+   * the join of its branches: a sequence if either branch is one, the other promoted to a sequence
+   * of one, and a single value if both are.
    */
   @Override
   public Operand<?> visitConditionalExpression(final ConditionalExpressionContext ctx) {
     final List<Operand<?>> operands = this.operandsOf(ctx);
     final Operands parts = new Operands(CONDITIONAL, operands,
         operands.stream().map(Operand::value).collect(Collectors.toList()));
-    return this.operand(this.conditional(ctx, parts, this.scalarTypeOf(parts.valueAt(1, ctx))));
+    return this.operand(this.conditional(ctx, parts, this.joinOfBranches(ctx, parts)));
   }
 
-  private <T extends ScalarExpression> T conditional(final ConditionalExpressionContext ctx,
+  /**
+   * Gives the class of a conditional, the join of its branches. The then branch binds {@code T},
+   * as the first argument of a generic built-in does, and the else branch must have its primitive,
+   * as a single value or as a sequence.
+   *
+   * @param ctx the conditional
+   * @param parts its condition and its two branches
+   * @return the sequence class of the primitive if either branch is a sequence, and its scalar
+   *         class otherwise
+   * @throws TypeMismatchException if the then branch is a node, or the else branch is not of the
+   *         primitive of the then branch
+   */
+  private Class<? extends TypedExpression> joinOfBranches(final ConditionalExpressionContext ctx,
+      final Operands parts) {
+    final TypedExpression then = parts.valueAt(1, ctx);
+    final Class<? extends ScalarExpression> single = this.scalarTypeOf(then);
+    final Class<? extends SequenceExpression> sequence = this.sequenceTypeOf(then);
+    final TypedExpression otherwise = parts.valueAt(2,
+        List.of(ParameterType.of(single), ParameterType.of(sequence)), ctx.expression(2));
+    return then instanceof SequenceExpression || otherwise instanceof SequenceExpression
+        ? sequence
+        : single;
+  }
+
+  private <T extends TypedExpression> T conditional(final ConditionalExpressionContext ctx,
       final Operands parts, final Class<T> type) {
     final T otherwise = parts.converted(2, type, ctx.expression(2));
     final T then = parts.converted(1, type, ctx.expression(1));

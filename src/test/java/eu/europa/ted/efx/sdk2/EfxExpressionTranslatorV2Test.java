@@ -1011,6 +1011,113 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
         "(if TRUE then 1 else 2) == 3");
   }
 
+  // The conditional takes the join of its branches (Yannis, 31 October), the eighth language change
+  // of the untyped grammar: a sequence if either branch is one, the other promoted to a sequence of
+  // one, and a single value if both are.
+
+  @Test
+  void testConditionalExpression_SequenceInThenBranch() {
+    testExpressionTranslationWithContext("(if (true()) then (1) else 2)", "ND-Root",
+        "if TRUE then [1] else 2");
+  }
+
+  @Test
+  void testConditionalExpression_SequenceInElseBranch() {
+    testExpressionTranslationWithContext("(if (true()) then 1 else (2))", "ND-Root",
+        "if TRUE then 1 else [2]");
+  }
+
+  @Test
+  void testConditionalExpression_SequenceInBothBranches() {
+    testExpressionTranslationWithContext("(if (true()) then (1) else (2))", "ND-Root",
+        "if TRUE then [1] else [2]");
+  }
+
+  @Test
+  void testConditionalExpression_RepeatableFieldInThenBranch() {
+    testExpressionTranslationWithContext(
+        "(if (true()) then PathNode/RepeatableNumberField/number() else 2)", "ND-Root",
+        "if TRUE then BT-00-Repeatable-Number else 2");
+  }
+
+  @Test
+  void testConditionalExpression_RepeatableFieldInElseBranch() {
+    testExpressionTranslationWithContext(
+        "(if (true()) then 2 else PathNode/RepeatableNumberField/number())", "ND-Root",
+        "if TRUE then 2 else BT-00-Repeatable-Number");
+  }
+
+  @Test
+  void testConditionalExpression_RepeatableTextFieldAndList() {
+    testExpressionTranslationWithContext(
+        "(if (true()) then PathNode/RepeatableTextField/normalize-space(text()) else ('a'))",
+        "ND-Root", "if TRUE then BT-00-Repeatable-Text else ['a']");
+  }
+
+  @Test
+  void testConditionalExpression_DateListAndDateField() {
+    testExpressionTranslationWithContext(
+        "(if (true()) then (xs:date('2020-01-01Z')) else PathNode/StartDateField/xs:date(text()))",
+        "ND-Root", "if TRUE then [2020-01-01Z] else BT-00-StartDate");
+  }
+
+  @Test
+  void testConditionalExpression_MultilingualFieldInThenBranch() {
+    // A multilingual field is a sequence of texts, one per language, as in, for and count take it.
+    testExpressionTranslationWithContext(
+        "(if (true()) then PathNode/TextMultilingualField/normalize-space(text()) else 'a')",
+        "ND-Root", "if TRUE then BT-00-Text-Multilingual else 'a'");
+  }
+
+  @Test
+  void testConditionalExpression_MultilingualFieldInElseBranch() {
+    testExpressionTranslationWithContext(
+        "(if (true()) then 'a' else PathNode/TextMultilingualField/normalize-space(text()))",
+        "ND-Root", "if TRUE then 'a' else BT-00-Text-Multilingual");
+  }
+
+  @Test
+  void testConditionalExpression_MultilingualFieldInBranch_IsATextSequence() {
+    assertTypeError(TypeMismatchException.ErrorCode.INCOMPATIBLE_OPERANDS,
+        "line 1:12 Type mismatch. Operator '==' cannot take 'text*' and 'text'."
+            + " Its left operand must be 'text'.",
+        "(if TRUE then BT-00-Text-Multilingual else 'a') == 'b'");
+  }
+
+  @Test
+  void testConditionalExpression_CodeFieldInElseBranch() {
+    // A code and a text join as a text in either order.
+    testExpressionTranslationWithContext(
+        "(if (true()) then 'a' else PathNode/CodeField/normalize-space(text()))", "ND-Root",
+        "if TRUE then 'a' else BT-00-Code");
+  }
+
+  @Test
+  void testConditionalExpression_SequenceCounted() {
+    testExpressionTranslationWithContext("count((if (true()) then (1,2) else (3)))", "ND-Root",
+        "count(if TRUE then [1, 2] else [3])");
+  }
+
+  @Test
+  void testConditionalExpression_NestedWithASequence() {
+    testExpressionTranslationWithContext(
+        "(if (true()) then 1 else (if (false()) then (2) else 3))", "ND-Root",
+        "if TRUE then 1 else if FALSE then [2] else 3");
+  }
+
+  @Test
+  void testConditionalExpression_SequenceIteratedOver() {
+    testExpressionTranslationWithContext("for $x in (if (true()) then (1) else (2)) return $x",
+        "ND-Root", "for number:$x in if TRUE then [1] else [2] return $x");
+  }
+
+  @Test
+  void testConditionalExpression_SequenceCompared_Throws() {
+    TypeMismatchException exception = assertThrows(TypeMismatchException.class,
+        () -> translateExpressionWithContext("ND-Root", "(if TRUE then [1] else 2) == 3"));
+    assertEquals(TypeMismatchException.ErrorCode.INCOMPATIBLE_OPERANDS, exception.getErrorCode());
+  }
+
   @Test
   void testSequenceFromIteration_ReturnTakesTheAddition() {
     // The return clause reaches as far to the right too: (for ... return $x) + 1 would add a
@@ -5119,6 +5226,14 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
         "line 1:15 Type mismatch. Conditional 'if' cannot take 'text', 'number' and 'number'."
             + " Its condition must be 'indicator'.",
         "if 'a' then 1 else 2");
+  }
+
+  @Test
+  void testTypeErrorMessage_ConditionalBranches() {
+    assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
+        "line 1:34 Type mismatch. Conditional 'if' cannot take 'indicator', 'number*' and 'text*'."
+            + " Its else branch must be 'number' or 'number*'.",
+        "if TRUE then [1] else ['a']");
   }
 
   @Test
