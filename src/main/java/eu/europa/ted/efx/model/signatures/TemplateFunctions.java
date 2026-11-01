@@ -98,4 +98,9 @@ public enum TemplateFunctions implements BuiltIn {
   public List<Overload> getOverloads() {
     return this.overloads;
   }
+
+  @Override
+  public boolean isFunction() {
+    return true;
+  }
 }

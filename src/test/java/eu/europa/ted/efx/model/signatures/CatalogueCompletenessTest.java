@@ -28,7 +28,8 @@ import eu.europa.ted.efx.sdk2.EfxLexer;
 
 /**
  * Proves that the catalogue has a built-in for every function of the EFX-2 lexer and for every
- * operator, and nothing else.
+ * operator, and nothing else, and that the built-ins that say they are functions are those of the
+ * lexer's functions.
  *
  * <p>The functions are the tokens named {@code ...Function}, and the keywords that are also
  * function names. A token the lexer retypes, such as {@code string}, which it reads as
@@ -53,6 +54,14 @@ class CatalogueCompletenessTest {
         .collect(Collectors.toCollection(TreeSet::new));
     Set<String> actual = BuiltIns.INSTANCE.getAll().stream().map(BuiltIn::getName)
         .collect(Collectors.toCollection(TreeSet::new));
+    assertEquals(expected, actual);
+  }
+
+  @Test
+  void testFunctions_AreTheFunctionTokens() {
+    Set<String> expected = functions().collect(Collectors.toCollection(TreeSet::new));
+    Set<String> actual = BuiltIns.INSTANCE.getAll().stream().filter(BuiltIn::isFunction)
+        .map(BuiltIn::getName).collect(Collectors.toCollection(TreeSet::new));
     assertEquals(expected, actual);
   }
 

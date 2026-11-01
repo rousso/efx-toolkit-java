@@ -47,6 +47,16 @@ public interface BuiltIn {
   }
 
   /**
+   * Tells whether the built-in is a function, called with its arguments in parentheses after its
+   * name, rather than an operator.
+   *
+   * @return {@code true} for the functions, {@code not} among them
+   */
+  default boolean isFunction() {
+    return false;
+  }
+
+  /**
    * Resolves a call of this built-in.
    *
    * @param arguments the translated arguments of the call
