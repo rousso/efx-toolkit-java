@@ -751,7 +751,7 @@ class EfxInvalidOperationV2Test extends EfxTestsBase {
         typeError("text([1])", CANNOT_CONVERT,
             "Function 'text' cannot take 'number*'"),
         typeError("string(BT-00-Repeatable-Number)", FIELD_MAY_REPEAT,
-            "Function 'text' cannot take 'number*'"),
+            "Function 'string' cannot take 'number*'"),
 
         // A built-in function takes the number of arguments it declares
         syntaxError("upper-case()"),
