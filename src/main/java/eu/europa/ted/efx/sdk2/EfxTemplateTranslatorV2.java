@@ -111,6 +111,14 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
 
   private static final String UNEXPECTED_INDENTATION = "Unexpected indentation tracker state.";
 
+  /**
+   * The variable that the translator's own loops bind each item to: the numbers, durations,
+   * dates and times it formats and the asset ids of a label. Like every name the translator
+   * generates, it starts with a prefix that no declaration may give, so it hides no variable of
+   * the template.
+   */
+  private static final String ITEM_VARIABLE = CallStackV2.RESERVED_PREFIX + "item";
+
   /** The condition of a conditional template block, as a type error names it. */
   private static final Construct WHEN = Construct.of("'when'", "condition");
 
@@ -629,19 +637,22 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
 
   private StringSequenceExpression composeFormattedSequence(NumericSequenceExpression numbers, NumberFormatOptions options) {
     IteratorListExpression iterators = this.script.composeIteratorList(List.of(this.script.composeIteratorExpression(
-        this.script.composeVariableDeclaration("item", NumericExpression.class), numbers)));
+        this.script.composeVariableDeclaration(ITEM_VARIABLE, NumericExpression.class), numbers)));
     return this.script.composeForExpression(iterators,
-        this.composeFormattedNumber(this.script.composeVariableReference("item", NumericExpression.class), options),
+        this.composeFormattedNumber(
+            this.script.composeVariableReference(ITEM_VARIABLE, NumericExpression.class), options),
         StringSequenceExpression.class);
   }
 
   private StringSequenceExpression composeFormattedSequence(DurationSequenceExpression durations,
       NumberFormatOptions options) {
     IteratorListExpression iterators = this.script.composeIteratorList(List.of(this.script.composeIteratorExpression(
-        this.script.composeVariableDeclaration("item", DurationExpression.class), durations)));
+        this.script.composeVariableDeclaration(ITEM_VARIABLE, DurationExpression.class),
+        durations)));
     return this.script.composeForExpression(iterators,
         this.composeFormattedNumber(
-            this.composeGetNumberFromDuration(this.script.composeVariableReference("item", DurationExpression.class)),
+            this.composeGetNumberFromDuration(
+                this.script.composeVariableReference(ITEM_VARIABLE, DurationExpression.class)),
             options),
         StringSequenceExpression.class);
   }
@@ -667,9 +678,10 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
 
   private StringSequenceExpression composeFormattedSequence(DateSequenceExpression dates, DateTimeFormatOptions options) {
     IteratorListExpression iterators = this.script.composeIteratorList(List.of(this.script.composeIteratorExpression(
-        this.script.composeVariableDeclaration("item", DateExpression.class), dates)));
+        this.script.composeVariableDeclaration(ITEM_VARIABLE, DateExpression.class), dates)));
     return this.script.composeForExpression(iterators,
-        this.composeFormattedScalar(this.script.composeVariableReference("item", DateExpression.class), options),
+        this.composeFormattedScalar(
+            this.script.composeVariableReference(ITEM_VARIABLE, DateExpression.class), options),
         StringSequenceExpression.class);
   }
 
@@ -686,9 +698,10 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
 
   private StringSequenceExpression composeFormattedSequence(TimeSequenceExpression times, DateTimeFormatOptions options) {
     IteratorListExpression iterators = this.script.composeIteratorList(List.of(this.script.composeIteratorExpression(
-        this.script.composeVariableDeclaration("item", TimeExpression.class), times)));
+        this.script.composeVariableDeclaration(ITEM_VARIABLE, TimeExpression.class), times)));
     return this.script.composeForExpression(iterators,
-        this.composeFormattedScalar(this.script.composeVariableReference("item", TimeExpression.class), options),
+        this.composeFormattedScalar(
+            this.script.composeVariableReference(ITEM_VARIABLE, TimeExpression.class), options),
         StringSequenceExpression.class);
   }
 
@@ -726,11 +739,12 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
    */
   private StringSequenceExpression composeGetUnitCode(DurationExpression duration) {
     IteratorListExpression iterators = this.script.composeIteratorList(List.of(this.script.composeIteratorExpression(
-        this.script.composeVariableDeclaration("item", DurationExpression.class),
+        this.script.composeVariableDeclaration(ITEM_VARIABLE, DurationExpression.class),
         new DurationSequenceExpression(duration.getScript()))));
     return this.script.composeForExpression(iterators,
         this.script.composeConditionalExpression(
-            this.composeIsYearMonthDuration(this.script.composeVariableReference("item", DurationExpression.class)),
+            this.composeIsYearMonthDuration(
+                this.script.composeVariableReference(ITEM_VARIABLE, DurationExpression.class)),
             this.script.getStringLiteralFromUnquotedString("MONTH"),
             this.script.getStringLiteralFromUnquotedString("DAY"), StringExpression.class),
         StringSequenceExpression.class);
@@ -851,9 +865,10 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
         ? this.labelPart(ctx, StringExpression.class, ASSET_TYPE)
         : this.script.getStringLiteralFromUnquotedString("");
 
-    Variable loopVariable = new Variable("item",
-        this.script.composeVariableDeclaration("item", StringExpression.class), StringExpression.empty(),
-        this.script.composeVariableReference("item", StringExpression.class));
+    Variable loopVariable = new Variable(ITEM_VARIABLE,
+        this.script.composeVariableDeclaration(ITEM_VARIABLE, StringExpression.class),
+        StringExpression.empty(),
+        this.script.composeVariableReference(ITEM_VARIABLE, StringExpression.class));
 
     StringSequenceExpression keys = this.script.composeDistinctValuesFunction(
         this.script.composeForExpression(
@@ -929,9 +944,10 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
     final String fieldType = this.symbols.getTypeOfField(fieldId);
     final PathExpression valueReference = this.expressions.fieldValueOf(fieldId,
         this.symbols.getRelativePathOfField(fieldId, currentContext.symbol()));
-    Variable loopVariable = new Variable("item",
-        this.script.composeVariableDeclaration("item", StringExpression.class), StringExpression.empty(),
-        this.script.composeVariableReference("item", StringExpression.class));
+    Variable loopVariable = new Variable(ITEM_VARIABLE,
+        this.script.composeVariableDeclaration(ITEM_VARIABLE, StringExpression.class),
+        StringExpression.empty(),
+        this.script.composeVariableReference(ITEM_VARIABLE, StringExpression.class));
     switch (fieldType) {
       case "indicator": {
         StringSequenceExpression keys = this.script.composeDistinctValuesFunction(

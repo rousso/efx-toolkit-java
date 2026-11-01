@@ -289,7 +289,7 @@ Phases 1, 2, 4 and 5 touch only the toolkit; phase 3 changes the grammar in the 
 - **P5.2** Build `efx-cli`, `eforms-sdk-analyzer` and `eforms-notice-viewer` against the branch from read-only clones and run their tests.
 - **P5.3** `CHANGELOG.md` entries in both repositories: the SDK's entry of P4.3 (188e429) covers the ninth and tenth language changes, so the first eight join it here; final numbers in `progress.md`. The template translator's generated loop variable `item` (formatted numbers and durations) takes the reserved prefix, as the tenth change implies for every generated name (Yannis, 1 November: align the generated names later).
 
-**Gate 5.** All green, consumers build and pass. Yannis reviews the branches, merges them into the forks, and opens the upstream pull requests himself, SDK first.
+**Gate 5.** All green, consumers build and pass; corpus identical to the baseline except the 3 indexed lines and the `$__item` rename of the allowed-changes table. Yannis reviews the branches, merges them into the forks, and opens the upstream pull requests himself, SDK first.
 
 ### Size
 
@@ -352,6 +352,7 @@ These are the only output differences and test-expectation changes this plan per
 | 1 test corrects its EFX: the time literal `00:01:00` of `testFieldValueComparison_TypeMismatch` gets its zone, `00:01:00Z`, and the test expects `INCOMPATIBLE_OPERANDS` | `EfxExpressionTranslatorV2Test`; today the literal is a syntax error, so the test did not check the type mismatch its name says | A test correction (Yannis, 1 November, in the P4.1/P4.2 design doc). Phase 4 (P4.1) |
 | 2 tests change their expected code from `CANNOT_CONVERT` to `INCOMPATIBLE_OPERANDS` | `LateBoundTypeResolutionTest.testLateBoundComparison_MismatchedFieldTypes_Throws` (`BT-00-Text == BT-00-Number`) and `EfxRulesTranslatorV2Test.testApiCall_TypeMismatch_InArithmeticExpression` (`1 + ?check(BT-00-Identifier)` in a rule) | A mismatched primitive under an operator gives `INCOMPATIBLE_OPERANDS` (Errors section); today the code depends on which grammar alternative matched. Yannis chose this over keeping today's codes until phase 3 (31 October). Phase 2 (P2.3) |
 | `rules.efx` translates after the resolver fix | `validation/rules.efx`, 75 maximum-length rules on multilingual fields | Toolkit defect fixed in P0.5; the baseline is captured after the fix |
+| 64 tests change their expected text, `$item` becoming `$__item`, and 51 of the 52 view-template outputs of the corpus change the same way (6,268 occurrences); the validation outputs do not change | `EfxTemplateTranslatorV2Test` (62) and `LateBoundTypeResolutionTest` (2); `target/corpus/output`, view templates | The template translator's generated loop variable takes the reserved prefix (P5.3, Yannis, 1 November). Text only: with `$__item` turned back into `$item`, the corpus is identical to the baseline except the 3 lines above. The rename also fixes a capture defect, a template variable named `$item` hidden by the generated one in a label with several asset ids, pinned by `EfxTemplateTranslatorV2Test.testLabelBlock_SeveralAssetIds_TemplateVariableNamedItem_IsNotHidden`. Phase 5 (P5.3) |
 
 ## Facts established during the design, for the implementing sessions
 

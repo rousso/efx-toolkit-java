@@ -135,7 +135,7 @@ class LateBoundTypeResolutionTest extends EfxTestsBase {
             "GLOBALS:",
             "string:f() -> { 'hi' }",
             "TEMPLATES:",
-            "let body01() -> { text('count: ')eval(for $item in count(udf:f()) return format-number($item, '# ##0,#########')) }",
+            "let body01() -> { text('count: ')eval(for $__item in count(udf:f()) return format-number($__item, '# ##0,#########')) }",
             "MAIN:",
             "for-each(/*).call(body01())"),
         translateTemplate(lines(
@@ -237,7 +237,7 @@ class LateBoundTypeResolutionTest extends EfxTestsBase {
             "GLOBALS:",
             "string:x='a'",
             "TEMPLATES:",
-            "let body01() -> { text('count: ')eval(for $item in count($x) return format-number($item, '# ##0,#########')) }",
+            "let body01() -> { text('count: ')eval(for $__item in count($x) return format-number($__item, '# ##0,#########')) }",
             "MAIN:",
             "for-each(/*).call(body01())"),
         translateTemplate(lines(
