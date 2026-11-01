@@ -17,8 +17,8 @@ import eu.europa.ted.efx.model.expressions.TypedExpression;
 
 /**
  * The outcome of matching the arguments of a call against {@link Parameters}: the arguments
- * converted to their parameters, or the first reason they do not match, which is either their
- * number or the first argument rejected.
+ * converted to their parameters, or the reason they do not match, which is either their number or
+ * the argument {@link Parameters#match} reports.
  */
 public final class Match {
 
@@ -74,7 +74,7 @@ public final class Match {
   }
 
   /**
-   * @return the position of the first argument rejected
+   * @return the position of the rejected argument
    */
   public int getPosition() {
     this.requireRejection();
@@ -96,6 +96,13 @@ public final class Match {
   public TypedExpression getArgument() {
     this.requireRejection();
     return this.argument;
+  }
+
+  /**
+   * @return what is wrong with the rejected argument
+   */
+  public Mismatch.Rejection.Kind getKind() {
+    return this.getRequired().rejectionKindOf(this.getArgument());
   }
 
   private void requireRejection() {

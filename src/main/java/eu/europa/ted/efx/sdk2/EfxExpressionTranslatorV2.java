@@ -25,6 +25,7 @@ import org.antlr.v4.runtime.tree.TerminalNode;
 
 import eu.europa.ted.eforms.sdk.component.SdkComponent;
 import eu.europa.ted.eforms.sdk.component.SdkComponentType;
+import eu.europa.ted.efx.exceptions.Construct;
 import eu.europa.ted.efx.exceptions.InvalidArgumentException;
 import eu.europa.ted.efx.exceptions.SymbolResolutionException;
 import eu.europa.ted.efx.interfaces.EfxExpressionTranslator;
@@ -63,6 +64,9 @@ public class EfxExpressionTranslatorV2 extends TranslatorListener
 
   private static final String BEGIN_EXPRESSION_BLOCK = "{";
   private static final String END_EXPRESSION_BLOCK = "}";
+
+  /** The expression after {@code COMPUTE}, as a type error names it. */
+  private static final Construct COMPUTE = Construct.of("'COMPUTE'", "expression");
 
   /**
    * Creates the visitor that translates the expression, for each translation.
@@ -173,7 +177,7 @@ public class EfxExpressionTranslatorV2 extends TranslatorListener
   @Override
   public void exitSingleExpression(SingleExpressionContext ctx) {
     if (ctx.expression() != null) {
-      this.stack.push(this.expressions.valueOf(ctx.expression()));
+      this.stack.push(this.expressions.valueOf(ctx.expression(), COMPUTE));
     }
     this.efxContext.pop();
   }

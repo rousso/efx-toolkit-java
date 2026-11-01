@@ -15,7 +15,6 @@ package eu.europa.ted.efx.exceptions;
 
 import org.antlr.v4.runtime.ParserRuleContext;
 
-import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.variables.Parametrised;
 
 /**
@@ -31,7 +30,7 @@ public class InvalidArgumentException extends EfxCompilationException {
     }
 
     private static final String ARGUMENT_NUMBER_MISMATCH = "Argument number mismatch in call to %s '%s'. Expected %d but got %d.";
-    private static final String ARGUMENT_TYPE_MISMATCH = "Argument type mismatch for argument %d in call to %s '%s'. Expected %s but got %s.";
+    private static final String ARGUMENT_TYPE_MISMATCH = "Type mismatch. %s";
     private static final String UNSUPPORTED_SEQUENCE_TYPE = "Unsupported sequence type '%s' in call to %s.";
     private static final String MISSING_ARGUMENT = "No argument passed for parameter '%s'.";
 
@@ -61,12 +60,16 @@ public class InvalidArgumentException extends EfxCompilationException {
         return argumentNumberMismatch(identifier, expectedNumber, expectedNumber + 1);
     }
 
-    public static InvalidArgumentException argumentTypeMismatch(int position, Parametrised identifier,
-            Class<? extends TypedExpression> expectedType, Class<? extends TypedExpression> actualType) {
-        return new InvalidArgumentException(ErrorCode.ARGUMENT_TYPE_MISMATCH,
-                ARGUMENT_TYPE_MISMATCH, position + 1, identifier.getClass().getSimpleName().toLowerCase(),
-                identifier.name, TypedExpression.getEfxDataType(expectedType).getSimpleName(),
-                TypedExpression.getEfxDataType(actualType).getSimpleName());
+    /**
+     * An argument of a declared function or template that does not fit its parameter.
+     *
+     * @param ctx the call
+     * @param diagnosis what the call gives, and what the argument at fault must be
+     * @return the exception, whose message gives the diagnosis
+     */
+    public static InvalidArgumentException argumentTypeMismatch(ParserRuleContext ctx, Diagnosis diagnosis) {
+        return new InvalidArgumentException(ErrorCode.ARGUMENT_TYPE_MISMATCH, ctx,
+                ARGUMENT_TYPE_MISMATCH, diagnosis.describe());
     }
 
     public static InvalidArgumentException unsupportedSequenceType(ParserRuleContext ctx, String type, String functionName) {

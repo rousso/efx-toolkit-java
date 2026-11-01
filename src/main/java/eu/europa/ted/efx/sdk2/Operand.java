@@ -17,9 +17,12 @@ import java.util.Optional;
 
 import org.antlr.v4.runtime.ParserRuleContext;
 
+import eu.europa.ted.efx.exceptions.Construct;
+import eu.europa.ted.efx.exceptions.Diagnosis;
 import eu.europa.ted.efx.exceptions.TypeMismatchException;
 import eu.europa.ted.efx.model.Context;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
+import eu.europa.ted.efx.model.signatures.Mismatch.Rejection;
 import eu.europa.ted.efx.sdk2.EfxParser.ExpressionContext;
 
 /**
@@ -56,7 +59,8 @@ final class Operand<E extends TypedExpression> {
   }
 
   /**
-   * @return the value of the operand, where a value is required
+   * @return the value of the operand, where a value is required; for an operand that has no value,
+   *         such as a node, its path, which the construct that requires a value rejects
    */
   TypedExpression value() {
     return this.origin.valueOf(this.expression);
@@ -91,18 +95,34 @@ final class Operand<E extends TypedExpression> {
    * operand.
    *
    * @param step the step
+   * @param construct the step as a type error names it, such as "Operator ':rawValue'"
    * @param reader what the step reads from the field
    * @return what the step gives
    */
-  Operand<?> readFromField(final ParserRuleContext step, final Origin.FieldReader reader) {
-    return this.origin.readFromField(this.expression, step, reader);
+  Operand<?> readFromField(final ParserRuleContext step, final Construct construct,
+      final Origin.FieldReader reader) {
+    return this.origin.readFromField(this.expression, step, construct, reader);
   }
 
   /**
-   * @return the error of the operand where it gives a sequence and a single value is required, if
-   *         the operand is written as a reference
+   * Gives the error of the reference the operand is written as, where the reference explains why
+   * a construct rejects the operand: a sequence where a single value is required, or a node, which
+   * has no value, where a value is.
+   *
+   * @param kind what is wrong with the operand
+   * @param diagnosis what the construct was given, and what it requires
+   * @return the error of the reference, or nothing if the construct gives its own
    */
-  Optional<TypeMismatchException> sequenceError() {
-    return this.origin.sequenceError();
+  Optional<TypeMismatchException> errorOf(final Rejection.Kind kind, final Diagnosis diagnosis) {
+    return this.origin.errorOf(kind, diagnosis);
+  }
+
+  /**
+   * @param diagnosis what the construct taking the operand was given, and what it requires
+   * @return the error where the operand has no value, if the operand is written as a reference
+   *         that explains it, such as a context variable that holds a node
+   */
+  Optional<TypeMismatchException> noValueError(final Diagnosis diagnosis) {
+    return this.origin.noValueError(diagnosis);
   }
 }

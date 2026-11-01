@@ -19,6 +19,7 @@ import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.ParseTree;
 
+import eu.europa.ted.efx.exceptions.Construct;
 import eu.europa.ted.efx.exceptions.TranslatorConfigurationException;
 import eu.europa.ted.efx.interfaces.ScriptGenerator;
 import eu.europa.ted.efx.interfaces.SymbolResolver;
@@ -47,6 +48,9 @@ import eu.europa.ted.efx.sdk2.EfxParser.StandardExpressionBlockContext;
  * next.</p>
  */
 abstract class TranslatorListener extends EfxBaseListener {
+
+  /** An expression block, as a type error names it. */
+  protected static final Construct EXPRESSION_BLOCK = Construct.of("Expression block", "expression");
 
   /**
    * Symbols are the field identifiers and node identifiers. The symbols map is used to resolve them
@@ -158,7 +162,7 @@ abstract class TranslatorListener extends EfxBaseListener {
    */
   @Override
   public void exitStandardExpressionBlock(final StandardExpressionBlockContext ctx) {
-    this.stack.push(this.expressions.valueOf(ctx.expression()));
+    this.stack.push(this.expressions.valueOf(ctx.expression(), EXPRESSION_BLOCK));
   }
 
   // #region Parameter Declarations -------------------------------------------

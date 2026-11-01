@@ -2871,6 +2871,107 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
     assertEquals(InvalidUsageException.ErrorCode.INDEX_READS_CONTEXT, exception.getErrorCode());
   }
 
+  // Each type error says what its construct was given, and what the operand at fault must be. One
+  // test for each construct of a template pins its whole message.
+
+  @Test
+  void testTypeErrorMessage_ExpressionBlock() {
+    assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
+        "line 1:12 Type mismatch. Expression block cannot take 'node'."
+            + " Its expression must be a value.",
+        "{ND-Root} ${ND-SubNode}");
+  }
+
+  @Test
+  void testTypeErrorMessage_Variable() {
+    assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
+        "line 1:14 Type mismatch. Variable 'text:$x' cannot take 'number'."
+            + " Its value must be 'text'.",
+        lines("let text:$x = 1;", "{ND-Root} ${$x}"));
+  }
+
+  @Test
+  void testTypeErrorMessage_FunctionDeclaration() {
+    assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
+        "line 1:16 Type mismatch. Function 'text:?f' cannot take 'number'."
+            + " Its value must be 'text'.",
+        lines("let text:?f() = 1;", "{ND-Root} ${?f()}"));
+  }
+
+  @Test
+  void testTypeErrorMessage_When() {
+    assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
+        "line 1:5 Type mismatch. 'when' cannot take 'number'. Its condition must be 'indicator'.",
+        "when 1 display this is one;");
+  }
+
+  @Test
+  void testTypeErrorMessage_Hyperlink() {
+    assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
+        "line 1:24 Type mismatch. Hyperlink cannot take 'number'. Its URL must be 'text'.",
+        "DISPLAY here is a Link@{1};");
+  }
+
+  @Test
+  void testTypeErrorMessage_LabelBlock() {
+    assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
+        "line 1:10 Type mismatch. Label block cannot take 'number'. Its asset id must be 'text'.",
+        "{ND-Root} #{field|name|${1}}");
+  }
+
+  @Test
+  void testTypeErrorMessage_FunctionInvocation() {
+    InvalidArgumentException ex = assertThrows(InvalidArgumentException.class,
+        () -> translateTemplate(lines(
+            "let text:?greeting(text:$name) = concat('Hello ', $name);",
+            "{ND-Root} ${?greeting(1)}")));
+    assertEquals(InvalidArgumentException.ErrorCode.ARGUMENT_TYPE_MISMATCH, ex.getErrorCode());
+    assertEquals("line 2:12 Type mismatch. Function '?greeting' cannot take 'number'."
+        + " Its argument must be 'text'.", ex.getMessage());
+  }
+
+  @Test
+  void testTypeErrorMessage_TemplateInvocation() {
+    InvalidArgumentException ex = assertThrows(InvalidArgumentException.class,
+        () -> translateTemplate(lines(
+            "let template:greeting(text:$name) display Hello ${$name};",
+            "invoke greeting(ND-SubNode);")));
+    assertEquals(InvalidArgumentException.ErrorCode.ARGUMENT_TYPE_MISMATCH, ex.getErrorCode());
+    assertEquals("line 2:0 Type mismatch. Template 'greeting' cannot take 'node'."
+        + " Its argument must be 'text'.", ex.getMessage());
+  }
+
+  @Test
+  void testTypeErrorMessage_PreferredLanguage_NotAField() {
+    assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
+        "line 1:12 Type mismatch. Function 'preferred-language' cannot take 'text'."
+            + " Its argument must be a field reference.",
+        "{ND-Root} ${preferred-language('a')}");
+  }
+
+  @Test
+  void testTypeErrorMessage_PreferredLanguage_NotMultilingual() {
+    assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
+        "line 1:12 Type mismatch. Function 'preferred-language' cannot take 'text'."
+            + " Its argument must be a multilingual field.",
+        "{ND-Root} ${preferred-language(BT-00-Text)}");
+  }
+
+  @Test
+  void testPreferredLanguageFunction_FilteredField_AsThePostfixForm() {
+    assertEquals(
+        translateTemplate("{ND-Root} ${BT-00-Text-Multilingual[BT-00-Text == 'a']:preferredLanguage}"),
+        translateTemplate("{ND-Root} ${preferred-language(BT-00-Text-Multilingual[BT-00-Text == 'a'])}"));
+  }
+
+  private void assertTypeError(final TypeMismatchException.ErrorCode code, final String message,
+      final String template) {
+    TypeMismatchException ex = assertThrows(TypeMismatchException.class,
+        () -> translateTemplate(template));
+    assertEquals(code, ex.getErrorCode());
+    assertEquals(message, ex.getMessage());
+  }
+
   // #endregion TypeMismatchException ------------------------------------------
 
   // #region Repeatable Fields in Expression Blocks ----------------------------

@@ -16,6 +16,7 @@ package eu.europa.ted.efx.model.signatures;
 import eu.europa.ted.efx.interfaces.TypeChecker;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.signatures.Mismatch.Rejection;
+import eu.europa.ted.efx.model.types.EfxTypeTokenLookup;
 
 /**
  * A parameter type that names one expression class, such as a number or a sequence of texts. An
@@ -50,6 +51,15 @@ final class ConcreteParameterType implements ParameterType {
             ? Rejection.Kind.CARDINALITY
             : Rejection.Kind.PRIMITIVE)
         .orElse(Rejection.Kind.PATH);
+  }
+
+  /**
+   * Names the type in quotes, as a declaration writes it.
+   */
+  @Override
+  public String describe() {
+    return "'" + EfxTypeTokenLookup.nameOf(TypedExpression.getEfxDataType(this.expressionType))
+        + "'";
   }
 
   @Override

@@ -26,9 +26,15 @@ import eu.europa.ted.efx.model.signatures.Mismatch.Rejection;
 final class PathParameterType implements ParameterType {
 
   private final Class<? extends PathExpression> pathType;
+  private final String description;
 
-  PathParameterType(final Class<? extends PathExpression> pathType) {
+  /**
+   * @param pathType the class of the paths this type takes
+   * @param description what it takes, as a type error says it, such as "a field reference"
+   */
+  PathParameterType(final Class<? extends PathExpression> pathType, final String description) {
     this.pathType = pathType;
+    this.description = description;
   }
 
   @Override
@@ -45,6 +51,11 @@ final class PathParameterType implements ParameterType {
   @Override
   public Rejection.Kind rejectionKindOf(final TypedExpression argument) {
     return Rejection.Kind.PATH;
+  }
+
+  @Override
+  public String describe() {
+    return this.description;
   }
 
   @Override

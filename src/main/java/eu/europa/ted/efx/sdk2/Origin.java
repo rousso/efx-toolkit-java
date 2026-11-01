@@ -13,10 +13,13 @@
  */
 package eu.europa.ted.efx.sdk2;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.antlr.v4.runtime.ParserRuleContext;
 
+import eu.europa.ted.efx.exceptions.Construct;
+import eu.europa.ted.efx.exceptions.Diagnosis;
 import eu.europa.ted.efx.exceptions.InvalidIdentifierException;
 import eu.europa.ted.efx.exceptions.TypeMismatchException;
 import eu.europa.ted.efx.model.Context;
@@ -25,6 +28,7 @@ import eu.europa.ted.efx.model.Context.NodeContext;
 import eu.europa.ted.efx.model.expressions.PathExpression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.expressions.scalar.BooleanExpression;
+import eu.europa.ted.efx.model.signatures.Mismatch.Rejection;
 import eu.europa.ted.efx.model.types.FieldTypes;
 import eu.europa.ted.efx.sdk2.EfxParser.ExpressionContext;
 
@@ -35,9 +39,10 @@ import eu.europa.ted.efx.sdk2.EfxParser.ExpressionContext;
  *
  * <p>Each kind answers, for the translated expression of the operand, the questions its parent
  * asks: what its value is, what context it names for the reference after {@code ::}, what a
- * bracket after it means, whether a step that reads a field may follow it, and which error to
- * give when it gives a sequence where a single value is required. The defaults are those of an
- * operand written as anything but a reference.</p>
+ * bracket after it means, whether a step that reads a field may follow it, and which error explains
+ * why a construct rejects it: a sequence where a single value is required, or a node, which has no
+ * value, where a value is. The defaults are those of an operand written as anything but a
+ * reference.</p>
  *
  * @param <E> the class of the expressions of this kind: a path for a field or a node
  */
@@ -56,6 +61,11 @@ abstract class Origin<E extends TypedExpression> {
     Operand<?> read(PathExpression field, FieldOrigin origin);
   }
 
+  /**
+   * What a step that only a field has takes, as a type error says it.
+   */
+  private static final String FIELD_REFERENCE = "a field reference";
+
   protected final EfxExpressionVisitor translator;
 
   protected Origin(final EfxExpressionVisitor translator) {
@@ -64,7 +74,8 @@ abstract class Origin<E extends TypedExpression> {
 
   /**
    * @param expression the translated operand
-   * @return its value, where an operator, a built-in, a declaration or a clause takes it
+   * @return its value, where an operator, a built-in, a declaration or a clause takes it; for an
+   *         operand that has no value, such as a node, its path, which the construct rejects
    */
   TypedExpression valueOf(final E expression) {
     return expression;
@@ -104,13 +115,15 @@ abstract class Origin<E extends TypedExpression> {
    *
    * @param expression the translated operand
    * @param step the step
+   * @param construct the step as a type error names it, such as "Operator ':rawValue'"
    * @param reader what the step reads from the field
    * @return what the step gives
    * @throws TypeMismatchException if the operand is not a field
    */
   Operand<?> readFromField(final E expression, final ParserRuleContext step,
-      final FieldReader reader) {
-    throw TypeMismatchException.cannotConvert(step, PathExpression.class, expression.getClass());
+      final Construct construct, final FieldReader reader) {
+    throw TypeMismatchException.cannotConvert(step,
+        new Diagnosis(construct, List.of(expression), 0, List.of(FIELD_REFERENCE)));
   }
 
   /**
@@ -122,10 +135,40 @@ abstract class Origin<E extends TypedExpression> {
   }
 
   /**
+   * Gives the error of the reference the operand is written as, where the reference explains why
+   * a construct rejects the operand.
+   *
+   * @param kind what is wrong with the operand
+   * @param diagnosis what the construct was given, and what it requires
+   * @return the error of the reference, or nothing if the construct gives its own
+   */
+  final Optional<TypeMismatchException> errorOf(final Rejection.Kind kind,
+      final Diagnosis diagnosis) {
+    switch (kind) {
+      case CARDINALITY:
+        return this.sequenceError(diagnosis);
+      case PATH:
+        return this.noValueError(diagnosis);
+      default:
+        return Optional.empty();
+    }
+  }
+
+  /**
+   * @param diagnosis what the construct taking the operand was given, and what it requires
    * @return the error where the operand gives a sequence and a single value is required, if the
    *         operand is written as a reference that it names
    */
-  Optional<TypeMismatchException> sequenceError() {
+  Optional<TypeMismatchException> sequenceError(final Diagnosis diagnosis) {
+    return Optional.empty();
+  }
+
+  /**
+   * @param diagnosis what the construct taking the operand was given, and what it requires
+   * @return the error where the operand has no value and a value is required, if the operand is
+   *         written as a reference that it names
+   */
+  Optional<TypeMismatchException> noValueError(final Diagnosis diagnosis) {
     return Optional.empty();
   }
 
@@ -156,8 +199,13 @@ abstract class Origin<E extends TypedExpression> {
     }
 
     @Override
-    Optional<TypeMismatchException> sequenceError() {
-      return this.reference.sequenceError();
+    Optional<TypeMismatchException> sequenceError(final Diagnosis diagnosis) {
+      return this.reference.sequenceError(diagnosis);
+    }
+
+    @Override
+    Optional<TypeMismatchException> noValueError(final Diagnosis diagnosis) {
+      return this.reference.noValueError(diagnosis);
     }
   }
 
@@ -194,8 +242,8 @@ abstract class Origin<E extends TypedExpression> {
   }
 
   /**
-   * A field. Its value is the value step on its path. It records the context it is read in, which
-   * its error names.
+   * A field. Its value is the value step on its path. It records the context it is read from,
+   * which its error names.
    */
   static final class FieldOrigin extends PathOrigin {
 
@@ -203,12 +251,18 @@ abstract class Origin<E extends TypedExpression> {
     private final String fieldId;
     private final String contextSymbol;
 
+    /**
+     * @param translator the visitor
+     * @param reference the reference to the field
+     * @param fieldId the field
+     * @param contextSymbol the context the field is read from, or {@code null} for the root
+     */
     FieldOrigin(final EfxExpressionVisitor translator, final ParserRuleContext reference,
-        final String fieldId) {
+        final String fieldId, final String contextSymbol) {
       super(translator);
       this.reference = reference;
       this.fieldId = fieldId;
-      this.contextSymbol = translator.efxContext().symbol();
+      this.contextSymbol = contextSymbol;
     }
 
     @Override
@@ -224,7 +278,7 @@ abstract class Origin<E extends TypedExpression> {
 
     @Override
     Operand<?> readFromField(final PathExpression path, final ParserRuleContext step,
-        final FieldReader reader) {
+        final Construct construct, final FieldReader reader) {
       return reader.read(path, this);
     }
 
@@ -239,13 +293,14 @@ abstract class Origin<E extends TypedExpression> {
     }
 
     @Override
-    Optional<TypeMismatchException> sequenceError() {
+    Optional<TypeMismatchException> sequenceError(final Diagnosis diagnosis) {
       if (FieldTypes.TEXT_MULTILINGUAL.getName()
           .equals(this.translator.symbols().getTypeOfField(this.fieldId))) {
-        return Optional.of(TypeMismatchException.fieldIsMultilingual(this.reference, this.fieldId));
+        return Optional.of(
+            TypeMismatchException.fieldIsMultilingual(this.reference, diagnosis, this.fieldId));
       }
-      return Optional.of(
-          TypeMismatchException.fieldMayRepeat(this.reference, this.fieldId, this.contextSymbol));
+      return Optional.of(TypeMismatchException.fieldMayRepeat(this.reference, diagnosis,
+          this.fieldId, this.contextSymbol));
     }
   }
 
@@ -302,8 +357,9 @@ abstract class Origin<E extends TypedExpression> {
     }
 
     @Override
-    Optional<TypeMismatchException> sequenceError() {
-      return Optional.of(TypeMismatchException.identifierIsSequence(this.reference, this.name));
+    Optional<TypeMismatchException> sequenceError(final Diagnosis diagnosis) {
+      return Optional.of(
+          TypeMismatchException.identifierIsSequence(this.reference, diagnosis, this.name));
     }
   }
 
@@ -325,8 +381,10 @@ abstract class Origin<E extends TypedExpression> {
 
   /**
    * A context variable: it holds one element of the field or the node it iterates, so it names
-   * that field or node as a context. A field context variable is a value of its field; a node
-   * context variable has no value.
+   * that field or node as a context. A field context variable is a value of its field. A node
+   * context variable has no value: where a value is required, its path is given as it is, the
+   * construct that requires the value rejects it, and the error says that the variable holds a
+   * node. Where a node is taken, as {@code count} takes one, the variable gives its node.
    */
   static final class ContextVariableOrigin extends IdentifierOrigin<PathExpression> {
 
@@ -339,12 +397,12 @@ abstract class Origin<E extends TypedExpression> {
     }
 
     @Override
-    TypedExpression valueOf(final PathExpression variable) {
+    Optional<TypeMismatchException> noValueError(final Diagnosis diagnosis) {
       if (this.context.isNodeContext()) {
-        throw TypeMismatchException.nodeContextUsedAsValue(this.reference, this.name,
-            this.context.symbol());
+        return Optional.of(TypeMismatchException.nodeContextUsedAsValue(this.reference, diagnosis,
+            this.name, this.context.symbol()));
       }
-      return variable;
+      return Optional.empty();
     }
 
     /**
@@ -400,7 +458,7 @@ abstract class Origin<E extends TypedExpression> {
 
     @Override
     Operand<?> readFromField(final TypedExpression expression, final ParserRuleContext step,
-        final FieldReader reader) {
+        final Construct construct, final FieldReader reader) {
       throw InvalidIdentifierException.undeclaredIdentifier(this.reference, this.name);
     }
   }
@@ -421,8 +479,9 @@ abstract class Origin<E extends TypedExpression> {
     }
 
     @Override
-    Optional<TypeMismatchException> sequenceError() {
-      return Optional.of(TypeMismatchException.dictionaryIsSequence(this.reference, this.name));
+    Optional<TypeMismatchException> sequenceError(final Diagnosis diagnosis) {
+      return Optional.of(
+          TypeMismatchException.dictionaryIsSequence(this.reference, diagnosis, this.name));
     }
   }
 
