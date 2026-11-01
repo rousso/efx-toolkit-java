@@ -52,8 +52,7 @@ public enum EfxDataType {
    * @return the data type that stands for it, or nothing for a node
    */
   static Optional<EfxDataType> of(final ParameterType parameterType) {
-    final Class<? extends eu.europa.ted.efx.model.types.EfxDataType> type =
-        TypedExpression.getEfxDataType(parameterType.getExpressionType());
+    final var type = TypedExpression.getEfxDataType(parameterType.getExpressionType());
     return Arrays.stream(values()).filter(value -> value.type.isAssignableFrom(type)).findFirst();
   }
 }

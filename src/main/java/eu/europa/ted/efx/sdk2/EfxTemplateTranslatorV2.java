@@ -113,9 +113,9 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
 
   /**
    * The variable that the translator's own loops bind each item to: the numbers, durations,
-   * dates and times it formats and the asset ids of a label. Like every name the translator
-   * generates, it starts with a prefix that no declaration may give, so it hides no variable of
-   * the template.
+   * dates and times it formats and the asset ids of a label. It starts with the prefix that no
+   * declaration may give, so it cannot hide a variable of the template that a label's asset type
+   * or label type reads inside the loop.
    */
   private static final String ITEM_VARIABLE = CallStackV2.RESERVED_PREFIX + "item";
 
@@ -849,6 +849,16 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
   }
 
   /**
+   * Returns the variable that a label's loop binds each of its asset ids to.
+   */
+  private Variable composeAssetIdVariable() {
+    return new Variable(ITEM_VARIABLE,
+        this.script.composeVariableDeclaration(ITEM_VARIABLE, StringExpression.class),
+        StringExpression.empty(),
+        this.script.composeVariableReference(ITEM_VARIABLE, StringExpression.class));
+  }
+
+  /**
    * Renders a sequence of labels from a standard label reference.
    * 
    * @param ctx             The ParserRuleContext of the standard label reference.
@@ -865,10 +875,7 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
         ? this.labelPart(ctx, StringExpression.class, ASSET_TYPE)
         : this.script.getStringLiteralFromUnquotedString("");
 
-    Variable loopVariable = new Variable(ITEM_VARIABLE,
-        this.script.composeVariableDeclaration(ITEM_VARIABLE, StringExpression.class),
-        StringExpression.empty(),
-        this.script.composeVariableReference(ITEM_VARIABLE, StringExpression.class));
+    Variable loopVariable = this.composeAssetIdVariable();
 
     StringSequenceExpression keys = this.script.composeDistinctValuesFunction(
         this.script.composeForExpression(
@@ -944,10 +951,7 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
     final String fieldType = this.symbols.getTypeOfField(fieldId);
     final PathExpression valueReference = this.expressions.fieldValueOf(fieldId,
         this.symbols.getRelativePathOfField(fieldId, currentContext.symbol()));
-    Variable loopVariable = new Variable(ITEM_VARIABLE,
-        this.script.composeVariableDeclaration(ITEM_VARIABLE, StringExpression.class),
-        StringExpression.empty(),
-        this.script.composeVariableReference(ITEM_VARIABLE, StringExpression.class));
+    Variable loopVariable = this.composeAssetIdVariable();
     switch (fieldType) {
       case "indicator": {
         StringSequenceExpression keys = this.script.composeDistinctValuesFunction(
