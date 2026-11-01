@@ -388,8 +388,10 @@ class EfxInvalidOperationV2Test extends EfxTestsBase {
             "Conditional 'if' cannot take 'time', 'number' and 'number'"),
         typeError("if P1D then 1 else 2", CANNOT_CONVERT,
             "Conditional 'if' cannot take 'duration', 'number' and 'number'"),
+        typeError("if 1 then [1] else 2", CANNOT_CONVERT,
+            "Conditional 'if' cannot take 'number', 'number*' and 'number'"),
 
-        // The two branches of if ... then ... else have the same type
+        // The two branches of if ... then ... else have the same primitive
         typeError("if TRUE then 1 else 'a'", CANNOT_CONVERT,
             "Conditional 'if' cannot take 'indicator', 'number' and 'text'"),
         typeError("if TRUE then 'a' else BT-00-Number", CANNOT_CONVERT,
@@ -406,6 +408,10 @@ class EfxInvalidOperationV2Test extends EfxTestsBase {
             "Conditional 'if' cannot take 'indicator', 'number*' and 'text*'"),
         typeError("if TRUE then 1 else ['a']", CANNOT_CONVERT,
             "Conditional 'if' cannot take 'indicator', 'number' and 'text*'"),
+        typeError("if TRUE then ['a'] else 1", CANNOT_CONVERT,
+            "Conditional 'if' cannot take 'indicator', 'text*' and 'number'"),
+        typeError("if TRUE then BT-00-Repeatable-Number else 'a'", CANNOT_CONVERT,
+            "Conditional 'if' cannot take 'indicator', 'number*' and 'text'"),
 
         // The body of every ... satisfies and some ... satisfies is a boolean
         typeError("every text:$x in ['a', 'b'] satisfies $x", CANNOT_CONVERT,
