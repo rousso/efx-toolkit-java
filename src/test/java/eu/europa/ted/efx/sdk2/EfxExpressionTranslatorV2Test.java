@@ -17,7 +17,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
-import org.antlr.v4.runtime.misc.ParseCancellationException;
 import org.junit.jupiter.api.Test;
 import eu.europa.ted.efx.EfxTestsBase;
 import eu.europa.ted.efx.exceptions.InvalidIdentifierException;
@@ -458,8 +457,9 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testFieldValueComparison_TypeMismatch() {
-    assertThrows(ParseCancellationException.class,
-        () -> translateExpressionWithContext("ND-Root", "00:01:00 > BT-00-StartDate"));
+    TypeMismatchException exception = assertThrows(TypeMismatchException.class,
+        () -> translateExpressionWithContext("ND-Root", "00:01:00Z > BT-00-StartDate"));
+    assertEquals(TypeMismatchException.ErrorCode.INCOMPATIBLE_OPERANDS, exception.getErrorCode());
   }
 
 
@@ -881,8 +881,10 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testConditionalStringExpression_UsingFieldReferences_TypeMismatch() {
-    assertThrows(ParseCancellationException.class, () -> translateExpressionWithContext("ND-Root",
-        "if 'a' > 'b' then BT-00-StartDate else BT-00-Text"));
+    TypeMismatchException exception = assertThrows(TypeMismatchException.class,
+        () -> translateExpressionWithContext("ND-Root",
+            "if 'a' > 'b' then BT-00-StartDate else BT-00-Text"));
+    assertEquals(TypeMismatchException.ErrorCode.CANNOT_CONVERT, exception.getErrorCode());
   }
 
   @Test
@@ -1614,8 +1616,9 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testNumericList_UsingTextField() {
-    assertThrows(ParseCancellationException.class,
+    TypeMismatchException exception = assertThrows(TypeMismatchException.class,
         () -> translateExpressionWithContext("BT-00-Text", "4 in [1, BT-00-Text, 3]"));
+    assertEquals(TypeMismatchException.ErrorCode.CANNOT_CONVERT, exception.getErrorCode());
   }
 
   @Test
@@ -1984,8 +1987,9 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   void testNotFunction() {
     testExpressionTranslationWithContext("not(true())", "BT-00-Text", "not(ALWAYS)");
     testExpressionTranslationWithContext("not(1 + 1 = 2)", "BT-00-Text", "not(1 + 1 == 2)");
-    assertThrows(ParseCancellationException.class,
+    TypeMismatchException exception = assertThrows(TypeMismatchException.class,
         () -> translateExpressionWithContext("BT-00-Text", "not('text')"));
+    assertEquals(TypeMismatchException.ErrorCode.CANNOT_CONVERT, exception.getErrorCode());
   }
 
   @Test
@@ -2051,9 +2055,26 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testLinkedFieldProperty_onNonWithholdableField() {
-    assertThrows(ParseCancellationException.class,
+    InvalidUsageException exception = assertThrows(InvalidUsageException.class,
         () -> translateExpressionWithContext("BT-00-Text",
             "BT-00-Text:publicationDate is present"));
+    assertEquals(InvalidUsageException.ErrorCode.FIELD_NOT_WITHHOLDABLE, exception.getErrorCode());
+  }
+
+  @Test
+  void testLinkedFieldProperty_justificationCode_onNonWithholdableField() {
+    InvalidUsageException exception = assertThrows(InvalidUsageException.class,
+        () -> translateExpressionWithContext("BT-00-Text",
+            "BT-00-Text:justificationCode is present"));
+    assertEquals(InvalidUsageException.ErrorCode.FIELD_NOT_WITHHOLDABLE, exception.getErrorCode());
+  }
+
+  @Test
+  void testLinkedFieldProperty_justificationDescription_onNonWithholdableField() {
+    InvalidUsageException exception = assertThrows(InvalidUsageException.class,
+        () -> translateExpressionWithContext("BT-00-Text",
+            "BT-00-Text:justificationDescription is present"));
+    assertEquals(InvalidUsageException.ErrorCode.FIELD_NOT_WITHHOLDABLE, exception.getErrorCode());
   }
 
   @Test
@@ -2822,8 +2843,9 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testTrimFunction_WithRepeatableField_Throws() {
-    assertThrows(ParseCancellationException.class,
+    TypeMismatchException exception = assertThrows(TypeMismatchException.class,
         () -> translateExpressionWithContext("ND-Root", "trim(BT-00-Repeatable-Text)"));
+    assertEquals(TypeMismatchException.ErrorCode.FIELD_MAY_REPEAT, exception.getErrorCode());
   }
 
   @Test
@@ -2962,8 +2984,9 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testUrlEncodeFunction_WithRepeatableField_Throws() {
-    assertThrows(ParseCancellationException.class,
+    TypeMismatchException exception = assertThrows(TypeMismatchException.class,
         () -> translateExpression("{ND-Root} ${url-encode(ND-Root)}"));
+    assertEquals(TypeMismatchException.ErrorCode.CANNOT_CONVERT, exception.getErrorCode());
   }
 
   @Test
@@ -2982,8 +3005,9 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testCapitalizeFirstFunction_WithRepeatableField_Throws() {
-    assertThrows(ParseCancellationException.class,
+    TypeMismatchException exception = assertThrows(TypeMismatchException.class,
         () -> translateExpression("{ND-Root} ${capitalize-first(ND-Root)}"));
+    assertEquals(TypeMismatchException.ErrorCode.CANNOT_CONVERT, exception.getErrorCode());
   }
 
   @Test
@@ -3624,8 +3648,9 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testUnionFunction_WithTypeMismatch() {
-    assertThrows(ParseCancellationException.class,
+    TypeMismatchException exception = assertThrows(TypeMismatchException.class,
         () -> translateExpressionWithContext("ND-Root", "value-union(BT-00-Text, BT-00-Number)"));
+    assertEquals(TypeMismatchException.ErrorCode.CANNOT_CONVERT, exception.getErrorCode());
   }
 
   // #endregion: Union
@@ -3764,8 +3789,10 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testIntersectFunction_WithTypeMismatch() {
-    assertThrows(ParseCancellationException.class, () -> translateExpressionWithContext("ND-Root",
-        "value-intersect(BT-00-Text, BT-00-Number)"));
+    TypeMismatchException exception = assertThrows(TypeMismatchException.class,
+        () -> translateExpressionWithContext("ND-Root",
+            "value-intersect(BT-00-Text, BT-00-Number)"));
+    assertEquals(TypeMismatchException.ErrorCode.CANNOT_CONVERT, exception.getErrorCode());
   }
 
   // #endregion: Intersect
@@ -3935,8 +3962,9 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testExceptFunction_WithTypeMismatch() {
-    assertThrows(ParseCancellationException.class,
+    TypeMismatchException exception = assertThrows(TypeMismatchException.class,
         () -> translateExpressionWithContext("ND-Root", "value-except(BT-00-Text, BT-00-Number)"));
+    assertEquals(TypeMismatchException.ErrorCode.CANNOT_CONVERT, exception.getErrorCode());
   }
 
   // #endregion: Except
@@ -4557,7 +4585,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testParameterizedExpression_WithUnquotedStringParameter() {
-    assertThrows(ParseCancellationException.class,
+    assertSyntaxError(
         () -> translateExpression("{ND-Root, text:$p1, text:$p2} ${$p1 == $p2}", "hello", "world"));
   }
 
@@ -6352,8 +6380,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testSelector_RejectsValueExpression() {
-    assertThrows(ParseCancellationException.class,
-        () -> translateExpression("WITH ND-Root SELECT BT-00-Text == 'x'"));
+    assertSyntaxError(() -> translateExpression("WITH ND-Root SELECT BT-00-Text == 'x'"));
   }
 
 
