@@ -1732,14 +1732,14 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   @Override
   public Operand<?> visitPreferredLanguageFunction(final PreferredLanguageFunctionContext ctx) {
     return this.preferredLanguage(ctx, ctx.expression(), TemplateFunctions.PREFERRED_LANGUAGE,
-        Construct.function(TemplateFunctions.PREFERRED_LANGUAGE.getName(), 1));
+        Construct.function(ctx.PreferredLanguageFunction().getText(), 1));
   }
 
   @Override
   public Operand<?> visitPreferredLanguageTextFunction(
       final PreferredLanguageTextFunctionContext ctx) {
     return this.preferredLanguage(ctx, ctx.expression(), TemplateFunctions.PREFERRED_LANGUAGE_TEXT,
-        Construct.function(TemplateFunctions.PREFERRED_LANGUAGE_TEXT.getName(), 1));
+        Construct.function(ctx.PreferredLanguageTextFunction().getText(), 1));
   }
 
   // Date, time and duration functions
@@ -1840,16 +1840,18 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   /**
    * Translates a call of a built-in function with {@link #builtIn}: its operands are the
    * expressions of its grammar label, in order, read as values, and an argument of the wrong
-   * primitive cannot be converted.
+   * primitive cannot be converted. A type error names the function as the call writes it, which
+   * may be another name of the built-in, as {@code string} is of {@code text}.
    *
-   * @param call the call
+   * @param call the call, which starts with the name of the function
    * @param function the built-in called
    * @return the result of the call
    */
   private Operand<?> call(final ParserRuleContext call, final BuiltIn function) {
     final List<Operand<?>> operands = this.operandsOf(call);
-    return this.builtIn(call, function, Construct.function(function.getName(), operands.size()),
-        operands, Operand::value, TypeMismatchException::cannotConvert);
+    return this.builtIn(call, function,
+        Construct.function(call.getStart().getText(), operands.size()), operands, Operand::value,
+        TypeMismatchException::cannotConvert);
   }
 
   /**

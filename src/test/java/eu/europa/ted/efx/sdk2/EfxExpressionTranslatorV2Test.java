@@ -5014,6 +5014,14 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   }
 
   @Test
+  void testTypeErrorMessage_Function_NamedAsWritten() {
+    assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
+        "line 1:12 Type mismatch. Function 'string' cannot take 'text'."
+            + " Its argument must be 'number', 'indicator', 'date', 'time' or 'duration'.",
+        "string('a')");
+  }
+
+  @Test
   void testTypeErrorMessage_ConditionOperator() {
     assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
         "line 1:12 Type mismatch. Operator 'is present' cannot take 'text'."
