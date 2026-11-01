@@ -51,7 +51,8 @@ public final class FunctionCompletions {
    * Gives the completion items of a built-in function.
    *
    * @param function a built-in whose {@link BuiltIn#isFunction()} is {@code true}
-   * @return its items, in the order of its overloads and of the value types {@code T} takes
+   * @return its items, one for each form that is not folded into another, in the order of the
+   *     overloads and of the value types {@code T} takes
    */
   public static List<CompletionItem> itemsOf(final BuiltIn function) {
     return new FunctionCompletions(function).items();
