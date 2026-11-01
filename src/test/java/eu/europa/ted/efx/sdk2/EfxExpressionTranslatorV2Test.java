@@ -16,6 +16,7 @@ package eu.europa.ted.efx.sdk2;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import java.util.List;
 import org.antlr.v4.runtime.misc.ParseCancellationException;
 import org.junit.jupiter.api.Test;
 import eu.europa.ted.efx.EfxTestsBase;
@@ -4926,11 +4927,10 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   }
 
   @Test
-  void testSequenceFromNodeContextVariable_ThrowsNodeCannotBeValue() {
-    // A node context variable used in count() should throw
-    TypeMismatchException ex = assertThrows(TypeMismatchException.class,
-        () -> translateExpressionWithContext("ND-Root", "for context:$n in ND-SubNode return count($n)"));
-    assertEquals(TypeMismatchException.ErrorCode.NODE_CONTEXT_AS_VALUE, ex.getErrorCode());
+  void testCountOfNodeContextVariable_CountsItsNode() {
+    // count takes nodes, so a node context variable gives its node, as count(ND-SubNode) does
+    testExpressionTranslationWithContext("for $n in SubNode return count($n)", "ND-Root",
+        "for context:$n in ND-SubNode return count($n)");
   }
 
   // #endregion: TypeMismatchException - nodeCannotBeValue
@@ -4947,6 +4947,166 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   }
 
   // #endregion: TypeMismatchException - fieldMayRepeat (Context Variables)
+
+  // #region: TypeMismatchException - messages ---------------------------------
+
+  // Each type error says what its construct was given, and what the operand at fault must be. One
+  // test for each construct pins its whole message.
+
+  @Test
+  void testTypeErrorMessage_ComparisonOperator() {
+    assertTypeError(TypeMismatchException.ErrorCode.INCOMPATIBLE_OPERANDS,
+        "line 1:12 Type mismatch. Operator '==' cannot take 'text' and 'number'."
+            + " Its right operand must be 'text'.",
+        "'a' == 1");
+  }
+
+  @Test
+  void testTypeErrorMessage_ArithmeticOperator_GivesEveryTypeThePositionTakes() {
+    assertTypeError(TypeMismatchException.ErrorCode.INCOMPATIBLE_OPERANDS,
+        "line 1:12 Type mismatch. Operator '+' cannot take 'text' and 'number'."
+            + " Its left operand must be 'number', 'duration' or 'date'.",
+        "'a' + 1");
+  }
+
+  @Test
+  void testTypeErrorMessage_Function() {
+    assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
+        "line 1:12 Type mismatch. Function 'number' cannot take 'date'."
+            + " Its argument must be 'text' or 'indicator'.",
+        "number(2020-01-01Z)");
+  }
+
+  @Test
+  void testTypeErrorMessage_Function_Sequence() {
+    assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
+        "line 1:12 Type mismatch. Function 'upper-case' cannot take 'text*'."
+            + " Its argument must be 'text'.",
+        "upper-case(['a'])");
+  }
+
+  @Test
+  void testTypeErrorMessage_ConditionOperator() {
+    assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
+        "line 1:12 Type mismatch. Operator 'is present' cannot take 'text'."
+            + " Its operand must be a field or node reference.",
+        "'a' is present");
+  }
+
+  @Test
+  void testTypeErrorMessage_Conditional() {
+    assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
+        "line 1:15 Type mismatch. Conditional 'if' cannot take 'text', 'number' and 'number'."
+            + " Its condition must be 'indicator'.",
+        "if 'a' then 1 else 2");
+  }
+
+  @Test
+  void testTypeErrorMessage_List() {
+    assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
+        "line 1:16 Type mismatch. List cannot take 'number' and 'text'."
+            + " Its 2nd item must be 'number'.",
+        "[1, 'a']");
+  }
+
+  @Test
+  void testTypeErrorMessage_Iterator() {
+    assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
+        "line 1:29 Type mismatch. Iterator 'number:$n' cannot take 'text*'."
+            + " Its sequence must be 'number*'.",
+        "for number:$n in ['a'] return $n");
+  }
+
+  @Test
+  void testTypeErrorMessage_Bracket() {
+    assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
+        "line 1:34 Type mismatch. Bracket cannot take 'text*' and 'text'."
+            + " Its content must be 'indicator' or 'number'.",
+        "BT-00-Repeatable-Text[BT-00-Text]");
+  }
+
+  @Test
+  void testTypeErrorMessage_Parentheses() {
+    assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
+        "line 1:12 Type mismatch. Parenthesised expression cannot take 'node'."
+            + " Its content must be a value.",
+        "(ND-SubNode)");
+  }
+
+  @Test
+  void testTypeErrorMessage_ContextOverride() {
+    assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
+        "line 1:12 Type mismatch. Operator '::' cannot take 'text'."
+            + " Its left operand must be a field or node reference.",
+        "'a'::BT-00-Text");
+  }
+
+  @Test
+  void testTypeErrorMessage_StepOfAField() {
+    assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
+        "line 1:12 Type mismatch. Operator ':rawValue' cannot take 'text'."
+            + " Its operand must be a field reference.",
+        "'a':rawValue");
+  }
+
+  @Test
+  void testTypeErrorMessage_FieldMayRepeat() {
+    assertTypeError(TypeMismatchException.ErrorCode.FIELD_MAY_REPEAT,
+        "line 1:12 Type mismatch. Operator '==' cannot take 'text*' and 'text'."
+            + " Its left operand must be 'text'. Field 'BT-00-Repeatable-Text' may return"
+            + " multiple values from context 'ND-Root': use a sequence expression or change the"
+            + " context.",
+        "BT-00-Repeatable-Text == 'x'");
+  }
+
+  @Test
+  void testTypeErrorMessage_FieldMayRepeat_AbsoluteReference_NamesTheRoot() {
+    assertTypeError(TypeMismatchException.ErrorCode.FIELD_MAY_REPEAT,
+        "line 1:12 Type mismatch. Operator '==' cannot take 'text*' and 'text'."
+            + " Its left operand must be 'text'. Field 'BT-00-Repeatable-Text' may return"
+            + " multiple values from the root: use a sequence expression or change the context.",
+        "/BT-00-Repeatable-Text == 'x'");
+  }
+
+  @Test
+  void testTypeErrorMessage_FieldIsMultilingual() {
+    assertTypeError(TypeMismatchException.ErrorCode.FIELD_IS_MULTILINGUAL,
+        "line 1:12 Type mismatch. Operator '==' cannot take 'text*' and 'text'."
+            + " Its left operand must be 'text'. Field 'BT-00-Text-Multilingual' is multilingual"
+            + " and has one value per language: use :preferredLanguageText to select the"
+            + " preferred language, or an index [n] to select a specific value.",
+        "BT-00-Text-Multilingual == 'x'");
+  }
+
+  @Test
+  void testTypeErrorMessage_NodeContextVariable() {
+    assertTypeError(TypeMismatchException.ErrorCode.NODE_CONTEXT_AS_VALUE,
+        "line 1:48 Type mismatch. Operator '==' cannot take 'node' and 'text'."
+            + " Its left operand must be a value. Context variable '$n' refers to node"
+            + " 'ND-SubNode', which has no value: only field context variables can be used as"
+            + " values.",
+        "for context:$n in ND-SubNode return $n == 'test'");
+  }
+
+  @Test
+  void testTypeErrorCode_PairWrongInPrimitiveAndCardinality_WhicheverSideTheSequenceIsOn() {
+    for (String expression : List.of("BT-00-Repeatable-Text == 1", "1 == BT-00-Repeatable-Text")) {
+      TypeMismatchException ex = assertThrows(TypeMismatchException.class,
+          () -> translateExpressionWithContext("ND-Root", expression));
+      assertEquals(TypeMismatchException.ErrorCode.INCOMPATIBLE_OPERANDS, ex.getErrorCode(),
+          expression);
+    }
+  }
+
+  private void assertTypeError(final TypeMismatchException.ErrorCode code, final String message,
+      final String expression) {
+    TypeMismatchException ex = assertThrows(TypeMismatchException.class,
+        () -> translateExpressionWithContext("ND-Root", expression));
+    assertEquals(code, ex.getErrorCode());
+    assertEquals(message, ex.getMessage());
+  }
+
+  // #endregion: TypeMismatchException - messages
 
   // #region: Context Override Syntax Tests ------------------------------------
 

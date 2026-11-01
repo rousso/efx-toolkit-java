@@ -34,24 +34,27 @@ import eu.europa.ted.efx.model.types.EfxTypeLattice;
  */
 enum TypeVariableParameterType implements ParameterType {
 
-  SCALAR("T", ScalarExpression.class, ScalarExpression.fromEfxDataType),
+  SCALAR("T", "a value", ScalarExpression.class, ScalarExpression.fromEfxDataType),
 
-  SEQUENCE("T*", SequenceExpression.class, SequenceExpression.fromEfxDataType);
+  SEQUENCE("T*", "a sequence of values", SequenceExpression.class,
+      SequenceExpression.fromEfxDataType);
 
   private static final List<Class<? extends EfxDataType.Primitive>> VALUE_PRIMITIVES = List.of(
       EfxDataType.String.class, EfxDataType.Boolean.class, EfxDataType.Number.class,
       EfxDataType.Date.class, EfxDataType.Time.class, EfxDataType.Duration.class);
 
   private final String symbol;
+  private final String description;
   private final Class<? extends TypedExpression> expressionType;
   private final Map<Class<? extends EfxDataType.Primitive>,
       ? extends Class<? extends TypedExpression>> expressionTypes;
 
-  TypeVariableParameterType(final String symbol,
+  TypeVariableParameterType(final String symbol, final String description,
       final Class<? extends TypedExpression> expressionType,
       final Map<Class<? extends EfxDataType.Primitive>,
           ? extends Class<? extends TypedExpression>> expressionTypes) {
     this.symbol = symbol;
+    this.description = description;
     this.expressionType = expressionType;
     this.expressionTypes = expressionTypes;
   }
@@ -107,6 +110,14 @@ enum TypeVariableParameterType implements ParameterType {
   @Override
   public Rejection.Kind rejectionKindOf(final TypedExpression argument) {
     return Rejection.Kind.PATH;
+  }
+
+  /**
+   * An unbound type variable takes a value of any primitive, which a node is not.
+   */
+  @Override
+  public String describe() {
+    return this.description;
   }
 
   @Override

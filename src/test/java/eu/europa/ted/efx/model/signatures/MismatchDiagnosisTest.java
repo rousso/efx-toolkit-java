@@ -26,19 +26,25 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import eu.europa.ted.efx.exceptions.Construct;
 import eu.europa.ted.efx.model.expressions.Expression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
+import eu.europa.ted.efx.model.expressions.scalar.DateExpression;
+import eu.europa.ted.efx.model.expressions.scalar.DateLiteral;
 import eu.europa.ted.efx.model.expressions.scalar.NodePath;
 import eu.europa.ted.efx.model.expressions.scalar.NumericExpression;
+import eu.europa.ted.efx.model.expressions.scalar.NumericLiteral;
 import eu.europa.ted.efx.model.expressions.scalar.StringExpression;
 import eu.europa.ted.efx.model.expressions.scalar.StringLiteral;
+import eu.europa.ted.efx.model.expressions.sequence.DateSequencePath;
 import eu.europa.ted.efx.model.expressions.sequence.StringSequencePath;
 import eu.europa.ted.efx.model.signatures.Mismatch.Rejection;
 
 /**
- * Tests that the rejection a mismatch reports does not depend on the order of the overloads: the
- * one at the furthest position wins, and among those a cardinality failure comes before a
- * primitive one, and a primitive failure before a path one.
+ * Tests that the rejection a mismatch reports does not depend on the order of the overloads, nor on
+ * which argument of a call wrong in two ways comes first: an overload that rejects only a
+ * cardinality wins, then the one at the furthest position, and at the same position a primitive
+ * failure comes before a path one. Also tests what the diagnosis of a mismatch says.
  */
 class MismatchDiagnosisTest {
 
@@ -48,6 +54,12 @@ class MismatchDiagnosisTest {
       Expression.instantiate("$repeatable", StringSequencePath.class);
   private static final NodePath NODE =
       Expression.instantiate("$node", NodePath.class);
+  private static final NumericLiteral NUMBER_LITERAL =
+      Expression.instantiate("1", NumericLiteral.class);
+  private static final DateLiteral DATE =
+      Expression.instantiate("$date", DateLiteral.class);
+  private static final DateSequencePath REPEATABLE_DATE_FIELD =
+      Expression.instantiate("$repeatableDate", DateSequencePath.class);
 
   private static final Overload NUMBER_THEN_TEXT = overload(
       signature(parameter("first", ParameterType.NUMBER), parameter("second", ParameterType.TEXT))
@@ -71,10 +83,10 @@ class MismatchDiagnosisTest {
   @Test
   void testFurthestPositionAndCardinalityWin_WhateverTheOrderOfTheOverloads() {
     for (List<Overload> overloads : orders(NUMBER_THEN_TEXT, TEXT_THEN_TEXT, TEXT_THEN_NUMBER)) {
-      Rejection diagnosis = diagnosis(overloads, TEXT, REPEATABLE_TEXT_FIELD);
-      assertEquals(1, diagnosis.getPosition(), overloads::toString);
-      assertEquals(Rejection.Kind.CARDINALITY, diagnosis.getKind(), overloads::toString);
-      assertEquals(StringExpression.class, diagnosis.getRequired().getExpressionType(),
+      Rejection rejection = rejection(overloads, TEXT, REPEATABLE_TEXT_FIELD);
+      assertEquals(1, rejection.getPosition(), overloads::toString);
+      assertEquals(Rejection.Kind.CARDINALITY, rejection.getKind(), overloads::toString);
+      assertEquals(StringExpression.class, rejection.getRequired().getExpressionType(),
           overloads::toString);
     }
   }
@@ -82,37 +94,69 @@ class MismatchDiagnosisTest {
   @Test
   void testPrimitiveWinsOverPath_WhateverTheOrderOfTheOverloads() {
     for (List<Overload> overloads : orders(NUMBER, NODES)) {
-      Rejection diagnosis = diagnosis(overloads, TEXT);
-      assertEquals(Rejection.Kind.PRIMITIVE, diagnosis.getKind(), overloads::toString);
-      assertEquals(NumericExpression.class, diagnosis.getRequired().getExpressionType(),
+      Rejection rejection = rejection(overloads, TEXT);
+      assertEquals(Rejection.Kind.PRIMITIVE, rejection.getKind(), overloads::toString);
+      assertEquals(NumericExpression.class, rejection.getRequired().getExpressionType(),
           overloads::toString);
     }
   }
 
   @Test
   void testNodeWhereAValueIsRequired_IsAPathFailure() {
-    assertEquals(Rejection.Kind.PATH, diagnosis(List.of(NUMBER), NODE).getKind());
+    assertEquals(Rejection.Kind.PATH, rejection(List.of(NUMBER), NODE).getKind());
   }
 
   @Test
   void testSequenceWhereASingleValueOfItsPrimitiveIsRequired_IsACardinalityFailure() {
-    Rejection diagnosis = ComparisonOperators.EQUAL.resolve(List.of(REPEATABLE_TEXT_FIELD, TEXT))
-        .getMismatch().getDiagnosis();
-    assertEquals(0, diagnosis.getPosition());
-    assertEquals(Rejection.Kind.CARDINALITY, diagnosis.getKind());
+    Rejection rejection = ComparisonOperators.EQUAL.resolve(List.of(REPEATABLE_TEXT_FIELD, TEXT))
+        .getMismatch().getRejection();
+    assertEquals(0, rejection.getPosition());
+    assertEquals(Rejection.Kind.CARDINALITY, rejection.getKind());
   }
 
   @Test
-  void testArityMismatch_HasNoDiagnosis() {
-    Mismatch mismatch = StringFunctions.SUBSTRING.resolve(List.of(TEXT)).getMismatch();
-    assertThrows(IllegalStateException.class, mismatch::getDiagnosis);
+  void testPairWrongInPrimitiveAndCardinality_IsAPrimitiveFailure_WhicheverSideTheSequenceIsOn() {
+    for (List<TypedExpression> arguments : List.<List<TypedExpression>>of(
+        List.of(REPEATABLE_TEXT_FIELD, NUMBER_LITERAL),
+        List.of(NUMBER_LITERAL, REPEATABLE_TEXT_FIELD))) {
+      Rejection rejection =
+          ComparisonOperators.EQUAL.resolve(arguments).getMismatch().getRejection();
+      assertEquals(1, rejection.getPosition(), arguments::toString);
+      assertEquals(Rejection.Kind.PRIMITIVE, rejection.getKind(), arguments::toString);
+    }
   }
 
-  private static Rejection diagnosis(final List<Overload> overloads,
+  @Test
+  void testSequenceOfDatesMinusADate_IsACardinalityFailure() {
+    // The date - date overload fits but for the cardinality of the left operand, so that is
+    // reported, not that the right operand must be a duration.
+    Rejection rejection = ArithmeticOperators.MINUS.resolve(List.of(REPEATABLE_DATE_FIELD, DATE))
+        .getMismatch().getRejection();
+    assertEquals(0, rejection.getPosition());
+    assertEquals(Rejection.Kind.CARDINALITY, rejection.getKind());
+    assertEquals(DateExpression.class, rejection.getRequired().getExpressionType());
+  }
+
+  @Test
+  void testDiagnosis_GivesEveryTypeTheRejectedPositionTakes_InCatalogueOrder() {
+    assertEquals(
+        "Operator '+' cannot take 'text' and 'number'. "
+            + "Its left operand must be 'number', 'duration' or 'date'.",
+        ArithmeticOperators.PLUS.resolve(List.of(TEXT, NUMBER_LITERAL)).getMismatch()
+            .diagnose(Construct.operator("+", 2)).describe());
+  }
+
+  @Test
+  void testArityMismatch_HasNoRejection() {
+    Mismatch mismatch = StringFunctions.SUBSTRING.resolve(List.of(TEXT)).getMismatch();
+    assertThrows(IllegalStateException.class, mismatch::getRejection);
+  }
+
+  private static Rejection rejection(final List<Overload> overloads,
       final TypedExpression... arguments) {
     Resolution resolution = new TestBuiltIn(overloads).resolve(List.of(arguments));
     assertFalse(resolution.isResolved());
-    return resolution.getMismatch().getDiagnosis();
+    return resolution.getMismatch().getRejection();
   }
 
   /**

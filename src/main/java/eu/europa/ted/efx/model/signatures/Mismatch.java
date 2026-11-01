@@ -17,15 +17,17 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import eu.europa.ted.efx.exceptions.Construct;
+import eu.europa.ted.efx.exceptions.Diagnosis;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 
 /**
  * Why no overload of a {@link BuiltIn} applies to the arguments of a call: either no overload
  * takes that many arguments, or each overload that does rejects one of them.
  *
- * <p>A mismatch keeps the arguments and, for each overload of the right arity, the first position
- * it rejected. Its {@link #getDiagnosis diagnosis} is what the translator needs to raise the error
- * a call deserves.</p>
+ * <p>A mismatch keeps the arguments and, for each overload of the right arity, the argument it
+ * rejected. Its {@link #getRejection rejection} tells the translator which argument to report, and
+ * its {@link #diagnose diagnosis} what the error says about it.</p>
  */
 public final class Mismatch {
 
@@ -57,25 +59,51 @@ public final class Mismatch {
   }
 
   /**
-   * @return for each overload that takes that many arguments, the first argument it rejected
+   * @return for each overload that takes that many arguments, the argument it rejected
    */
   public List<Rejection> getRejections() {
     return this.rejections;
   }
 
   /**
-   * Gives the rejection that explains the mismatch, whatever the order of the overloads: the one
-   * at the furthest position, and among those a cardinality failure before a primitive one, and a
-   * primitive failure before a path one.
+   * Gives the rejection that explains the mismatch, whatever the order of the overloads.
+   *
+   * <p>An overload that rejects only a cardinality, since every primitive of the call fits it,
+   * explains the mismatch before any overload that rejects a primitive or a path. Among the rest,
+   * the rejection at the furthest position explains it, and at the same position a primitive
+   * failure before a path one.</p>
    *
    * @return the rejection to report
    * @throws IllegalStateException if the mismatch is the number of arguments
    */
-  public Rejection getDiagnosis() {
+  public Rejection getRejection() {
     return this.rejections.stream()
-        .min(Comparator.comparingInt(Rejection::getPosition).reversed()
+        .min(Comparator
+            .comparing((Rejection rejection) -> rejection.getKind() != Rejection.Kind.CARDINALITY)
+            .thenComparing(Comparator.comparingInt(Rejection::getPosition).reversed())
             .thenComparing(Rejection::getKind))
         .orElseThrow(() -> new IllegalStateException(this.toString()));
+  }
+
+  /**
+   * Says what the error of the mismatch says: the construct the built-in is written as, with the
+   * types of all the arguments, and every type the position of the {@link #getRejection
+   * rejection} takes. Those are the types required by all the overloads that reject the same
+   * position in the same way, in the order of the catalogue, each once.
+   *
+   * @param construct the built-in as the call writes it, such as "Operator '+'"
+   * @return the diagnosis of the mismatch
+   * @throws IllegalStateException if the mismatch is the number of arguments
+   */
+  public Diagnosis diagnose(final Construct construct) {
+    final Rejection reported = this.getRejection();
+    final List<String> requirements = this.rejections.stream()
+        .filter(rejection -> rejection.getPosition() == reported.getPosition()
+            && rejection.getKind() == reported.getKind())
+        .map(rejection -> rejection.getRequired().describe())
+        .distinct()
+        .collect(Collectors.toList());
+    return new Diagnosis(construct, this.arguments, reported.getPosition(), requirements);
   }
 
   @Override
@@ -95,7 +123,7 @@ public final class Mismatch {
   }
 
   /**
-   * The first argument an overload rejected.
+   * The argument an overload rejected: the one {@link Parameters#match} reports.
    */
   public static final class Rejection {
 
@@ -140,11 +168,12 @@ public final class Mismatch {
      * @return what is wrong with the argument
      */
     public Kind getKind() {
-      return this.getRequired().rejectionKindOf(this.getArgument());
+      return this.match.getKind();
     }
 
     /**
-     * What is wrong with a rejected argument, in the order in which a mismatch reports them.
+     * What is wrong with a rejected argument, in the order in which a mismatch reports them at
+     * the same position.
      */
     public enum Kind {
 

@@ -16,6 +16,7 @@ package eu.europa.ted.efx.model.signatures;
 import static eu.europa.ted.efx.model.signatures.Parameter.parameter;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -23,6 +24,7 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import eu.europa.ted.efx.model.expressions.TypedExpression;
+import eu.europa.ted.efx.model.signatures.Mismatch.Rejection;
 import eu.europa.ted.efx.model.types.EfxDataType;
 import eu.europa.ted.efx.model.variables.ParsedParameters;
 
@@ -36,6 +38,15 @@ import eu.europa.ted.efx.model.variables.ParsedParameters;
  * first position of {@code T} before the arguments are checked against them.</p>
  */
 public final class Parameters {
+
+  /**
+   * The order in which the rejected arguments of a call are reported: any argument of the wrong
+   * primitive, or not the path required, before a sequence where a single value is required, and
+   * then by position.
+   */
+  private static final Comparator<Match> REPORTING_ORDER =
+      Comparator.comparing((Match rejection) -> rejection.getKind() == Rejection.Kind.CARDINALITY)
+          .thenComparingInt(Match::getPosition);
 
   private final List<Parameter> fixed;
   private final Parameter variadic;
@@ -104,8 +115,15 @@ public final class Parameters {
    * first position, checks each argument against its parameter, and converts the arguments to the
    * expression classes of their parameters.
    *
+   * <p>Every argument is checked before one is reported, and a wrong primitive or path is reported
+   * before a wrong cardinality: the first argument of another primitive than its parameter's, or
+   * that is not the path its parameter requires, and only if there is none, the first sequence
+   * where a single value is required. A call wrong in both ways is thus reported by its primitive,
+   * whichever of its arguments is the sequence.</p>
+   *
    * @param arguments the translated arguments of the call
-   * @return the converted arguments, or the first reason they do not match
+   * @return the converted arguments, or the reason they do not match: their number, a {@code T}
+   *         that the argument at its first position cannot bind, or the argument to report
    */
   public Match match(final List<? extends TypedExpression> arguments) {
     if (!this.takes(arguments.size())) {
@@ -141,18 +159,27 @@ public final class Parameters {
   }
 
   private Match matchBound(final List<? extends TypedExpression> arguments) {
+    return IntStream.range(0, arguments.size())
+        .filter(position -> !this.typeAt(position).accepts(arguments.get(position)))
+        .mapToObj(
+            position -> Match.rejected(position, this.typeAt(position), arguments.get(position)))
+        .min(REPORTING_ORDER)
+        .orElseGet(() -> this.converted(arguments));
+  }
+
+  private Match converted(final List<? extends TypedExpression> arguments) {
     List<TypedExpression> values = new ArrayList<>();
     List<Class<? extends TypedExpression>> types = new ArrayList<>();
     for (int position = 0; position < arguments.size(); position++) {
-      ParameterType type = this.parameterAt(position).getType();
-      TypedExpression argument = arguments.get(position);
-      if (!type.accepts(argument)) {
-        return Match.rejected(position, type, argument);
-      }
-      values.add(type.convert(argument));
+      ParameterType type = this.typeAt(position);
+      values.add(type.convert(arguments.get(position)));
       types.add(type.getExpressionType());
     }
     return Match.of(new Arguments(values, types));
+  }
+
+  private ParameterType typeAt(final int position) {
+    return this.parameterAt(position).getType();
   }
 
   private Optional<Parameters> boundTo(final List<? extends TypedExpression> arguments) {

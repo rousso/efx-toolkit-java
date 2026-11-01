@@ -93,13 +93,14 @@ public interface ParameterType {
   ParameterType T_SEQUENCE = TypeVariableParameterType.SEQUENCE;
 
   /** A reference to a field or a node, taken as a path rather than as its value. */
-  ParameterType PATH = new PathParameterType(PathExpression.class);
+  ParameterType PATH = new PathParameterType(PathExpression.class, "a field or node reference");
 
   /** A reference to a node, repeatable or not, taken as the sequence of nodes it selects. */
-  ParameterType NODES = new PathParameterType(NodeSequencePath.class);
+  ParameterType NODES = new PathParameterType(NodeSequencePath.class, "a node reference");
 
   /** A reference to a multilingual text field, taken as a path. */
-  ParameterType MULTILINGUAL_FIELD = new PathParameterType(MultilingualStringSequencePath.class);
+  ParameterType MULTILINGUAL_FIELD =
+      new PathParameterType(MultilingualStringSequencePath.class, "a multilingual field");
 
   /**
    * Gives the parameter type of a value expression class, such as the class of a parameter
@@ -171,6 +172,15 @@ public interface ParameterType {
    * @return the kind of the rejection
    */
   Mismatch.Rejection.Kind rejectionKindOf(TypedExpression argument);
+
+  /**
+   * Says what this parameter type takes, as a type error says it: a type in quotes, as a
+   * declaration writes it, such as {@code 'text'} or {@code 'number*'}, or a phrase, such as
+   * "a value" or "a field or node reference".
+   *
+   * @return the words for what this parameter type takes
+   */
+  String describe();
 
   /**
    * Converts an accepted argument to {@link #getExpressionType()}, as
