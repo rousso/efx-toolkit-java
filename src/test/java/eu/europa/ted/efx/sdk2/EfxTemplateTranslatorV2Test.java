@@ -538,7 +538,8 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testDictionaryLookup_InIndexOnPath() {
-    // The index is read from each element of the path, which a lookup can start from
+    // A lookup reads the root, which each element of the path reads the same, so the position is
+    // not bound
     assertEquals(
         lines(
             "GLOBALS:",
@@ -549,7 +550,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
             "for-each(/*).call(body01())"),
         translateTemplate(lines(
             "let $d index BT-00-Text by BT-00-Text;",
-            "{ND-Root} ${BT-00-Repeatable-Text[count($d['x'])]}")));
+            "{ND-Root} ${BT-00-Repeatable-Text[at count($d['x'])]}")));
   }
 
   @Test
@@ -565,7 +566,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
             "for-each(/*).call(body01())"),
         translateTemplate(lines(
             "let $d index BT-00-Text by BT-00-Text;",
-            "{ND-Root} ${for context:$c in ND-Root return [1, 2][count($c::BT-00-Repeatable-Text[count($d['x']) == 1])]}")));
+            "{ND-Root} ${for context:$c in ND-Root return [1, 2][at count($c::BT-00-Repeatable-Text[count($d['x']) == 1])]}")));
   }
 
   // #endregion Globals --------------------------------------------------------
@@ -2322,7 +2323,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
         lines("TEMPLATES:",
             "let body01() -> { eval(efx:preferred-language((SubNode/RepeatableInSubNode/TextMultilingual)[1])) }",
             "MAIN:", "for-each(/*).call(body01())"),
-        translateTemplate("{/} ${preferred-language(BT-13-TextMultilingual[1])}"));
+        translateTemplate("{/} ${preferred-language(BT-13-TextMultilingual[at 1])}"));
   }
 
   @Test
@@ -2331,7 +2332,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
         lines("TEMPLATES:",
             "let body01() -> { eval(efx:preferred-language-text((SubNode/RepeatableInSubNode/TextMultilingual)[1])) }",
             "MAIN:", "for-each(/*).call(body01())"),
-        translateTemplate("{/} ${preferred-language-text(BT-13-TextMultilingual[1])}"));
+        translateTemplate("{/} ${preferred-language-text(BT-13-TextMultilingual[at 1])}"));
   }
 
   @Test
@@ -2340,7 +2341,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
         lines("TEMPLATES:",
             "let body01() -> { eval(efx:preferred-language-text((SubNode/RepeatableInSubNode/TextMultilingual['a' = 'a'])[1])) }",
             "MAIN:", "for-each(/*).call(body01())"),
-        translateTemplate("{/} ${preferred-language-text(BT-13-TextMultilingual['a' == 'a'][1])}"));
+        translateTemplate("{/} ${preferred-language-text(BT-13-TextMultilingual['a' == 'a'][at 1])}"));
   }
 
   @Test
@@ -2417,7 +2418,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
         lines("TEMPLATES:",
             "let body01() -> { eval(efx:preferred-language((SubNode/RepeatableInSubNode/TextMultilingual)[1])) }",
             "MAIN:", "for-each(/*).call(body01())"),
-        translateTemplate("{/} ${BT-13-TextMultilingual[1]:preferredLanguage}"));
+        translateTemplate("{/} ${BT-13-TextMultilingual[at 1]:preferredLanguage}"));
   }
 
   @Test
@@ -2426,7 +2427,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
         lines("TEMPLATES:",
             "let body01() -> { eval(efx:preferred-language-text((SubNode/RepeatableInSubNode/TextMultilingual)[1])) }",
             "MAIN:", "for-each(/*).call(body01())"),
-        translateTemplate("{/} ${BT-13-TextMultilingual[1]:preferredLanguageText}"));
+        translateTemplate("{/} ${BT-13-TextMultilingual[at 1]:preferredLanguageText}"));
   }
 
   @Test
@@ -2435,7 +2436,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
         lines("TEMPLATES:",
             "let body01() -> { eval(efx:preferred-language-text((SubNode/RepeatableInSubNode/TextMultilingual['a' = 'a'])[1])) }",
             "MAIN:", "for-each(/*).call(body01())"),
-        translateTemplate("{/} ${BT-13-TextMultilingual['a' == 'a'][1]:preferredLanguageText}"));
+        translateTemplate("{/} ${BT-13-TextMultilingual['a' == 'a'][at 1]:preferredLanguageText}"));
   }
 
   @Test
@@ -2827,6 +2828,29 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
   }
 
   @Test
+  void testDictionaryName_WithIndex_Throws() {
+    // The name of a dictionary has no value that an index could select from
+    var template = lines(
+        "let $dic index BT-00-Number by BT-00-Text;",
+        "display ${$dic[at 1]};");
+    InvalidIdentifierException exception =
+        assertThrows(InvalidIdentifierException.class, () -> translateTemplate(template));
+    assertEquals(InvalidIdentifierException.ErrorCode.UNDECLARED_IDENTIFIER,
+        exception.getErrorCode());
+  }
+
+  @Test
+  void testVariableDeclaration_ReservedName_Throws() {
+    var template = lines(
+        "let text:$__index = 'a';",
+        "display ${$__index};");
+    InvalidIdentifierException exception =
+        assertThrows(InvalidIdentifierException.class, () -> translateTemplate(template));
+    assertEquals(InvalidIdentifierException.ErrorCode.IDENTIFIER_IS_RESERVED,
+        exception.getErrorCode());
+  }
+
+  @Test
   void testComputedExpressionBlock_Node_Throws() {
     assertThrows(TypeMismatchException.class,
         () -> translateTemplate("{ND-Root} ${ND-SubNode}"));
@@ -2855,26 +2879,55 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
   }
 
   @Test
-  void testVariableDeclaration_IndexOnListReadingAField_Throws() {
+  void testVariableDeclaration_IndexOnListReadingAField() {
     // No context is declared for a global variable: the field is read from the root, which the
-    // target language would do for each value of the list
+    // target language would do for each value of the list, so the position is bound first
     var template = lines(
-        "let number:$n = [1, 2][BT-00-Number];",
+        "let number:$n = [1, 2][at BT-00-Number];",
         "display ${$n};");
-    InvalidUsageException exception =
-        assertThrows(InvalidUsageException.class, () -> translateTemplate(template));
-    assertEquals(InvalidUsageException.ErrorCode.INDEX_READS_CONTEXT, exception.getErrorCode());
+    assertEquals(
+        lines(
+            "GLOBALS:",
+            "decimal:n=(for $__index in /*/PathNode/NumberField/number() return (1,2)[$__index])",
+            "TEMPLATES:",
+            "let body01() -> { eval(for $item in $n return format-number($item, '# ##0,#########')) }",
+            "MAIN:",
+            "for-each(/*).call(body01())"),
+        translateTemplate(template));
   }
 
   @Test
-  void testDictionaryLookup_InIndexOnList_Throws() {
-    // A lookup starts from the root, which the target language would read for each value
+  void testVariable_IndexReadingAField() {
+    var template = lines(
+        "let text*:$list = ['a', 'b'];",
+        "{ND-Root} ${$list[at BT-00-Number]}");
+    assertEquals(
+        lines(
+            "GLOBALS:",
+            "string*:list=('a','b')",
+            "TEMPLATES:",
+            "let body01() -> { eval((for $__index in PathNode/NumberField/number() return $list[$__index])) }",
+            "MAIN:",
+            "for-each(/*).call(body01())"),
+        translateTemplate(template));
+  }
+
+  @Test
+  void testDictionaryLookup_InIndexOnList() {
+    // A lookup starts from the root, which the target language would read for each value, so the
+    // position is bound first
     var template = lines(
         "let $d index BT-00-Text by BT-00-Text;",
-        "{ND-Root} ${[1, 2][count($d['x'])]}");
-    InvalidUsageException exception =
-        assertThrows(InvalidUsageException.class, () -> translateTemplate(template));
-    assertEquals(InvalidUsageException.ErrorCode.INDEX_READS_CONTEXT, exception.getErrorCode());
+        "{ND-Root} ${[1, 2][at count($d['x'])]}");
+    assertEquals(
+        lines(
+            "GLOBALS:",
+            "let d index /*/PathNode/TextField by ./normalize-space(text());",
+            "TEMPLATES:",
+            "let body01() -> { eval(for $item in (for $__index in count(key('d', 'x')) return (1,2)[$__index]) return format-number($item, '# ##0,#########')) }",
+            "MAIN:",
+            "for-each(/*).call(body01())"),
+        translateTemplate(template));
   }
 
   // Each type error says what its construct was given, and what the operand at fault must be. One
@@ -3174,7 +3227,35 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
             "let body01() -> { eval(./normalize-space(text())) }",
             "MAIN:",
             "for-each((/*/PathNode/RepeatableTextField)[1]).call(body01())"),
-        translateTemplate("{BT-00-Repeatable-Text[1]} ${BT-00-Repeatable-Text}"));
+        translateTemplate("{BT-00-Repeatable-Text[at 1]} ${BT-00-Repeatable-Text}"));
+  }
+
+  @Test
+  void testContextDeclaration_WithFieldContextIndexReadingAField() {
+    // No context is declared above the line, so the field is read from the root, as the target
+    // language would read it for each element, and the position is bound first
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01() -> { eval(./normalize-space(text())) }",
+            "MAIN:",
+            "for-each((for $__index in /*/PathNode/NumberField/number() return (/*/PathNode/RepeatableTextField)[$__index])).call(body01())"),
+        translateTemplate("{BT-00-Repeatable-Text[at BT-00-Number]} ${BT-00-Repeatable-Text}"));
+  }
+
+  @Test
+  void testContextDeclaration_Nested_WithFieldContextIndexReadingAField() {
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01() -> { #1: eval(PathNode/TextField/normalize-space(text()))",
+            "for-each(../(for $__index in /*/PathNode/NumberField/number() return (/*/PathNode/RepeatableTextField)[$__index])).call(body0101()) }",
+            "let body0101() -> { eval(./normalize-space(text())) }",
+            "MAIN:",
+            "for-each(/*).call(body01())"),
+        translateTemplate(lines(
+            "{ND-Root} ${BT-00-Text}",
+            "  {BT-00-Repeatable-Text[at BT-00-Number]} ${BT-00-Repeatable-Text}")));
   }
 
   @Test
@@ -3196,7 +3277,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
             "let body01() -> { eval(./normalize-space(text())) }",
             "MAIN:",
             "for-each((/*/PathNode/RepeatableTextField['a' = 'a'])[1]).call(body01())"),
-        translateTemplate("{BT-00-Repeatable-Text['a' == 'a'][1]} ${BT-00-Repeatable-Text}"));
+        translateTemplate("{BT-00-Repeatable-Text['a' == 'a'][at 1]} ${BT-00-Repeatable-Text}"));
   }
 
   @Test
@@ -3218,7 +3299,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
             "let body01() -> { eval(./normalize-space(text())) }",
             "MAIN:",
             "for-each((/*/PathNode/RepeatableTextField)[1]).call(body01())"),
-        translateTemplate("{/BT-00-Repeatable-Text[1]} ${BT-00-Repeatable-Text}"));
+        translateTemplate("{/BT-00-Repeatable-Text[at 1]} ${BT-00-Repeatable-Text}"));
   }
 
   // #endregion: fieldContext structural variations in template context declarations

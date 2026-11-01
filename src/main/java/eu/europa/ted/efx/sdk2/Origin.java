@@ -39,10 +39,10 @@ import eu.europa.ted.efx.sdk2.EfxParser.ExpressionContext;
  *
  * <p>Each kind answers, for the translated expression of the operand, the questions its parent
  * asks: what its value is, what context it names for the reference after {@code ::}, what a
- * bracket after it means, whether a step that reads a field may follow it, and which error explains
- * why a construct rejects it: a sequence where a single value is required, or a node, which has no
- * value, where a value is. The defaults are those of an operand written as anything but a
- * reference.</p>
+ * predicate or an index after it means, whether a step that reads a field may follow it, and which
+ * error explains why a construct rejects it: a sequence where a single value is required, or a
+ * node, which has no value, where a value is. The defaults are those of an operand written as
+ * anything but a reference.</p>
  *
  * @param <E> the class of the expressions of this kind: a path for a field or a node
  */
@@ -98,15 +98,28 @@ abstract class Origin<E extends TypedExpression> {
   }
 
   /**
-   * Translates a bracket after the operand. A bracket after a value is a position in the sequence
-   * of its values.
+   * Translates a predicate after the operand. A value has no elements that the condition could be
+   * read from, so a predicate after it is rejected.
    *
    * @param expression the translated operand
-   * @param content the content of the bracket
-   * @return the operand the bracket selects
+   * @param condition the condition of the predicate
+   * @return the operand the predicate selects
+   * @throws TypeMismatchException unless the operand is a field or a node
    */
-  Operand<?> indexedBy(final E expression, final ExpressionContext content) {
-    return this.translator.positionInValue(new Operand<>(expression, this), content);
+  Operand<?> filteredBy(final E expression, final ExpressionContext condition) {
+    throw this.translator.predicateOnValue(new Operand<>(expression, this), condition);
+  }
+
+  /**
+   * Translates an index after the operand: the value at a position in the sequence of its values.
+   * A single value is a sequence of one.
+   *
+   * @param expression the translated operand
+   * @param position the position the index selects
+   * @return the value at that position
+   */
+  Operand<?> indexedBy(final E expression, final ExpressionContext position) {
+    return this.translator.positionInValue(new Operand<>(expression, this), position);
   }
 
   /**
@@ -214,7 +227,8 @@ abstract class Origin<E extends TypedExpression> {
   // #region Fields and nodes -------------------------------------------------
 
   /**
-   * A field or a node: a path, whose elements a bracket after it filters or selects.
+   * A field or a node: a path, whose elements a predicate after it filters and an index after it
+   * selects one of.
    */
   abstract static class PathOrigin extends Origin<PathExpression> {
 
@@ -223,13 +237,18 @@ abstract class Origin<E extends TypedExpression> {
     }
 
     @Override
-    Operand<?> indexedBy(final PathExpression path, final ExpressionContext content) {
-      return this.translator.positionInPath(path, this, content);
+    Operand<?> filteredBy(final PathExpression path, final ExpressionContext condition) {
+      return this.translator.filtered(path, this, condition);
+    }
+
+    @Override
+    Operand<?> indexedBy(final PathExpression path, final ExpressionContext position) {
+      return this.translator.positionInPath(path, this, position);
     }
 
     /**
-     * Pushes the context that the content of a bracket after the path is read in: the field or
-     * the node, as each element it selects.
+     * Pushes the context that the condition of a predicate after the path is read in: the field
+     * or the node, as each element it selects.
      */
     abstract void pushElementContext();
 
@@ -422,7 +441,8 @@ abstract class Origin<E extends TypedExpression> {
 
   /**
    * A name that is not declared as a variable, a parameter or a context variable. It is not a
-   * value: it may only name a dictionary, which a bracket after it looks a key up in.
+   * value: it may only name a dictionary, which a key in brackets after it is looked up in. An
+   * index after it reads its value, and is rejected.
    */
   static final class DictionaryNameOrigin extends Origin<TypedExpression> {
 
@@ -452,7 +472,7 @@ abstract class Origin<E extends TypedExpression> {
     }
 
     @Override
-    Operand<?> indexedBy(final TypedExpression expression, final ExpressionContext key) {
+    Operand<?> filteredBy(final TypedExpression expression, final ExpressionContext key) {
       return this.translator.lookUp(this.name, this.reference, key);
     }
 

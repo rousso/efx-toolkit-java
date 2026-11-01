@@ -44,19 +44,16 @@ public class TypeMismatchException extends EfxCompilationException {
     private static final String CANNOT_CONVERT = "Type mismatch. Expected %s instead of %s.";
     private static final String CANNOT_COMPARE = "Type mismatch. Cannot compare values of different types: %s and %s.";
 
-    /** Sentences 1 and 2 of a diagnosis. */
+    /** A diagnosis: its two sentences, the reason the operand gives, if any, and its suggestion. */
     private static final String DIAGNOSED = "Type mismatch. %s";
-
-    /** Sentences 1 and 2 of a diagnosis, and the reason the operand gives. */
-    private static final String DIAGNOSED_BECAUSE = "Type mismatch. %s %s";
 
     private static final String FIELD_MAY_REPEAT = "Field '%s' may return multiple values from %s: use a sequence expression or change the context.";
     private static final String FROM_CONTEXT = "context '%s'";
     private static final String FROM_ROOT = "the root";
-    private static final String FIELD_IS_MULTILINGUAL = "Field '%s' is multilingual and has one value per language: use :preferredLanguageText to select the preferred language, or an index [n] to select a specific value.";
+    private static final String FIELD_IS_MULTILINGUAL = "Field '%s' is multilingual and has one value per language: use :preferredLanguageText to select the preferred language, or an index [at n] to select a specific value.";
     private static final String NODE_CONTEXT_AS_VALUE = "Context variable '$%s' refers to node '%s', which has no value: only field context variables can be used as values.";
     private static final String IDENTIFIER_IS_SEQUENCE = "Variable '$%s' is declared as a sequence.";
-    private static final String DICTIONARY_IS_SEQUENCE = "Dictionary lookup '$%s' returns a sequence: use an index to select a single value, as in $%s['key'][1].";
+    private static final String DICTIONARY_IS_SEQUENCE = "Dictionary lookup '$%s' returns a sequence: use an index to select a single value, as in $%s['key'][at 1].";
 
     private final ErrorCode errorCode;
 
@@ -217,6 +214,6 @@ public class TypeMismatchException extends EfxCompilationException {
 
     private static TypeMismatchException diagnosed(ErrorCode errorCode, ParserRuleContext ctx,
             Diagnosis diagnosis, String reason) {
-        return new TypeMismatchException(errorCode, ctx, DIAGNOSED_BECAUSE, diagnosis.describe(), reason);
+        return new TypeMismatchException(errorCode, ctx, DIAGNOSED, diagnosis.describe(reason));
     }
 }

@@ -40,6 +40,7 @@ final class Operands {
   private final Construct construct;
   private final List<Operand<?>> operands;
   private final List<TypedExpression> values;
+  private final List<String> suggestions;
 
   /**
    * @param construct the construct, as a type error names it
@@ -48,9 +49,21 @@ final class Operands {
    */
   Operands(final Construct construct, final List<? extends Operand<?>> operands,
       final List<? extends TypedExpression> values) {
+    this(construct, operands, values, List.of());
+  }
+
+  /**
+   * @param construct the construct, as a type error names it
+   * @param operands its operands, in order
+   * @param values the value the construct reads from each operand, in the same order
+   * @param suggestions what its errors suggest writing instead, each a sentence
+   */
+  Operands(final Construct construct, final List<? extends Operand<?>> operands,
+      final List<? extends TypedExpression> values, final List<String> suggestions) {
     this.construct = construct;
     this.operands = List.copyOf(operands);
     this.values = List.copyOf(values);
+    this.suggestions = List.copyOf(suggestions);
   }
 
   /**
@@ -106,7 +119,8 @@ final class Operands {
       final ParserRuleContext where) {
     final TypedExpression value = this.values.get(position);
     final Diagnosis diagnosis = new Diagnosis(this.construct, this.values, position,
-        takes.stream().map(ParameterType::describe).collect(Collectors.toList()));
+        takes.stream().map(ParameterType::describe).collect(Collectors.toList()),
+        this.suggestions);
     return takes.stream()
         .map(type -> type.rejectionKindOf(value))
         .min(Comparator.naturalOrder())

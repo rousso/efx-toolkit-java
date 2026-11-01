@@ -30,7 +30,7 @@ final class TranslationContext {
 
   private final SymbolResolver symbols;
   private final ScriptGenerator script;
-  private final CallStack stack = new CallStack();
+  private final CallStack stack = new CallStackV2();
   private final ContextStack efxContext;
 
   TranslationContext(final SymbolResolver symbols, final ScriptGenerator script) {

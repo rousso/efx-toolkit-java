@@ -529,16 +529,16 @@ class LateBoundTypeResolutionTest extends EfxTestsBase {
         () -> translateExpressionWithContext("ND-Root",
             "BT-00-Text[(BT-00-Repeatable-Indicator)] is present"));
     assertEquals(ErrorCode.FIELD_MAY_REPEAT, ex.getErrorCode());
-    assertEquals("line 1:24 Type mismatch. Bracket cannot take 'text' and 'indicator*'. Its"
-        + " content must be 'indicator'. Field 'BT-00-Repeatable-Indicator' may return multiple"
+    assertEquals("line 1:24 Type mismatch. Predicate cannot take 'text' and 'indicator*'. Its"
+        + " condition must be 'indicator'. Field 'BT-00-Repeatable-Indicator' may return multiple"
         + " values from context 'BT-00-Text': use a sequence expression or change the context.",
         ex.getMessage());
   }
 
   @Test
   void testOperandOrigin_Indexer() {
-    assertSequenceError(ErrorCode.FIELD_MAY_REPEAT, "1:23", "BT-00-Repeatable-Number",
-        () -> translateExpressionWithContext("ND-Root", "['a', 'b'][BT-00-Repeatable-Number]"));
+    assertSequenceError(ErrorCode.FIELD_MAY_REPEAT, "1:26", "BT-00-Repeatable-Number",
+        () -> translateExpressionWithContext("ND-Root", "['a', 'b'][at BT-00-Repeatable-Number]"));
   }
 
   @Test

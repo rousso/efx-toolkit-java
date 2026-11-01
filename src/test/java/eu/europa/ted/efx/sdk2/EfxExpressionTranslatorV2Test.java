@@ -129,7 +129,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testPresenceCondition_WithIndexedNodeReference() {
-    testExpressionTranslationWithContext("(SubNode)[1]", "ND-Root", "ND-SubNode[1] is present");
+    testExpressionTranslationWithContext("(SubNode)[1]", "ND-Root", "ND-SubNode[at 1] is present");
   }
 
   @Test
@@ -1718,13 +1718,13 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   @Test
   void testAttributeReference_AfterIndexer() {
     testExpressionTranslationWithContext("(PathNode/CodeField)[1]/@listName", "ND-Root",
-        "BT-00-Code[1]/@listName");
+        "BT-00-Code[at 1]/@listName");
   }
 
   @Test
   void testAttributeReference_WithIndexer() {
     testExpressionTranslationWithContext("(PathNode/CodeField/@listName)[1]", "ND-Root",
-        "BT-00-Code/@listName[1]");
+        "BT-00-Code/@listName[at 1]");
   }
 
   @Test
@@ -4665,7 +4665,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   void testIndexer_WithNonRepeatableField() {
     // Indexing a non-repeatable field - currently allowed (semantically odd but syntactically valid)
     testExpressionTranslationWithContext("(PathNode/TextField)[1]/normalize-space(text())", "ND-Root",
-        "BT-00-Text[1]");
+        "BT-00-Text[at 1]");
   }
 
   @Test
@@ -4673,7 +4673,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     // Indexing a non-repeatable field with predicate
     testExpressionTranslationWithContext(
         "(PathNode/TextField[./normalize-space(text()) = 'hello'])[1]/normalize-space(text())", "ND-Root",
-        "BT-00-Text[BT-00-Text == 'hello'][1]");
+        "BT-00-Text[BT-00-Text == 'hello'][at 1]");
   }
 
   @Test
@@ -4681,7 +4681,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     // Indexing a repeatable field should work - BT-00-Repeatable-Text is repeatable
     // No explicit cast - preprocessor inserts (text*) making it stringSequence[indexer]
     testExpressionTranslationWithContext("(PathNode/RepeatableTextField)[1]/normalize-space(text())", "ND-Root",
-        "BT-00-Repeatable-Text[1]");
+        "BT-00-Repeatable-Text[at 1]");
   }
 
   @Test
@@ -4690,67 +4690,67 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     // No explicit cast - preprocessor handles typing
     testExpressionTranslationWithContext(
         "(PathNode/RepeatableTextField[(.)[1]/normalize-space(text()) = 'hello'])[1]/normalize-space(text())", "ND-Root",
-        "BT-00-Repeatable-Text[BT-00-Repeatable-Text[1] == 'hello'][1]");
+        "BT-00-Repeatable-Text[BT-00-Repeatable-Text[at 1] == 'hello'][at 1]");
   }
 
   @Test
   void testIndexer_WithTextSequence() {
-    testExpressionTranslationWithContext("('a','b','c')[1]", "ND-Root", "['a', 'b','c'][1]");
+    testExpressionTranslationWithContext("('a','b','c')[1]", "ND-Root", "['a', 'b','c'][at 1]");
   }
 
   @Test
   void testIndexer_WithBooleanSequence() {
-    testExpressionTranslationWithContext("(true(),false())[2]", "ND-Root", "[TRUE, FALSE][2]");
+    testExpressionTranslationWithContext("(true(),false())[2]", "ND-Root", "[TRUE, FALSE][at 2]");
   }
 
   @Test
   void testIndexer_WithNumericSequence() {
-    testExpressionTranslationWithContext("(1,2,3)[2]", "ND-Root", "[1, 2, 3][2]");
+    testExpressionTranslationWithContext("(1,2,3)[2]", "ND-Root", "[1, 2, 3][at 2]");
   }
 
   @Test
   void testIndexer_WithDateSequence() {
     testExpressionTranslationWithContext(
         "(xs:date('2020-01-01Z'),xs:date('2020-01-02Z'))[2]", "ND-Root",
-        "[2020-01-01Z, 2020-01-02Z][2]");
+        "[2020-01-01Z, 2020-01-02Z][at 2]");
   }
 
   @Test
   void testIndexer_WithTimeSequence() {
     testExpressionTranslationWithContext(
         "(xs:time('10:00:00Z'),xs:time('11:00:00Z'))[2]", "ND-Root",
-        "[10:00:00Z, 11:00:00Z][2]");
+        "[10:00:00Z, 11:00:00Z][at 2]");
   }
 
   @Test
   void testIndexer_WithDurationSequence() {
     testExpressionTranslationWithContext(
         "(xs:dayTimeDuration('P1D'),xs:yearMonthDuration('P2M'))[2]", "ND-Root",
-        "[P1D, P2M][2]");
+        "[P1D, P2M][at 2]");
   }
 
-  // An index is computed once, where the expression stands. Content that reads no field or node
-  // from the context means the same wherever it is evaluated; content that does is rejected.
+  // An index is computed once, where the expression stands. A position that reads no field or
+  // node from the context means the same wherever it is evaluated; one that does is bound first.
 
   @Test
   void testIndexer_WithVariable() {
     testExpressionTranslationWithContext(
         "for $n in PathNode/NumberField/number() return (PathNode/RepeatableTextField)[$n]/normalize-space(text())",
-        "ND-Root", "for number:$n in BT-00-Number return BT-00-Repeatable-Text[$n]");
+        "ND-Root", "for number:$n in BT-00-Number return BT-00-Repeatable-Text[at $n]");
   }
 
   @Test
   void testIndexer_WithArithmeticOnLiterals() {
     testExpressionTranslationWithContext(
         "(PathNode/RepeatableTextField)[1 + 1]/normalize-space(text())", "ND-Root",
-        "BT-00-Repeatable-Text[1 + 1]");
+        "BT-00-Repeatable-Text[at 1 + 1]");
   }
 
   @Test
   void testIndexer_WithAbsoluteFieldReference() {
     testExpressionTranslationWithContext(
         "(PathNode/RepeatableTextField)[/*/PathNode/NumberField/number()]/normalize-space(text())",
-        "ND-Root", "BT-00-Repeatable-Text[/BT-00-Number]");
+        "ND-Root", "BT-00-Repeatable-Text[at /BT-00-Number]");
   }
 
   @Test
@@ -4758,47 +4758,78 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     testExpressionTranslationWithContext(
         "for $c in RepeatableNode return (PathNode/RepeatableTextField)[count($c/TextField/normalize-space(text()))]/normalize-space(text())",
         "ND-Root",
-        "for context:$c in ND-RepeatableNode return BT-00-Repeatable-Text[count($c::BT-00-Text-In-Repeatable-Node)]");
+        "for context:$c in ND-RepeatableNode return BT-00-Repeatable-Text[at count($c::BT-00-Text-In-Repeatable-Node)]");
   }
 
   @Test
-  void testIndexer_ReadingAField_Throws() {
-    InvalidUsageException exception = assertThrows(InvalidUsageException.class,
-        () -> translateExpressionWithContext("ND-Root", "BT-00-Repeatable-Text[BT-00-Number]"));
-    assertEquals(InvalidUsageException.ErrorCode.INDEX_READS_CONTEXT, exception.getErrorCode());
-    assertEquals("line 1:34 The index 'BT-00-Number' reads a field or a node from its context."
-        + " An index is computed once, where the expression stands: bind it to a variable first,"
-        + " and index with the variable.", exception.getMessage());
+  void testIndexer_ReadingAField() {
+    testExpressionTranslationWithContext(
+        "(for $__index in PathNode/NumberField/number() return (PathNode/RepeatableTextField)[$__index])/normalize-space(text())",
+        "ND-Root", "BT-00-Repeatable-Text[at BT-00-Number]");
   }
 
   @Test
-  void testIndexer_ComputedFromAField_Throws() {
-    InvalidUsageException exception = assertThrows(InvalidUsageException.class,
-        () -> translateExpressionWithContext("ND-Root", "BT-00-Repeatable-Text[BT-00-Number + 1]"));
-    assertEquals(InvalidUsageException.ErrorCode.INDEX_READS_CONTEXT, exception.getErrorCode());
+  void testIndexer_ComputedFromAField() {
+    testExpressionTranslationWithContext(
+        "(for $__index in PathNode/NumberField/number() + 1 return (PathNode/RepeatableTextField)[$__index])/normalize-space(text())",
+        "ND-Root", "BT-00-Repeatable-Text[at BT-00-Number + 1]");
   }
 
   @Test
-  void testIndexer_OnNodeReadingAField_Throws() {
-    InvalidUsageException exception = assertThrows(InvalidUsageException.class,
-        () -> translateExpressionWithContext("ND-Root",
-            "ND-RepeatableNode[count(BT-00-Text-In-Repeatable-Node)] is present"));
-    assertEquals(InvalidUsageException.ErrorCode.INDEX_READS_CONTEXT, exception.getErrorCode());
+  void testIndexer_ComputedByAFunctionOfAField() {
+    testExpressionTranslationWithContext(
+        "(for $__index in count(PathNode/RepeatableNumberField/number()) return (PathNode/RepeatableTextField)[$__index])/normalize-space(text())",
+        "ND-Root", "BT-00-Repeatable-Text[at count(BT-00-Repeatable-Number)]");
   }
 
   @Test
-  void testIndexer_OnListReadingAField_Throws() {
-    InvalidUsageException exception = assertThrows(InvalidUsageException.class,
-        () -> translateExpressionWithContext("ND-Root", "[1, 2, 3][BT-00-Number]"));
-    assertEquals(InvalidUsageException.ErrorCode.INDEX_READS_CONTEXT, exception.getErrorCode());
+  void testIndexer_OnNodeReadingAField() {
+    testExpressionTranslationWithContext(
+        "(for $__index in PathNode/NumberField/number() return (RepeatableNode)[$__index])",
+        "ND-Root", "ND-RepeatableNode[at BT-00-Number] is present");
   }
 
   @Test
-  void testIndexer_OnListReadingAnAbsoluteField_Throws() {
-    // The target language reads the index for each value, which has no root to start from
-    InvalidUsageException exception = assertThrows(InvalidUsageException.class,
-        () -> translateExpressionWithContext("ND-Root", "[1, 2, 3][/BT-00-Number]"));
-    assertEquals(InvalidUsageException.ErrorCode.INDEX_READS_CONTEXT, exception.getErrorCode());
+  void testIndexer_OnNodeComputedFromAField() {
+    testExpressionTranslationWithContext(
+        "(for $__index in PathNode/NumberField/number() - 1 return (RepeatableNode)[$__index])",
+        "ND-Root", "ND-RepeatableNode[at BT-00-Number - 1] is present");
+  }
+
+  @Test
+  void testIndexer_OnNodeComputedByAFunctionOfAField() {
+    testExpressionTranslationWithContext(
+        "(for $__index in count(RepeatableNode/TextField/normalize-space(text())) return (RepeatableNode)[$__index])",
+        "ND-Root", "ND-RepeatableNode[at count(BT-00-Text-In-Repeatable-Node)] is present");
+  }
+
+  @Test
+  void testIndexer_OnListReadingAField() {
+    testExpressionTranslationWithContext(
+        "(for $__index in PathNode/NumberField/number() return (1,2,3)[$__index])", "ND-Root",
+        "[1, 2, 3][at BT-00-Number]");
+  }
+
+  @Test
+  void testIndexer_OnListComputedFromAField() {
+    testExpressionTranslationWithContext(
+        "(for $__index in PathNode/NumberField/number() + 1 return (1,2,3)[$__index])", "ND-Root",
+        "[1, 2, 3][at BT-00-Number + 1]");
+  }
+
+  @Test
+  void testIndexer_OnListComputedByAFunctionOfAField() {
+    testExpressionTranslationWithContext(
+        "(for $__index in count(PathNode/RepeatableTextField/normalize-space(text())) return (1,2,3)[$__index])",
+        "ND-Root", "[1, 2, 3][at count(BT-00-Repeatable-Text)]");
+  }
+
+  @Test
+  void testIndexer_OnListReadingAnAbsoluteField() {
+    // The target language would read the position for each value, which has no root to start from
+    testExpressionTranslationWithContext(
+        "(for $__index in /*/PathNode/NumberField/number() return (1,2,3)[$__index])", "ND-Root",
+        "[1, 2, 3][at /BT-00-Number]");
   }
 
   @Test
@@ -4806,7 +4837,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     testExpressionTranslationWithContext(
         "for $c in . return (1,2,3)[$c/PathNode/NumberField/number()]",
         "ND-Root",
-        "for context:$c in ND-Root return [1, 2, 3][$c::BT-00-Number]");
+        "for context:$c in ND-Root return [1, 2, 3][at $c::BT-00-Number]");
   }
 
   @Test
@@ -4815,15 +4846,68 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     testExpressionTranslationWithContext(
         "for $c in . return (1,2)[count($c/PathNode/TextField[/*/PathNode/NumberField/number() = 1]/normalize-space(text()))]",
         "ND-Root",
-        "for context:$c in ND-Root return [1, 2][count($c::BT-00-Text[/BT-00-Number == 1])]");
+        "for context:$c in ND-Root return [1, 2][at count($c::BT-00-Text[/BT-00-Number == 1])]");
   }
 
   @Test
-  void testIndexer_OnListWithAbsoluteFieldBesideAFilter_Throws() {
-    InvalidUsageException exception = assertThrows(InvalidUsageException.class,
+  void testIndexer_OnListWithAbsoluteFieldBesideAFilter() {
+    testExpressionTranslationWithContext(
+        "for $c in . return (for $__index in count($c/PathNode/TextField[/*/PathNode/NumberField/number() = 1]/normalize-space(text())) + /*/PathNode/NumberField/number() return (1,2)[$__index])",
+        "ND-Root",
+        "for context:$c in ND-Root return [1, 2][at count($c::BT-00-Text[/BT-00-Number == 1]) + /BT-00-Number]");
+  }
+
+  @Test
+  void testIndexer_Nested() {
+    testExpressionTranslationWithContext(
+        "(for $__index in (for $__index in PathNode/NumberField/number() return (PathNode/RepeatableNumberField)[$__index])/number() return (1,2,3)[$__index])",
+        "ND-Root", "[1, 2, 3][at BT-00-Repeatable-Number[at BT-00-Number]]");
+  }
+
+  @Test
+  void testIndexer_FollowedByAPredicate() {
+    // The predicate filters the element the index selects
+    testExpressionTranslationWithContext(
+        "(for $__index in PathNode/NumberField/number() return (PathNode/RepeatableTextField)[$__index])[./normalize-space(text()) = 'b']/normalize-space(text())",
+        "ND-Root", "BT-00-Repeatable-Text[at BT-00-Number][BT-00-Repeatable-Text == 'b']");
+  }
+
+  @Test
+  void testIndexer_FollowedByAnOperator() {
+    // The operator takes the element the index selects, or nothing if the position is missing
+    testExpressionTranslationWithContext(
+        "(for $__index in PathNode/NumberField/number() return (PathNode/RepeatableTextField)[$__index])/normalize-space(text()) = 'x' or true()",
+        "ND-Root", "BT-00-Repeatable-Text[at BT-00-Number] == 'x' or TRUE");
+  }
+
+  @Test
+  void testIndexer_InAPredicateReadingItsElement() {
+    // The position is read where the index stands: from each element of the predicate's field
+    testExpressionTranslationWithContext(
+        "RepeatableNode[(for $__index in NumberField/number() return (../PathNode/RepeatableTextField)[$__index])/normalize-space(text()) = 'b']",
+        "ND-Root",
+        "ND-RepeatableNode[BT-00-Repeatable-Text[at BT-00-Number-In-Repeatable-Node] == 'b'] is present");
+  }
+
+  @Test
+  void testIndexer_ReadingAFieldOfTheContextThatRepeats() {
+    // The position is read once, from the context, before the field it selects is read
+    testExpressionTranslationWithContext(
+        "(for $__index in NumberField/number() + 1 return (../PathNode/RepeatableTextField)[$__index])/normalize-space(text())",
+        "ND-RepeatableNode", "BT-00-Repeatable-Text[at BT-00-Number-In-Repeatable-Node + 1]");
+  }
+
+  @Test
+  void testIteratorVariable_ReservedName_Throws() {
+    // Names that start with __ are kept for the variables the translator generates, such as the
+    // one an index binds its position to
+    InvalidIdentifierException exception = assertThrows(InvalidIdentifierException.class,
         () -> translateExpressionWithContext("ND-Root",
-            "for context:$c in ND-Root return [1, 2][count($c::BT-00-Text[/BT-00-Number == 1]) + /BT-00-Number]"));
-    assertEquals(InvalidUsageException.ErrorCode.INDEX_READS_CONTEXT, exception.getErrorCode());
+            "for number:$__index in [1, 2] return $__index"));
+    assertEquals(InvalidIdentifierException.ErrorCode.IDENTIFIER_IS_RESERVED,
+        exception.getErrorCode());
+    assertEquals("line 1:12 Identifier '__index' is reserved: the translator generates the names"
+        + " that start with '__'.", exception.getMessage());
   }
 
   // #endregion: Indexers
@@ -5054,11 +5138,54 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   }
 
   @Test
-  void testTypeErrorMessage_Bracket() {
+  void testTypeErrorMessage_Predicate() {
     assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
-        "line 1:34 Type mismatch. Bracket cannot take 'text*' and 'text'."
-            + " Its content must be 'indicator' or 'number'.",
+        "line 1:34 Type mismatch. Predicate cannot take 'text*' and 'text'."
+            + " Its condition must be 'indicator'.",
         "BT-00-Repeatable-Text[BT-00-Text]");
+  }
+
+  @Test
+  void testTypeErrorMessage_PredicateWithNumber_SuggestsTheIndex() {
+    assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
+        "line 1:34 Type mismatch. Predicate cannot take 'text*' and 'number'."
+            + " Its condition must be 'indicator'. To select by position, write [at n].",
+        "BT-00-Repeatable-Text[1]");
+  }
+
+  @Test
+  void testTypeErrorMessage_PredicateOnValue() {
+    assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
+        "line 1:12 Type mismatch. Predicate cannot take 'text*' and 'text'."
+            + " Its sequence must be a field or node reference.",
+        "['a', 'b']['x']");
+  }
+
+  @Test
+  void testTypeErrorMessage_PredicateOnValueWithNumber_SuggestsTheIndex() {
+    assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
+        "line 1:12 Type mismatch. Predicate cannot take 'text*' and 'number'."
+            + " Its sequence must be a field or node reference. To select by position, write"
+            + " [at n].",
+        "['a', 'b'][1]");
+  }
+
+  @Test
+  void testTypeErrorMessage_Index() {
+    assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
+        "line 1:37 Type mismatch. Index cannot take 'text*' and 'text'."
+            + " Its position must be 'number'.",
+        "BT-00-Repeatable-Text[at 'x']");
+  }
+
+  @Test
+  void testTypeErrorMessage_IndexReadingARepeatableField() {
+    assertTypeError(TypeMismatchException.ErrorCode.FIELD_MAY_REPEAT,
+        "line 1:33 Type mismatch. Index cannot take 'node*' and 'number*'."
+            + " Its position must be 'number'. Field 'BT-00-Number-In-Repeatable-Node' may return"
+            + " multiple values from context 'ND-Root': use a sequence expression or change the"
+            + " context.",
+        "ND-RepeatableNode[at BT-00-Number-In-Repeatable-Node] is present");
   }
 
   @Test
@@ -5110,7 +5237,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
         "line 1:12 Type mismatch. Operator '==' cannot take 'text*' and 'text'."
             + " Its left operand must be 'text'. Field 'BT-00-Text-Multilingual' is multilingual"
             + " and has one value per language: use :preferredLanguageText to select the"
-            + " preferred language, or an index [n] to select a specific value.",
+            + " preferred language, or an index [at n] to select a specific value.",
         "BT-00-Text-Multilingual == 'x'");
   }
 
@@ -5438,7 +5565,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     testExpressionTranslationWithContext(
         "(../ChildNode/SubLevelTextField)[1]/../../TextField/normalize-space(text())",
         "BT-00-Code",
-        "BT-01-SubLevel-Text[1]::BT-00-Text");
+        "BT-01-SubLevel-Text[at 1]::BT-00-Text");
   }
 
   @Test
@@ -5518,7 +5645,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     testExpressionTranslationWithContext(
         "'test' = (../ChildNode/SubLevelTextField)[1]/../../TextField/normalize-space(text())",
         "BT-00-Code",
-        "'test' in BT-01-SubLevel-Text[1]::BT-00-Text");
+        "'test' in BT-01-SubLevel-Text[at 1]::BT-00-Text");
   }
 
   // Row 8 PRES
@@ -5527,7 +5654,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     testExpressionTranslationWithContext(
         "(../ChildNode/SubLevelTextField)[1]/../../TextField",
         "BT-00-Code",
-        "BT-01-SubLevel-Text[1]::BT-00-Text is present");
+        "BT-01-SubLevel-Text[at 1]::BT-00-Text is present");
   }
 
   // Row 8 ATTR
@@ -5536,7 +5663,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     testExpressionTranslationWithContext(
         "(../ChildNode/SubLevelTextField)[1]/../../CodeField/@listName",
         "BT-00-Code",
-        "BT-01-SubLevel-Text[1]::BT-00-Code/@listName");
+        "BT-01-SubLevel-Text[at 1]::BT-00-Code/@listName");
   }
 
   // Row 9 PRES
@@ -5696,7 +5823,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     testExpressionTranslationWithContext(
         "(PathNode/TextMultilingualField)[1]/normalize-space(text()) = 'test'",
         "ND-Root",
-        "BT-00-Text-Multilingual[1] == 'test'");
+        "BT-00-Text-Multilingual[at 1] == 'test'");
   }
 
   // Note: testIndexer_MultilingualField_InSequenceContext is not possible because
@@ -5708,7 +5835,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     testExpressionTranslationWithContext(
         "(PathNode/TextMultilingualField[./@languageID = 'eng'])[1]/normalize-space(text()) = 'test'",
         "ND-Root",
-        "BT-00-Text-Multilingual[BT-00-Text-Multilingual/@languageID == 'eng'][1] == 'test'");
+        "BT-00-Text-Multilingual[BT-00-Text-Multilingual/@languageID == 'eng'][at 1] == 'test'");
   }
 
   // #endregion: Indexer interactions
@@ -5727,7 +5854,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     testExpressionTranslationWithContext(
         "(PathNode/RepeatableTextField)[1]/text() = 'test'",
         "ND-Root",
-        "BT-00-Repeatable-Text[1]:rawValue == 'test'");
+        "BT-00-Repeatable-Text[at 1]:rawValue == 'test'");
   }
 
   @Test
@@ -5737,7 +5864,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     testExpressionTranslationWithContext(
         "(PathNode/TextMultilingualField)[1]/text() = 'test'",
         "ND-Root",
-        "BT-00-Text-Multilingual[1]:rawValue == 'test'");
+        "BT-00-Text-Multilingual[at 1]:rawValue == 'test'");
   }
 
   @Test
@@ -5754,7 +5881,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     testExpressionTranslationWithContext(
         "(RepeatableNode/TextField)[1]/text() = 'test'",
         "ND-Root",
-        "BT-00-Text-In-Repeatable-Node[1]:rawValue == 'test'");
+        "BT-00-Text-In-Repeatable-Node[at 1]:rawValue == 'test'");
   }
 
   @Test
@@ -5763,7 +5890,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     testExpressionTranslationWithContext(
         "(PathNode/RepeatableTextField['a' = 'a'])[1]/text() = 'test'",
         "ND-Root",
-        "BT-00-Repeatable-Text['a' == 'a'][1]:rawValue == 'test'");
+        "BT-00-Repeatable-Text['a' == 'a'][at 1]:rawValue == 'test'");
   }
 
   @Test
@@ -5771,7 +5898,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     testExpressionTranslationWithContext(
         "'test' = (PathNode/RepeatableTextField)[1]/text()",
         "ND-Root",
-        "'test' in BT-00-Repeatable-Text[1]:rawValue");
+        "'test' in BT-00-Repeatable-Text[at 1]:rawValue");
   }
 
   @Test
@@ -5779,7 +5906,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     testExpressionTranslationWithContext(
         "'test' = (PathNode/RepeatableTextField['a' = 'a'])[1]/text()",
         "ND-Root",
-        "'test' in BT-00-Repeatable-Text['a' == 'a'][1]:rawValue");
+        "'test' in BT-00-Repeatable-Text['a' == 'a'][at 1]:rawValue");
   }
 
   @Test
@@ -5811,7 +5938,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     testExpressionTranslationWithContext(
         "(/*/PathNode/RepeatableTextField)[1]/text() = 'test'",
         "BT-00-Repeatable-Text",
-        "/BT-00-Repeatable-Text[1]:rawValue == 'test'");
+        "/BT-00-Repeatable-Text[at 1]:rawValue == 'test'");
   }
 
   @Test
@@ -5819,7 +5946,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     testExpressionTranslationWithContext(
         "'test' = (/*/PathNode/RepeatableTextField)[1]/text()",
         "BT-00-Repeatable-Text",
-        "'test' in /BT-00-Repeatable-Text[1]:rawValue");
+        "'test' in /BT-00-Repeatable-Text[at 1]:rawValue");
   }
 
   // #endregion: rawValue with structural variations
@@ -5832,7 +5959,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     testExpressionTranslationWithContext(
         "for $x in (PathNode/RepeatableTextField)[1] return $x = 'test'",
         "ND-Root",
-        "for context:$x in BT-00-Repeatable-Text[1] return $x == 'test'");
+        "for context:$x in BT-00-Repeatable-Text[at 1] return $x == 'test'");
   }
 
   @Test
@@ -5840,7 +5967,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     testExpressionTranslationWithContext(
         "for $x in (PathNode/TextField['a' = 'a'])[1] return $x = 'test'",
         "ND-Root",
-        "for context:$x in BT-00-Text['a' == 'a'][1] return $x == 'test'");
+        "for context:$x in BT-00-Text['a' == 'a'][at 1] return $x == 'test'");
   }
 
   @Test
@@ -5849,7 +5976,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     testExpressionTranslationWithContext(
         "for $x in PathNode/RepeatableTextField return ($x)[1] = 'test'",
         "ND-Root",
-        "for context:$x in BT-00-Repeatable-Text return $x[1] == 'test'");
+        "for context:$x in BT-00-Repeatable-Text return $x[at 1] == 'test'");
   }
 
   @Test
@@ -5873,7 +6000,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     testExpressionTranslationWithContext(
         "for $x in (/*/PathNode/RepeatableTextField)[1] return $x = 'test'",
         "BT-00-Repeatable-Text",
-        "for context:$x in /BT-00-Repeatable-Text[1] return $x == 'test'");
+        "for context:$x in /BT-00-Repeatable-Text[at 1] return $x == 'test'");
   }
 
   @Test
@@ -5998,7 +6125,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     testExpressionTranslationWithContext(
         "'test' = (PathNode/TextMultilingualField)[1]/text()",
         "ND-Root",
-        "'test' in BT-00-Text-Multilingual[1]:rawValue");
+        "'test' in BT-00-Text-Multilingual[at 1]:rawValue");
   }
 
   // #endregion: rawValue cardinality
@@ -6399,16 +6526,16 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
    */
   @Test
   void testSelector_IndexerSelectsFromWholeSequence() {
-    testExpressionTranslation("(PathNode/TextField)[1]", "WITH ND-Root SELECT BT-00-Text[1]");
+    testExpressionTranslation("(PathNode/TextField)[1]", "WITH ND-Root SELECT BT-00-Text[at 1]");
     testExpressionTranslation("(PathNode/TextField)[1]/normalize-space(text())",
-        "WITH ND-Root COMPUTE BT-00-Text[1]");
+        "WITH ND-Root COMPUTE BT-00-Text[at 1]");
   }
 
   @Test
   void testSelector_IndexerAfterPredicate() {
     testExpressionTranslation(
         "(/*/PathNode/TextField[../CodeField/normalize-space(text()) = 'x'])[1]",
-        "WITH ND-Root SELECT /BT-00-Text[BT-00-Code == 'x'][1]");
+        "WITH ND-Root SELECT /BT-00-Text[BT-00-Code == 'x'][at 1]");
   }
 
   // #endregion: Selectors ----------------------------------------------------
