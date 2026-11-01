@@ -54,4 +54,12 @@ public enum LogicalOperators implements BuiltIn {
   public List<Overload> getOverloads() {
     return this.overloads;
   }
+
+  /**
+   * @return {@code true} for {@code not}, which is called as a function
+   */
+  @Override
+  public boolean isFunction() {
+    return this == NOT;
+  }
 }

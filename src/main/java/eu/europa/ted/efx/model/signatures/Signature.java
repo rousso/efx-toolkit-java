@@ -14,6 +14,7 @@
 package eu.europa.ted.efx.model.signatures;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 import eu.europa.ted.efx.model.types.EfxDataType;
 
@@ -68,6 +69,20 @@ public final class Signature {
    */
   Signature bind(final Class<? extends EfxDataType.Primitive> primitive) {
     return new Signature(this.parameters.bind(primitive), this.result.bind(primitive));
+  }
+
+  /**
+   * Gives the signatures this one stands for: one for each value primitive {@code T} can be bound
+   * to, when it mentions {@code T}, and itself otherwise.
+   *
+   * @return the signatures with {@code T} bound, or this signature alone
+   */
+  public List<Signature> concreteForms() {
+    if (!this.parameters.isGeneric()) {
+      return List.of(this);
+    }
+    return TypeVariableParameterType.valuePrimitives().stream().map(this::bind)
+        .collect(Collectors.toUnmodifiableList());
   }
 
   @Override
