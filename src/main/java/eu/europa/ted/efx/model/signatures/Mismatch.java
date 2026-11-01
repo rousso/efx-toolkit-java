@@ -43,13 +43,6 @@ public final class Mismatch {
   }
 
   /**
-   * @return the arguments of the call
-   */
-  public List<TypedExpression> getArguments() {
-    return this.arguments;
-  }
-
-  /**
    * Tells whether the mismatch is the number of arguments.
    *
    * @return {@code true} if no overload takes that many arguments
@@ -155,13 +148,6 @@ public final class Mismatch {
      */
     public ParameterType getRequired() {
       return this.match.getRequired();
-    }
-
-    /**
-     * @return the rejected argument
-     */
-    public TypedExpression getArgument() {
-      return this.match.getArgument();
     }
 
     /**

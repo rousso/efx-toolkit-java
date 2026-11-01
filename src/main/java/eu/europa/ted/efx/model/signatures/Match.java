@@ -91,18 +91,10 @@ public final class Match {
   }
 
   /**
-   * @return the rejected argument
-   */
-  public TypedExpression getArgument() {
-    this.requireRejection();
-    return this.argument;
-  }
-
-  /**
    * @return what is wrong with the rejected argument
    */
   public Mismatch.Rejection.Kind getKind() {
-    return this.getRequired().rejectionKindOf(this.getArgument());
+    return this.getRequired().rejectionKindOf(this.argument);
   }
 
   private void requireRejection() {

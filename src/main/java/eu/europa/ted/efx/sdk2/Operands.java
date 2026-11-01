@@ -44,6 +44,14 @@ final class Operands {
 
   /**
    * @param construct the construct, as a type error names it
+   * @param operands its operands, in order, each read as its value
+   */
+  Operands(final Construct construct, final List<? extends Operand<?>> operands) {
+    this(construct, operands, operands.stream().map(Operand::value).collect(Collectors.toList()));
+  }
+
+  /**
+   * @param construct the construct, as a type error names it
    * @param operands its operands, in order
    * @param values the value the construct reads from each operand, in the same order
    */

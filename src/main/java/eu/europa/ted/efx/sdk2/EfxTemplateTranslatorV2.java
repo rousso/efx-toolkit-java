@@ -123,6 +123,13 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
   /** A label block, as a type error names it with the one of its parts that is at fault. */
   private static final String LABEL_BLOCK = "Label block";
 
+  /** The parts of a label block, each as a type error names it. */
+  private static final Construct ASSET_TYPE = Construct.of(LABEL_BLOCK, "asset type");
+  private static final Construct LABEL_TYPE = Construct.of(LABEL_BLOCK, "label type");
+  private static final Construct ASSET_ID = Construct.of(LABEL_BLOCK, "asset id");
+  private static final Construct PLURALISER = Construct.of(LABEL_BLOCK, "pluraliser");
+  private static final Construct LABEL_KEY = Construct.of(LABEL_BLOCK, "key");
+
   private static final String LABEL_TYPE_NAME = getLexerSymbol(EfxLexer.LABEL_TYPE_NAME);
   private static final String LABEL_TYPE_WHEN = getLexerSymbol(EfxLexer.LABEL_TYPE_WHEN_TRUE).replace("-true", "");
   private static final String SHORTHAND_CONTEXT_FIELD_LABEL_REFERENCE = getLexerSymbol(EfxLexer.ValueKeyword);
@@ -771,7 +778,7 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
     // New in EFX-2: Pluralisation of labels based on a supplied quantity.
     // The quantity is on top of the stack, above the assetId, so it is popped first.
     NumericExpression quantity = ctx.pluraliser() != null
-        ? this.labelPart(ctx, NumericExpression.class, "pluraliser")
+        ? this.labelPart(ctx, NumericExpression.class, PLURALISER)
         : NumericExpression.empty();
 
     if (!this.stack.empty() && StringSequenceExpression.class.isAssignableFrom(this.stack.peek().getClass()) && ctx.assetId() != null) {
@@ -794,7 +801,7 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
       // Standard implementation as originally intended by EFX 1
 
       StringExpression assetId = ctx.assetId() != null
-          ? this.labelPart(ctx, StringExpression.class, "asset id")
+          ? this.labelPart(ctx, StringExpression.class, ASSET_ID)
           : this.script.getStringLiteralFromUnquotedString("");
       this.exitStandardLabelReference(ctx, assetId, quantity);
     }
@@ -808,10 +815,10 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
    */
   private void exitStandardLabelReference(StandardLabelReferenceContext ctx, StringExpression assetId, NumericExpression quantity) {
     StringExpression labelType = ctx.labelType() != null
-        ? this.labelPart(ctx, StringExpression.class, "label type")
+        ? this.labelPart(ctx, StringExpression.class, LABEL_TYPE)
         : this.script.getStringLiteralFromUnquotedString("");
     StringExpression assetType = ctx.assetType() != null
-        ? this.labelPart(ctx, StringExpression.class, "asset type")
+        ? this.labelPart(ctx, StringExpression.class, ASSET_TYPE)
         : this.script.getStringLiteralFromUnquotedString("");
 
     StringExpression key = this.script.composeStringConcatenation(
@@ -831,10 +838,10 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
   private void exitStandardLabelReference(StandardLabelReferenceContext ctx, StringSequenceExpression assetIdSequence,
       NumericExpression quantity) {
     StringExpression labelType = ctx.labelType() != null
-        ? this.labelPart(ctx, StringExpression.class, "label type")
+        ? this.labelPart(ctx, StringExpression.class, LABEL_TYPE)
         : this.script.getStringLiteralFromUnquotedString("");
     StringExpression assetType = ctx.assetType() != null
-        ? this.labelPart(ctx, StringExpression.class, "asset type")
+        ? this.labelPart(ctx, StringExpression.class, ASSET_TYPE)
         : this.script.getStringLiteralFromUnquotedString("");
 
     Variable loopVariable = new Variable("item",
@@ -861,11 +868,11 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
   @Override
   public void exitShorthandBtLabelReference(ShorthandBtLabelReferenceContext ctx) {
     NumericExpression quantity = ctx.pluraliser() != null
-        ? this.labelPart(ctx, NumericExpression.class, "pluraliser")
+        ? this.labelPart(ctx, NumericExpression.class, PLURALISER)
         : NumericExpression.empty();
     StringExpression assetId = this.script.getStringLiteralFromUnquotedString(ctx.BtId().getText());
     StringExpression labelType = ctx.labelType() != null
-        ? this.labelPart(ctx, StringExpression.class, "label type")
+        ? this.labelPart(ctx, StringExpression.class, LABEL_TYPE)
         : this.script.getStringLiteralFromUnquotedString("");
     StringExpression key = this.script.composeStringConcatenation(
         List.of(this.script.getStringLiteralFromUnquotedString(ASSET_TYPE_BT),
@@ -878,10 +885,10 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
   public void exitShorthandFieldLabelReference(ShorthandFieldLabelReferenceContext ctx) {
     final String fieldId = ctx.FieldId().getText();
     NumericExpression quantity = ctx.pluraliser() != null
-        ? this.labelPart(ctx, NumericExpression.class, "pluraliser")
+        ? this.labelPart(ctx, NumericExpression.class, PLURALISER)
         : NumericExpression.empty();
     StringExpression labelType = ctx.labelType() != null
-        ? this.labelPart(ctx, StringExpression.class, "label type")
+        ? this.labelPart(ctx, StringExpression.class, LABEL_TYPE)
         : this.script.getStringLiteralFromUnquotedString("");
 
     if (labelType.getScript().equals("value")) {
@@ -900,7 +907,7 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
   public void exitShorthandIndirectLabelReference(ShorthandIndirectLabelReferenceContext ctx) {
     // New in EFX-2: Pluralisation of labels based on a supplied quantity
     NumericExpression quantity = ctx.pluraliser() != null
-        ? this.labelPart(ctx, NumericExpression.class, "pluraliser")
+        ? this.labelPart(ctx, NumericExpression.class, PLURALISER)
         : NumericExpression.empty();
     this.shorthandIndirectLabelReference(ctx.FieldId().getText(), quantity);
   }
@@ -1003,7 +1010,7 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
 
     // New in EFX-2: Pluralisation of labels based on a supplied quantity
     NumericExpression quantity = ctx.pluraliser() != null
-        ? this.labelPart(ctx, NumericExpression.class, "pluraliser")
+        ? this.labelPart(ctx, NumericExpression.class, PLURALISER)
         : NumericExpression.empty();
 
     final String labelType = ctx.LabelType().getText();
@@ -1052,15 +1059,14 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
    * @param <T> the class the part requires
    * @param labelBlock the label block, where an error is reported
    * @param type the class the part requires
-   * @param part the part, as a type error names it, such as "asset id"
+   * @param part the part, as a type error names it, such as {@link #ASSET_ID}
    * @return the part, converted to that class
    * @throws eu.europa.ted.efx.exceptions.TypeMismatchException if the part does not convert to
    *         that class
    */
   private <T extends TypedExpression> T labelPart(final ParserRuleContext labelBlock,
-      final Class<T> type, final String part) {
-    return this.expressions
-        .operandsOf(Construct.of(LABEL_BLOCK, part), List.of(this.stack.pop(TypedExpression.class)))
+      final Class<T> type, final Construct part) {
+    return this.expressions.operandsOf(part, List.of(this.stack.pop(TypedExpression.class)))
         .converted(0, type, labelBlock);
   }
 
@@ -1090,9 +1096,9 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
   @Override
   public void exitComputedLabelReference(ComputedLabelReferenceContext ctx) {
     NumericExpression quantity = ctx.pluraliser() != null
-        ? this.labelPart(ctx, NumericExpression.class, "pluraliser")
+        ? this.labelPart(ctx, NumericExpression.class, PLURALISER)
         : NumericExpression.empty();
-    StringExpression expression = this.labelPart(ctx, StringExpression.class, "key");
+    StringExpression expression = this.labelPart(ctx, StringExpression.class, LABEL_KEY);
     this.stack.push(new LabelFromExpressionContentTemplateFragment(expression, quantity));
   }
 
