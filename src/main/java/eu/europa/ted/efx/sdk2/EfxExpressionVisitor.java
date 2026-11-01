@@ -558,24 +558,35 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   }
 
   private String fieldIdOf(final LinkedFieldReferenceContext ctx) {
-    return this.fieldIdOf(ctx.simpleFieldReference().fieldId.getText(),
+    return this.fieldIdOf(ctx, ctx.simpleFieldReference().fieldId.getText(),
         ctx.linkedFieldProperty());
   }
 
   private String fieldIdOf(final FieldMentionContext ctx) {
-    return this.fieldIdOf(ctx.fieldId.getText(), ctx.linkedFieldProperty());
+    return this.fieldIdOf(ctx, ctx.fieldId.getText(), ctx.linkedFieldProperty());
   }
 
   /**
+   * @param reference the reference to the field, where an error is reported
    * @param baseFieldId the field written
    * @param property the linked field property after it, or {@code null}
    * @return the identifier of the field written, or of the field the property links to it
+   * @throws InvalidUsageException if a property links to a field that cannot be withheld
    */
-  private String fieldIdOf(final String baseFieldId, final LinkedFieldPropertyContext property) {
-    return property == null ? baseFieldId : this.linkedFieldIdOf(baseFieldId, property);
+  private String fieldIdOf(final ParserRuleContext reference, final String baseFieldId,
+      final LinkedFieldPropertyContext property) {
+    return property == null ? baseFieldId : this.linkedFieldIdOf(reference, baseFieldId, property);
   }
 
-  private String linkedFieldIdOf(final String baseFieldId, final LinkedFieldPropertyContext ctx) {
+  /**
+   * Gives the field linked to the privacy settings of a field. Only a field that can be withheld
+   * has privacy settings, so any other field is rejected, as the privacy properties reject it.
+   */
+  private String linkedFieldIdOf(final ParserRuleContext reference, final String baseFieldId,
+      final LinkedFieldPropertyContext ctx) {
+    if (!this.isWithholdable(baseFieldId)) {
+      throw InvalidUsageException.fieldNotWithholdable(reference, baseFieldId);
+    }
     if (ctx.PublicationDate() != null) {
       return this.symbols.getPrivacySettingOfField(baseFieldId,
           PrivacySetting.PUBLICATION_DATE_FIELD);
@@ -1227,10 +1238,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   @Override
   public Operand<?> visitFieldIsWithholdableProperty(
       final FieldIsWithholdablePropertyContext ctx) {
-    final String privacyCode =
-        this.symbols.getPrivacyCodeOfField(this.fieldIdOf(ctx.fieldMention()));
     return this.operand(
-        this.script.getBooleanEquivalent(privacyCode != null && !privacyCode.isEmpty()));
+        this.script.getBooleanEquivalent(this.isWithholdable(this.fieldIdOf(ctx.fieldMention()))));
   }
 
   /**
@@ -1268,11 +1277,19 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * @throws InvalidUsageException if the field cannot be withheld
    */
   private String privacyCodeOf(final ParserRuleContext property, final String fieldId) {
-    final String privacyCode = this.symbols.getPrivacyCodeOfField(fieldId);
-    if (privacyCode == null || privacyCode.isEmpty()) {
+    if (!this.isWithholdable(fieldId)) {
       throw InvalidUsageException.fieldNotWithholdable(property, fieldId);
     }
-    return privacyCode;
+    return this.symbols.getPrivacyCodeOfField(fieldId);
+  }
+
+  /**
+   * @param fieldId a field
+   * @return whether the field can be withheld from publication: whether it has a privacy code
+   */
+  private boolean isWithholdable(final String fieldId) {
+    final String privacyCode = this.symbols.getPrivacyCodeOfField(fieldId);
+    return privacyCode != null && !privacyCode.isEmpty();
   }
 
   private BooleanExpression composeWasWithheldCondition(final String fieldId,

@@ -18,7 +18,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.Locale;
-import org.antlr.v4.runtime.misc.ParseCancellationException;
 import org.junit.jupiter.api.Test;
 import eu.europa.ted.efx.exceptions.EfxCompilationException;
 import eu.europa.ted.efx.exceptions.InvalidUsageException;
@@ -1377,8 +1376,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testLabelBlock_ShorthandBtLabelReferenceMissingLabelType() {
-    assertThrows(ParseCancellationException.class,
-        () -> translateTemplate("{BT-00-Text}  #{BT-01}"));
+    assertSyntaxError(() -> translateTemplate("{BT-00-Text}  #{BT-01}"));
   }
 
   @Test
@@ -1449,14 +1447,18 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testShorthandIndirectLabelReferenceForText() {
-    assertThrows(ParseCancellationException.class,
+    InvalidUsageException exception = assertThrows(InvalidUsageException.class,
         () -> translateTemplate("{BT-00-Text}  #{BT-00-Text}"));
+    assertEquals(InvalidUsageException.ErrorCode.SHORTHAND_REQUIRES_CODE_OR_INDICATOR,
+        exception.getErrorCode());
   }
 
   @Test
   void testShorthandIndirectLabelReferenceForAttribute() {
-    assertThrows(ParseCancellationException.class,
+    InvalidUsageException exception = assertThrows(InvalidUsageException.class,
         () -> translateTemplate("{BT-00-Text}  #{BT-00-Attribute}"));
+    assertEquals(InvalidUsageException.ErrorCode.SHORTHAND_REQUIRES_CODE_OR_INDICATOR,
+        exception.getErrorCode());
   }
 
   @Test
@@ -1538,8 +1540,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testShorthandLabelReferenceFromContext_WithValueLabelTypeAndTextField() {
-    assertThrows(ParseCancellationException.class,
-        () -> translateTemplate("{BT-00-Text}  #{value}"));
+    assertSyntaxError(() -> translateTemplate("{BT-00-Text}  #{value}"));
   }
 
   @Test
@@ -1555,8 +1556,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testShorthandLabelReferenceFromContext_WithUnknownLabelType() {
-    assertThrows(ParseCancellationException.class,
-        () -> translateTemplate("{BT-00-Text}  #{whatever}"));
+    assertSyntaxError(() -> translateTemplate("{BT-00-Text}  #{whatever}"));
   }
 
   @Test
@@ -1594,7 +1594,10 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testLabelBlock_ShorthandIndirectLabelReferenceFromContextField_WithNodeContext() {
-    assertThrows(ParseCancellationException.class, () -> translateTemplate("{ND-Root} #value"));
+    InvalidUsageException exception = assertThrows(InvalidUsageException.class,
+        () -> translateTemplate("{ND-Root} #value"));
+    assertEquals(InvalidUsageException.ErrorCode.SHORTHAND_REQUIRES_FIELD_CONTEXT,
+        exception.getErrorCode());
   }
 
   @Test
@@ -1670,7 +1673,10 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testExpressionBlock_ShorthandFieldValueReferenceFromContextField_WithNodeContext() {
-    assertThrows(ParseCancellationException.class, () -> translateTemplate("{ND-Root} $value"));
+    InvalidUsageException exception = assertThrows(InvalidUsageException.class,
+        () -> translateTemplate("{ND-Root} $value"));
+    assertEquals(InvalidUsageException.ErrorCode.SHORTHAND_REQUIRES_FIELD_CONTEXT,
+        exception.getErrorCode());
   }
 
   // #endregion Expression block -----------------------------------------------
@@ -1971,7 +1977,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testFormattedExpressionBlock_MoreThanNineDecimals_IsSyntaxError() {
-    assertThrows(ParseCancellationException.class, () -> translateTemplate("{/} ${BT-00-Number|10}"));
+    assertSyntaxError(() -> translateTemplate("{/} ${BT-00-Number|10}"));
   }
 
   @Test
@@ -2137,7 +2143,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testFormattedExpressionBlock_NoFormattingWithOtherOptions_IsSyntaxError() {
-    assertThrows(ParseCancellationException.class, () -> translateTemplate("{/} ${BT-00-Number|2 no-formatting}"));
+    assertSyntaxError(() -> translateTemplate("{/} ${BT-00-Number|2 no-formatting}"));
   }
 
   // Expressions: formatted according to the type of their result.
@@ -2249,7 +2255,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testFormattedExpressionBlock_OptionsInLabel_IsSyntaxError() {
-    assertThrows(ParseCancellationException.class, () -> translateTemplate("{/} #{${'field|name|BT-00-Text'|2}}"));
+    assertSyntaxError(() -> translateTemplate("{/} #{${'field|name|BT-00-Text'|2}}"));
   }
 
   // #endregion Formatted expression blocks ----------------------------------------
@@ -2510,7 +2516,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testContextDeclarationBlock_OnlyVariables() {
-    assertThrows(ParseCancellationException.class, () -> translateTemplate(
+    assertSyntaxError(() -> translateTemplate(
         "{text:$var1='test', number:$var2=123, indicator:$var3=TRUE} Only vars: ${$var1}, ${$var2}, ${$var3}"));
   }
 
