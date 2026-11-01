@@ -273,12 +273,12 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    */
   Operands operandsOf(final Construct construct, final List<? extends TypedExpression> values) {
     return new Operands(construct,
-        values.stream().map(this::operand).collect(Collectors.toList()), values);
+        values.stream().map(this::operand).collect(Collectors.toList()));
   }
 
   private Operands onlyOperandOf(final Construct construct, final ExpressionContext expression) {
     final Operand<?> operand = this.visit(expression);
-    return new Operands(construct, List.of(operand), List.of(operand.value()));
+    return new Operands(construct, List.of(operand));
   }
 
   /**
@@ -607,9 +607,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    */
   private String linkedFieldIdOf(final ParserRuleContext reference, final String baseFieldId,
       final LinkedFieldPropertyContext ctx) {
-    if (!this.isWithholdable(baseFieldId)) {
-      throw InvalidUsageException.fieldNotWithholdable(reference, baseFieldId);
-    }
+    this.requireWithholdable(reference, baseFieldId);
     if (ctx.PublicationDate() != null) {
       return this.symbols.getPrivacySettingOfField(baseFieldId,
           PrivacySetting.PUBLICATION_DATE_FIELD);
@@ -848,18 +846,14 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
       final ExpressionContext position) {
     final Reads reads = this.readsInCurrentContext();
     final int readsBefore = reads.ofContext();
-    final Operand<?> index = this.visit(position);
-    final NumericExpression number = new Operands(INDEX,
-        List.of(new Operand<>(path, origin), index), List.of(path, index.value()))
-            .converted(1, NumericExpression.class, position);
+    final NumericExpression number = index(new Operand<>(path, origin), path,
+        this.visit(position)).converted(1, NumericExpression.class, position);
     final Class<? extends EfxDataType.Primitive> primitive =
         EfxTypeLattice.toPrimitive(path.getDataType());
     final Class<? extends SequencePath> elementsType = SequencePath.fromEfxDataType.get(primitive);
-    final SequencePath elements = this.inParentheses(path, elementsType);
-    final Class<? extends ScalarPath> type = ScalarPath.fromEfxDataType.get(primitive);
-    return new Operand<>(reads.ofContext() > readsBefore
-        ? this.elementAtBoundPosition(elements, elementsType, number, type)
-        : this.script.composeIndexer(elements, number, type), origin);
+    return new Operand<>(this.elementAt(this.inParentheses(path, elementsType), elementsType,
+        number, ScalarPath.fromEfxDataType.get(primitive), reads.ofContext() > readsBefore),
+        origin);
   }
 
   /**
@@ -878,19 +872,49 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
     final TypedExpression given = sequence.value();
     final Reads reads = this.readsInCurrentContext();
     final int readsBefore = reads.all();
-    final Operand<?> index = this.visit(position);
-    final Operands operands =
-        new Operands(INDEX, List.of(sequence, index), List.of(given, index.value()));
+    final Operands operands = index(sequence, given, this.visit(position));
     final TypedExpression value = operands.valueAt(0, this.stack.peekParserContext());
     final NumericExpression number = operands.converted(1, NumericExpression.class, position);
     final Class<? extends SequenceExpression> listType = this.sequenceTypeOf(value);
     final SequenceExpression list = value instanceof PathExpression
         ? this.inParentheses(value, listType)
         : TypedExpression.from(value, listType);
-    final Class<? extends ScalarExpression> type = this.scalarTypeOf(value);
-    return this.operand(reads.all() > readsBefore
-        ? this.elementAtBoundPosition(list, listType, number, type)
-        : this.script.composeIndexer(list, number, type));
+    return this.operand(this.elementAt(list, listType, number, this.scalarTypeOf(value),
+        reads.all() > readsBefore));
+  }
+
+  /**
+   * Gives the operands of an index.
+   *
+   * @param sequence what the index follows
+   * @param elements the elements the index selects from
+   * @param position the position, translated
+   * @return the operands
+   */
+  private static Operands index(final Operand<?> sequence, final TypedExpression elements,
+      final Operand<?> position) {
+    return new Operands(INDEX, List.of(sequence, position), List.of(elements, position.value()));
+  }
+
+  /**
+   * The element at a position in a sequence. The position is read once, where the expression
+   * stands: if the target language would read it again for each element, it is bound before the
+   * element is selected.
+   *
+   * @param <T> the class of the element
+   * @param sequence the sequence
+   * @param sequenceType the class of the sequence
+   * @param position the position, a single number
+   * @param type the class of the element
+   * @param readForEachElement whether the target language would read the position for each element
+   * @return the element at that position
+   */
+  private <T extends ScalarExpression> T elementAt(final SequenceExpression sequence,
+      final Class<? extends SequenceExpression> sequenceType, final NumericExpression position,
+      final Class<T> type, final boolean readForEachElement) {
+    return readForEachElement
+        ? this.elementAtBoundPosition(sequence, sequenceType, position, type)
+        : this.script.composeIndexer(sequence, position, type);
   }
 
   /**
@@ -1134,8 +1158,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   @Override
   public Operand<?> visitParenthesizedExpression(final ParenthesizedExpressionContext ctx) {
     final Operand<?> inner = this.visit(ctx.expression());
-    final TypedExpression value =
-        new Operands(PARENTHESES, List.of(inner), List.of(inner.value())).valueAt(0, ctx);
+    final TypedExpression value = new Operands(PARENTHESES, List.of(inner)).valueAt(0, ctx);
     final Class<? extends TypedExpression> type = value instanceof SequenceExpression
         ? this.sequenceTypeOf(value)
         : this.scalarTypeOf(value);
@@ -1149,9 +1172,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    */
   @Override
   public Operand<?> visitConditionalExpression(final ConditionalExpressionContext ctx) {
-    final List<Operand<?>> operands = this.operandsOf(ctx);
-    final Operands parts = new Operands(CONDITIONAL, operands,
-        operands.stream().map(Operand::value).collect(Collectors.toList()));
+    final Operands parts = new Operands(CONDITIONAL, this.operandsOf(ctx));
     return this.operand(this.conditional(ctx, parts, this.joinOfBranches(ctx, parts)));
   }
 
@@ -1170,13 +1191,13 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   private Class<? extends TypedExpression> joinOfBranches(final ConditionalExpressionContext ctx,
       final Operands parts) {
     final TypedExpression then = parts.valueAt(1, ctx);
-    final Class<? extends ScalarExpression> single = this.scalarTypeOf(then);
-    final Class<? extends SequenceExpression> sequence = this.sequenceTypeOf(then);
-    final TypedExpression otherwise = parts.valueAt(2,
-        List.of(ParameterType.of(single), ParameterType.of(sequence)), ctx.expression(2));
-    return then instanceof SequenceExpression || otherwise instanceof SequenceExpression
+    final ParameterType single = this.bindingOf(ParameterType.T, then);
+    final ParameterType sequence = this.bindingOf(ParameterType.T_SEQUENCE, then);
+    final TypedExpression otherwise =
+        parts.valueAt(2, List.of(single, sequence), ctx.expression(2));
+    return (then instanceof SequenceExpression || otherwise instanceof SequenceExpression
         ? sequence
-        : single;
+        : single).getExpressionType();
   }
 
   private <T extends TypedExpression> T conditional(final ConditionalExpressionContext ctx,
@@ -1377,10 +1398,22 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * @throws InvalidUsageException if the field cannot be withheld
    */
   private String privacyCodeOf(final ParserRuleContext property, final String fieldId) {
-    if (!this.isWithholdable(fieldId)) {
-      throw InvalidUsageException.fieldNotWithholdable(property, fieldId);
-    }
+    this.requireWithholdable(property, fieldId);
     return this.symbols.getPrivacyCodeOfField(fieldId);
+  }
+
+  /**
+   * Rejects a field that cannot be withheld where only such a field has what is asked of it: its
+   * privacy code, or a field linked to its privacy settings.
+   *
+   * @param reference where the error is reported
+   * @param fieldId the field
+   * @throws InvalidUsageException if the field cannot be withheld
+   */
+  private void requireWithholdable(final ParserRuleContext reference, final String fieldId) {
+    if (!this.isWithholdable(fieldId)) {
+      throw InvalidUsageException.fieldNotWithholdable(reference, fieldId);
+    }
   }
 
   /**
@@ -1468,7 +1501,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
         : ParameterType.T;
     return new Operand<>(
         this.script.composeFunctionInvocation(name, arguments.getArgumentValues(),
-            this.typeOf(result, function.expression)),
+            this.bindingOf(result, function.expression).getExpressionType()),
         new IdentifierOrigin<>(this, ctx, name));
   }
 
@@ -1527,7 +1560,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
       final Diagnosis diagnosis = new Diagnosis(construct, arguments.getValues(),
           match.getPosition(), List.of(match.getRequired().describe()));
       final Optional<TypeMismatchException> noValue =
-          operands.get(match.getPosition()).noValueError(diagnosis);
+          operands.get(match.getPosition()).errorOf(Rejection.Kind.PATH, diagnosis);
       if (noValue.isPresent()) {
         throw noValue.get();
       }
@@ -2075,7 +2108,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * @return the scalar class of the operand's primitive
    */
   private Class<? extends ScalarExpression> scalarTypeOf(final TypedExpression operand) {
-    return this.typeOf(ParameterType.T, operand).asSubclass(ScalarExpression.class);
+    return this.bindingOf(ParameterType.T, operand).getExpressionType()
+        .asSubclass(ScalarExpression.class);
   }
 
   /**
@@ -2085,20 +2119,20 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * @return the sequence class of the operand's primitive
    */
   private Class<? extends SequenceExpression> sequenceTypeOf(final TypedExpression operand) {
-    return this.typeOf(ParameterType.T_SEQUENCE, operand).asSubclass(SequenceExpression.class);
+    return this.bindingOf(ParameterType.T_SEQUENCE, operand).getExpressionType()
+        .asSubclass(SequenceExpression.class);
   }
 
   /**
-   * Gives the class a type variable is bound to by an operand. Each construct rejects a node, which
-   * binds no type variable, before it asks for the class of its values.
+   * Gives the type a type variable is bound to by an operand. Each construct rejects a node, which
+   * binds no type variable, before it asks for the type of its values.
    *
    * @throws IllegalStateException if the operand is a node
    */
-  private Class<? extends TypedExpression> typeOf(final ParameterType typeVariable,
+  private ParameterType bindingOf(final ParameterType typeVariable,
       final TypedExpression operand) {
     return typeVariable.boundBy(operand)
-        .orElseThrow(() -> new IllegalStateException("A node has no value: " + operand))
-        .getExpressionType();
+        .orElseThrow(() -> new IllegalStateException("A node has no value: " + operand));
   }
 
   // #endregion Built-ins and operands ----------------------------------------

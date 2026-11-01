@@ -127,13 +127,4 @@ final class Operand<E extends TypedExpression> {
   Optional<TypeMismatchException> errorOf(final Rejection.Kind kind, final Diagnosis diagnosis) {
     return this.origin.errorOf(kind, diagnosis);
   }
-
-  /**
-   * @param diagnosis what the construct taking the operand was given, and what it requires
-   * @return the error where the operand has no value, if the operand is written as a reference
-   *         that explains it, such as a context variable that holds a node
-   */
-  Optional<TypeMismatchException> noValueError(final Diagnosis diagnosis) {
-    return this.origin.noValueError(diagnosis);
-  }
 }

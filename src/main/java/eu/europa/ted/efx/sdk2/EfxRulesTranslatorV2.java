@@ -688,7 +688,7 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
     var rawCall = this.script.composeDynamicFunction(apiFunc.endpointName, funcName, args);
 
     // Compose the variable's expressions: declaration, initialization, and success check ($var == 1).
-    String varName = "__apiResult" + (++this.apiCallCounter);
+    String varName = CallStackV2.RESERVED_PREFIX + "apiResult" + (++this.apiCallCounter);
     var declaration = this.script.composeVariableDeclaration(varName, DynamicExpression.class);
     var initExpression = new DynamicExpression(rawCall.getScript());
     var varRef = this.script.composeVariableReference(varName, NumericExpression.class);
