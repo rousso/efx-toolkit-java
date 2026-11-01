@@ -103,7 +103,7 @@ public final class FunctionCompletions {
      * names, types and result, so that this form folds into it.
      */
     boolean begins(final Form longer) {
-      if (this.signature.getParameters().getVariadic().isPresent()
+      if (this.variadic().isPresent()
           || this.arity() >= longer.arity()
           || !sameType(this.signature.getResult(), longer.signature.getResult())) {
         return false;
@@ -130,8 +130,7 @@ public final class FunctionCompletions {
         parameters.add(new EfxFunctionParameter(parameter.getName(),
             dataTypeOf(parameter.getType()), position >= required, false));
       }
-      final Optional<Parameter> variadic = this.signature.getParameters().getVariadic();
-      variadic.ifPresent(tail -> parameters.add(
+      this.variadic().ifPresent(tail -> parameters.add(
           new EfxFunctionParameter(tail.getName(), dataTypeOf(tail.getType()), false, true)));
       return new CompletionItem(name, CompletionKind.FUNCTION,
           dataTypeOf(this.signature.getResult()), List.copyOf(parameters));
@@ -141,10 +140,13 @@ public final class FunctionCompletions {
       return this.signature.getParameters().getFixed();
     }
 
+    private Optional<Parameter> variadic() {
+      return this.signature.getParameters().getVariadic();
+    }
+
     private Stream<ParameterType> types() {
       return Stream.concat(
-          Stream.concat(this.fixed().stream(),
-              this.signature.getParameters().getVariadic().stream()).map(Parameter::getType),
+          Stream.concat(this.fixed().stream(), this.variadic().stream()).map(Parameter::getType),
           Stream.of(this.signature.getResult()));
     }
 

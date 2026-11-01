@@ -47,7 +47,7 @@ class CatalogueResultTypesTest {
   static Stream<org.junit.jupiter.params.provider.Arguments> boundOverloads() {
     return BuiltIns.INSTANCE.getAll().stream()
         .flatMap(builtIn -> builtIn.getOverloads().stream()
-            .flatMap(overload -> bindings(overload.getSignature())
+            .flatMap(overload -> overload.getSignature().concreteForms().stream()
                 .map(bound -> org.junit.jupiter.params.provider.Arguments.of(builtIn.getName(),
                     bound, overload))));
   }
@@ -63,13 +63,6 @@ class CatalogueResultTypesTest {
         overload.getSignature().getParameters().match(arguments).getArguments());
     assertTrue(bound.getResult().getExpressionType().isInstance(result),
         () -> name + " " + bound + " returned " + result.getClass().getSimpleName());
-  }
-
-  private static Stream<Signature> bindings(final Signature signature) {
-    if (!signature.getParameters().isGeneric()) {
-      return Stream.of(signature);
-    }
-    return TypeVariableParameterType.valuePrimitives().stream().map(signature::bind);
   }
 
   private static int arity(final Signature signature) {
