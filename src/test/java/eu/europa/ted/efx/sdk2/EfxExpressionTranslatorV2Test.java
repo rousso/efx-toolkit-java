@@ -4948,6 +4948,23 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   }
 
   @Test
+  void testIndexer_OnListWithFieldContextVariable() {
+    // The variable holds an element of the field: the position is the field's value read from it
+    testExpressionTranslationWithContext(
+        "for $c in PathNode/NumberField return (1,2,3)[$c/number()]",
+        "ND-Root",
+        "for context:$c in BT-00-Number return [1, 2, 3][at $c]");
+  }
+
+  @Test
+  void testIndexer_OnFieldWithFieldContextVariable() {
+    testExpressionTranslationWithContext(
+        "for $c in PathNode/NumberField return (PathNode/RepeatableTextField)[$c/number()]/normalize-space(text())",
+        "ND-Root",
+        "for context:$c in BT-00-Number return BT-00-Repeatable-Text[at $c]");
+  }
+
+  @Test
   void testIndexer_OnListWithAbsoluteFieldInAFilterOfItsOwn() {
     // The filter reads the root from each of its own elements, not from the values of the list
     testExpressionTranslationWithContext(
@@ -5160,7 +5177,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   void testScalarFromFieldContextVariable_NonRepeatable_Works() {
     // A non-repeatable field context variable used as scalar should work
     testExpressionTranslationWithContext(
-        "for $f in PathNode/TextField return $f = 'test'",
+        "for $f in PathNode/TextField return $f/normalize-space(text()) = 'test'",
         "ND-Root",
         "for context:$f in BT-00-Text return $f == 'test'");
   }
@@ -6072,7 +6089,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   void testContextIterator_WithIndexer() {
     // Indexer selects from the whole sequence in context iterator
     testExpressionTranslationWithContext(
-        "for $x in (PathNode/RepeatableTextField)[1] return $x = 'test'",
+        "for $x in (PathNode/RepeatableTextField)[1] return $x/normalize-space(text()) = 'test'",
         "ND-Root",
         "for context:$x in BT-00-Repeatable-Text[at 1] return $x == 'test'");
   }
@@ -6080,7 +6097,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   @Test
   void testContextIterator_WithPredicateAndIndexer() {
     testExpressionTranslationWithContext(
-        "for $x in (PathNode/TextField['a' = 'a'])[1] return $x = 'test'",
+        "for $x in (PathNode/TextField['a' = 'a'])[1] return $x/normalize-space(text()) = 'test'",
         "ND-Root",
         "for context:$x in BT-00-Text['a' == 'a'][at 1] return $x == 'test'");
   }
@@ -6089,7 +6106,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   void testContextIterator_WithIndexerOnTheVariable() {
     // The variable holds one value, a sequence of one
     testExpressionTranslationWithContext(
-        "for $x in PathNode/RepeatableTextField return ($x)[1] = 'test'",
+        "for $x in PathNode/RepeatableTextField return ($x/normalize-space(text()))[1] = 'test'",
         "ND-Root",
         "for context:$x in BT-00-Repeatable-Text return $x[at 1] == 'test'");
   }
@@ -6097,7 +6114,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   @Test
   void testContextIterator_AbsoluteReference() {
     testExpressionTranslationWithContext(
-        "for $x in /*/PathNode/TextField return $x = 'test'",
+        "for $x in /*/PathNode/TextField return $x/normalize-space(text()) = 'test'",
         "BT-00-Text",
         "for context:$x in /BT-00-Text return $x == 'test'");
   }
@@ -6105,7 +6122,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   @Test
   void testContextIterator_AbsoluteReferenceWithPredicate() {
     testExpressionTranslationWithContext(
-        "for $x in /*/PathNode/TextField['a' = 'a'] return $x = 'test'",
+        "for $x in /*/PathNode/TextField['a' = 'a'] return $x/normalize-space(text()) = 'test'",
         "BT-00-Text",
         "for context:$x in /BT-00-Text['a' == 'a'] return $x == 'test'");
   }
@@ -6113,7 +6130,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   @Test
   void testContextIterator_AbsoluteReferenceWithIndexer() {
     testExpressionTranslationWithContext(
-        "for $x in (/*/PathNode/RepeatableTextField)[1] return $x = 'test'",
+        "for $x in (/*/PathNode/RepeatableTextField)[1] return $x/normalize-space(text()) = 'test'",
         "BT-00-Repeatable-Text",
         "for context:$x in /BT-00-Repeatable-Text[at 1] return $x == 'test'");
   }
@@ -6123,9 +6140,26 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     // The context variable of the first iteration is out of scope in the second, where the name
     // is a text variable
     testExpressionTranslationWithContext(
-        "(every $x in PathNode/RepeatableTextField satisfies $x = 'a') and (every $x in PathNode/RepeatableTextField/normalize-space(text()) satisfies $x = 'b')",
+        "(every $x in PathNode/RepeatableTextField satisfies $x/normalize-space(text()) = 'a') and (every $x in PathNode/RepeatableTextField/normalize-space(text()) satisfies $x = 'b')",
         "ND-Root",
         "(every context:$x in BT-00-Repeatable-Text satisfies $x == 'a') and (every text:$x in BT-00-Repeatable-Text satisfies $x == 'b')");
+  }
+
+  @Test
+  void testContextIterator_AttributeFieldVariable_IsItsAttribute() {
+    // The element of an attribute field is its attribute, which is its value
+    testExpressionTranslationWithContext(
+        "for $c in PathNode/TextField/@Attribute return $c = 'a'",
+        "ND-Root",
+        "for context:$c in BT-00-Attribute return $c == 'a'");
+  }
+
+  @Test
+  void testContextIterator_FieldVariableInPresenceCondition_IsItsElement() {
+    testExpressionTranslationWithContext(
+        "for $c in PathNode/TextField return $c",
+        "ND-Root",
+        "for context:$c in BT-00-Text return $c is present");
   }
 
   // #endregion: Context iterator with structural variations

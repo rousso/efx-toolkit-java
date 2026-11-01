@@ -463,7 +463,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
             "for-each(.).call(body0102(string:ctx2=$ctx2, string:ctx=., string:t2=udf:test($t3, 99)))",
             "for-each(.).call(body0103(string:ctx2=$ctx2, string:ctx4=., string:t5=udf:test($t3, 99))) }",
             "let body0101(string:ctx2, decimal:ctx3) -> { eval(../TextField/normalize-space(text())) }",
-            "let body0102(string:ctx2, string:ctx, string:t2) -> { call(some-template(string:text1=$ctx, string:text2=$t2)) }",
+            "let body0102(string:ctx2, string:ctx, string:t2) -> { call(some-template(string:text1=$ctx/normalize-space(text()), string:text2=$t2)) }",
             "let body0103(string:ctx2, string:ctx4, string:t5) -> { eval(./normalize-space(text())) }",
             "MAIN:",
             "for-each(/*/PathNode/TextField).call(body01(string:ctx2=.))"),
@@ -1154,9 +1154,9 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
             "let body0101(string:xyz, string:ctx, string:t, string:t2) -> { #1.1: eval(for $y in ./normalize-space(text()) return concat($y, $t, $t2))", //
             "for-each(.).call(body010101(string:xyz=$xyz, string:ctx=$ctx, string:t=$t, string:t2=$t2))", //
             "for-each(.).call(body010102(string:xyz=$xyz, string:ctx=$ctx, string:t=$t, string:t2=$t2)) }", //
-            "let body010101(string:xyz, string:ctx, string:t, string:t2) -> { eval(for $z in ./normalize-space(text()) return concat($z, $t, $ctx)) }", //
-            "let body010102(string:xyz, string:ctx, string:t, string:t2) -> { eval(for $z in ./normalize-space(text()) return concat($z, $t, $ctx)) }", //
-            "let body0102(string:xyz, string:ctx, string:t, string:t2) -> { eval(for $z in ./normalize-space(text()) return concat($z, $t2, $ctx)) }", //
+            "let body010101(string:xyz, string:ctx, string:t, string:t2) -> { eval(for $z in ./normalize-space(text()) return concat($z, $t, $ctx/normalize-space(text()))) }", //
+            "let body010102(string:xyz, string:ctx, string:t, string:t2) -> { eval(for $z in ./normalize-space(text()) return concat($z, $t, $ctx/normalize-space(text()))) }", //
+            "let body0102(string:xyz, string:ctx, string:t, string:t2) -> { eval(for $z in ./normalize-space(text()) return concat($z, $t2, $ctx/normalize-space(text()))) }", //
             "MAIN:",
             "for-each(/*/PathNode/TextField).call(body01(string:xyz='a', string:ctx=., string:t=./normalize-space(text())))"), //
         translateTemplate(lines(
@@ -2460,7 +2460,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
     assertEquals(
         lines(
             "TEMPLATES:",
-            "let body01(string:ctx) -> { text('Context: ')eval($ctx) }",
+            "let body01(string:ctx) -> { text('Context: ')eval($ctx/normalize-space(text())) }",
             "MAIN:",
             "for-each(/*/PathNode/TextField).call(body01(string:ctx=.))"),
         translateTemplate("{context:$ctx = BT-00-Text} Context: ${$ctx}"));
@@ -2473,7 +2473,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
     assertEquals(
         lines(
             "TEMPLATES:",
-            "let body01(string:ctx) -> { text('Context: ')eval($ctx) }",
+            "let body01(string:ctx) -> { text('Context: ')eval($ctx/normalize-space(text())) }",
             "let body02(string:ctx) -> { text('Text: ')eval($ctx) }",
             "MAIN:",
             "for-each(/*/PathNode/TextField).call(body01(string:ctx=.))",
@@ -2537,7 +2537,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
     assertEquals(
         lines(
             "TEMPLATES:",
-            "let body01(decimal:ctx) -> { text('Value plus one: ')eval(for $item in $ctx + 1 return format-number($item, '# ##0,#########')) }",
+            "let body01(decimal:ctx) -> { text('Value plus one: ')eval(for $item in $ctx/number() + 1 return format-number($item, '# ##0,#########')) }",
             "MAIN:",
             "for-each(/*/SubNode/RepeatableInSubNode/Number).call(body01(decimal:ctx=.))"),
         result);
