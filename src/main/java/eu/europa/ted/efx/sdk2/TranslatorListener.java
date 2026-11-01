@@ -50,7 +50,7 @@ import eu.europa.ted.efx.sdk2.EfxParser.StandardExpressionBlockContext;
 abstract class TranslatorListener extends EfxBaseListener {
 
   /** An expression block, as a type error names it. */
-  protected static final Construct EXPRESSION_BLOCK = Construct.of("Expression block", "expression");
+  static final Construct EXPRESSION_BLOCK = Construct.of("Expression block", "expression");
 
   /**
    * Symbols are the field identifiers and node identifiers. The symbols map is used to resolve them

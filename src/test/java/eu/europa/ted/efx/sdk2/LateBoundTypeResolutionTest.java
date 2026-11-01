@@ -197,7 +197,7 @@ class LateBoundTypeResolutionTest extends EfxTestsBase {
   @Test
   void testResolveContextVariable_Sequence_IsPromoted() {
     // Promotion: a context variable where a sequence is required gives a sequence of one value.
-    testExpressionTranslationWithContext("for $f in PathNode/RepeatableTextField return 'test' = $f", "ND-Root",
+    testExpressionTranslationWithContext("for $f in PathNode/RepeatableTextField return 'test' = $f/normalize-space(text())", "ND-Root",
         "for context:$f in BT-00-Repeatable-Text return 'test' in $f");
   }
 

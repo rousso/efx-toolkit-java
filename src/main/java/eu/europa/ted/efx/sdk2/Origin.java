@@ -415,6 +415,20 @@ abstract class Origin<E extends TypedExpression> {
       this.context = context;
     }
 
+    /**
+     * The value of a field context variable is the value of its field, read from the element it
+     * holds. The element of an attribute field is its attribute, which is its own value. A node
+     * context variable gives its node.
+     */
+    @Override
+    TypedExpression valueOf(final PathExpression variable) {
+      final String symbol = this.context.symbol();
+      if (this.context.isNodeContext() || this.translator.symbols().isAttributeField(symbol)) {
+        return variable;
+      }
+      return this.translator.script().composeFieldValueReference(variable);
+    }
+
     @Override
     Optional<TypeMismatchException> noValueError(final Diagnosis diagnosis) {
       if (this.context.isNodeContext()) {
