@@ -3261,7 +3261,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
         lines(
             "TEMPLATES:",
             "let body01() -> { #1: eval(PathNode/TextField/normalize-space(text()))",
-            "for-each(../(for $__index in /*/PathNode/NumberField/number() return (/*/PathNode/RepeatableTextField)[$__index])).call(body0101()) }",
+            "for-each((for $__index in PathNode/NumberField/number() return (PathNode/RepeatableTextField)[$__index])).call(body0101()) }",
             "let body0101() -> { eval(./normalize-space(text())) }",
             "MAIN:",
             "for-each(/*).call(body01())"),
@@ -3315,4 +3315,485 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
   }
 
   // #endregion: fieldContext structural variations in template context declarations
+
+  // #region Context declarations of nested template lines ---------------------
+
+  @Test
+  void testContextDeclaration_NestedInRepeatingNode_NodeContextIndex() {
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01() -> { #1: text('a')",
+            "for-each((NonRepeatableSubNode)[2]).call(body0101()) }",
+            "let body0101() -> { text('b') }",
+            "MAIN:",
+            "for-each(/*/RepeatableNode).call(body01())"),
+        translateTemplate(lines(
+            "{ND-RepeatableNode} a",
+            "  {ND-NonRepeatableSubNode[at 2]} b")));
+  }
+
+  @Test
+  void testContextDeclaration_NestedInRepeatingNode_NodeContextIndexReadingAField() {
+    // The position reads the field in each element of the line above
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01() -> { #1: text('a')",
+            "for-each((for $__index in count(TextField/normalize-space(text())) return (RepeatableInRepeatableNode)[$__index])).call(body0101()) }",
+            "let body0101() -> { text('b') }",
+            "MAIN:",
+            "for-each(/*/RepeatableNode).call(body01())"),
+        translateTemplate(lines(
+            "{ND-RepeatableNode} a",
+            "  {ND-RepeatableInRepeatableNode[at count(BT-00-Text-In-Repeatable-Node)]} b")));
+  }
+
+  @Test
+  void testContextDeclaration_NestedInRepeatingNode_FieldContextIndex() {
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01() -> { #1: text('a')",
+            "for-each((TextField)[2]).call(body0101()) }",
+            "let body0101() -> { eval(./normalize-space(text())) }",
+            "MAIN:",
+            "for-each(/*/RepeatableNode).call(body01())"),
+        translateTemplate(lines(
+            "{ND-RepeatableNode} a",
+            "  {BT-00-Text-In-Repeatable-Node[at 2]} ${BT-00-Text-In-Repeatable-Node}")));
+  }
+
+  @Test
+  void testContextDeclaration_NestedInRepeatingNode_FieldContextIndexReadingAField() {
+    // The position reads the field in each element of the line above, where it is a single value
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01() -> { #1: text('a')",
+            "for-each((for $__index in NumberField/number() return (TextField)[$__index])).call(body0101()) }",
+            "let body0101() -> { text('b') }",
+            "MAIN:",
+            "for-each(/*/RepeatableNode).call(body01())"),
+        translateTemplate(lines(
+            "{ND-RepeatableNode} a",
+            "  {BT-00-Text-In-Repeatable-Node[at BT-00-Number-In-Repeatable-Node]} b")));
+  }
+
+  @Test
+  void testContextDeclaration_NestedInRepeatingNode_TwoLevels_IndexReadingAField() {
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01() -> { #1: text('a')",
+            "for-each(NonRepeatableSubNode).call(body0101()) }",
+            "let body0101() -> { #1.1: text('b')",
+            "for-each((for $__index in count(TextField/normalize-space(text())) return (RepeatableSubSubNode)[$__index])).call(body010101()) }",
+            "let body010101() -> { text('c') }",
+            "MAIN:",
+            "for-each(/*/RepeatableNode).call(body01())"),
+        translateTemplate(lines(
+            "{ND-RepeatableNode} a",
+            "  {ND-NonRepeatableSubNode} b",
+            "    {ND-RepeatableSubSubNode[at count(BT-00-Text-In-NonRepeatableSubNode)]} c")));
+  }
+
+  @Test
+  void testContextDeclaration_NestedInRepeatingNode_TwoLevels_BothIndexed() {
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01() -> { #1: text('a')",
+            "for-each((RepeatableInRepeatableNode)[1]).call(body0101()) }",
+            "let body0101() -> { #1.1: text('b')",
+            "for-each((../TextField)[2]).call(body010101()) }",
+            "let body010101() -> { text('c') }",
+            "MAIN:",
+            "for-each(/*/RepeatableNode).call(body01())"),
+        translateTemplate(lines(
+            "{ND-RepeatableNode} a",
+            "  {ND-RepeatableInRepeatableNode[at 1]} b",
+            "    {BT-00-Text-In-Repeatable-Node[at 2]} c")));
+  }
+
+  @Test
+  void testContextDeclaration_NestedInRepeatingNode_WithClauseIndex() {
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01() -> { #1: text('a')",
+            "for-each((NonRepeatableSubNode)[2]).call(body0101()) }",
+            "let body0101() -> { text('b') }",
+            "MAIN:",
+            "for-each(/*/RepeatableNode).call(body01())"),
+        translateTemplate(lines(
+            "{ND-RepeatableNode} a",
+            "  WITH ND-NonRepeatableSubNode[at 2] DISPLAY b;")));
+  }
+
+  @Test
+  void testContextDeclaration_NestedInRepeatingNode_ContextVariableIndex() {
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01() -> { #1: text('a')",
+            "for-each((RepeatableInRepeatableNode)[2]).call(body0101(context:c=.)) }",
+            "let body0101(context:c) -> { eval($c/../TextField/normalize-space(text())) }",
+            "MAIN:",
+            "for-each(/*/RepeatableNode).call(body01())"),
+        translateTemplate(lines(
+            "{ND-RepeatableNode} a",
+            "  {context:$c = ND-RepeatableInRepeatableNode[at 2]} ${$c::BT-00-Text-In-Repeatable-Node}")));
+  }
+
+  @Test
+  void testContextDeclaration_NestedInRepeatingNode_ContextOverrideInIndex() {
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01() -> { #1: text('a')",
+            "for-each((for $__index in count(../PathNode/RepeatableTextField/normalize-space(text())) return (RepeatableInRepeatableNode)[$__index])).call(body0101()) }",
+            "let body0101() -> { text('b') }",
+            "MAIN:",
+            "for-each(/*/RepeatableNode).call(body01())"),
+        translateTemplate(lines(
+            "{ND-RepeatableNode} a",
+            "  {ND-RepeatableInRepeatableNode[at count(ND-Root::BT-00-Repeatable-Text)]} b")));
+  }
+
+  @Test
+  void testContextDeclaration_NestedInRepeatingNode_ContextVariableOverrideInIndex() {
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01(context:r) -> { #1: text('a')",
+            "for-each((RepeatableInRepeatableNode)[count($r/TextField/normalize-space(text()))]).call(body0101(context:r=$r)) }",
+            "let body0101(context:r) -> { text('b') }",
+            "MAIN:",
+            "for-each(/*/RepeatableNode).call(body01(context:r=.))"),
+        translateTemplate(lines(
+            "{context:$r = ND-RepeatableNode} a",
+            "  {ND-RepeatableInRepeatableNode[at count($r::BT-00-Text-In-Repeatable-Node)]} b")));
+  }
+
+  @Test
+  void testContextDeclaration_NestedInRepeatingNode_SameContextAfterIndexedLine() {
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01() -> { #1: text('a')",
+            "for-each((RepeatableInRepeatableNode)[2]).call(body0101())",
+            "for-each((RepeatableInRepeatableNode)[2]).call(body0102()) }",
+            "let body0101() -> { text('b') }",
+            "let body0102() -> { text('c') }",
+            "MAIN:",
+            "for-each(/*/RepeatableNode).call(body01())"),
+        translateTemplate(lines(
+            "{ND-RepeatableNode} a",
+            "  {ND-RepeatableInRepeatableNode[at 2]} b",
+            "  {.} c")));
+  }
+
+  @Test
+  void testContextDeclaration_NestedInRepeatingNode_AttributeFieldInIndexedLine() {
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01() -> { #1: text('a')",
+            "for-each((TextField)[2]).call(body0101()) }",
+            "let body0101() -> { eval(./@attribute) }",
+            "MAIN:",
+            "for-each(/*/RepeatableNode).call(body01())"),
+        translateTemplate(lines(
+            "{ND-RepeatableNode} a",
+            "  {BT-00-Text-In-Repeatable-Node[at 2]} ${BT-00-Attribute-In-Repeatable-Node}")));
+  }
+
+  @Test
+  void testContextDeclaration_NestedInFieldContext_NodeContextIndex() {
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01() -> { #1: text('a')",
+            "for-each((../RepeatableInRepeatableNode)[2]).call(body0101()) }",
+            "let body0101() -> { text('b') }",
+            "MAIN:",
+            "for-each(/*/RepeatableNode/TextField).call(body01())"),
+        translateTemplate(lines(
+            "{BT-00-Text-In-Repeatable-Node} a",
+            "  {ND-RepeatableInRepeatableNode[at 2]} b")));
+  }
+
+  @Test
+  void testContextDeclaration_NestedInFieldContext_NodeContextIndexReadingAField() {
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01() -> { #1: text('a')",
+            "for-each((for $__index in ../NumberField/number() return (../RepeatableInRepeatableNode)[$__index])).call(body0101()) }",
+            "let body0101() -> { text('b') }",
+            "MAIN:",
+            "for-each(/*/RepeatableNode/TextField).call(body01())"),
+        translateTemplate(lines(
+            "{BT-00-Text-In-Repeatable-Node} a",
+            "  {ND-RepeatableInRepeatableNode[at BT-00-Number-In-Repeatable-Node]} b")));
+  }
+
+  @Test
+  void testContextDeclaration_NestedInFieldContext_WithClauseIndex() {
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01() -> { #1: text('a')",
+            "for-each((../RepeatableInRepeatableNode)[2]).call(body0101()) }",
+            "let body0101() -> { text('b') }",
+            "MAIN:",
+            "for-each(/*/RepeatableNode/TextField).call(body01())"),
+        translateTemplate(lines(
+            "WITH BT-00-Text-In-Repeatable-Node DISPLAY a;",
+            "  WITH ND-RepeatableInRepeatableNode[at 2] DISPLAY b;")));
+  }
+
+  @Test
+  void testContextDeclaration_NestedInRepeatingNode_LineAfterAnIndexedLineAndItsChild() {
+    // The last line stands in the element of the first, as the indexed line does
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01() -> { #1: text('a')",
+            "for-each((RepeatableInRepeatableNode)[2]).call(body0101())",
+            "for-each((TextField)[1]).call(body0102()) }",
+            "let body0101() -> { #1.1: text('b')",
+            "for-each(../TextField).call(body010101()) }",
+            "let body010101() -> { text('c') }",
+            "let body0102() -> { text('d') }",
+            "MAIN:",
+            "for-each(/*/RepeatableNode).call(body01())"),
+        translateTemplate(lines(
+            "{ND-RepeatableNode} a",
+            "  {ND-RepeatableInRepeatableNode[at 2]} b",
+            "    {BT-00-Text-In-Repeatable-Node} c",
+            "  {BT-00-Text-In-Repeatable-Node[at 1]} d")));
+  }
+
+
+  @Test
+  void testContextDeclaration_NestedInTemplateDeclaration_NodeContextIndex() {
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let t() -> { text('x')",
+            "for-each(/*/RepeatableNode).call(t01()) }",
+            "let t01() -> { #1: text('a')",
+            "for-each((RepeatableInRepeatableNode)[2]).call(t0101()) }",
+            "let t0101() -> { text('b') }",
+            "let body01() -> { text('c') }",
+            "MAIN:",
+            "for-each(/*).call(body01())"),
+        translateTemplate(lines(
+            "let template:t() display x;",
+            "  {ND-RepeatableNode} a",
+            "    {ND-RepeatableInRepeatableNode[at 2]} b",
+            "{ND-Root} c")));
+  }
+
+  @Test
+  void testContextDeclaration_NestedInRepeatingNode_SameContextAfterADedent() {
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01() -> { #1: text('a')",
+            "for-each((RepeatableInRepeatableNode)[2]).call(body0101())",
+            "for-each((RepeatableInRepeatableNode)[2]).call(body0102()) }",
+            "let body0101() -> { #1.1: text('b')",
+            "for-each(../TextField).call(body010101()) }",
+            "let body010101() -> { text('c') }",
+            "let body0102() -> { text('d') }",
+            "MAIN:",
+            "for-each(/*/RepeatableNode).call(body01())"),
+        translateTemplate(lines(
+            "{ND-RepeatableNode} a",
+            "  {ND-RepeatableInRepeatableNode[at 2]} b",
+            "    {BT-00-Text-In-Repeatable-Node} c",
+            "  {.} d")));
+  }
+
+  @Test
+  void testContextDeclaration_NestedInRepeatingNode_ContextVariableAfterParentContext() {
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01() -> { #1: text('a')",
+            "for-each((RepeatableInRepeatableNode)[2]).call(body0101(context:c=.)) }",
+            "let body0101(context:c) -> { #1.1: text('b')",
+            "for-each(.).call(body010101(context:c=$c)) }",
+            "let body010101(context:c) -> { #1.1.1: text('c')",
+            "for-each(.).call(body01010101(context:c=$c)) }",
+            "let body01010101(context:c) -> { eval($c/../TextField/normalize-space(text())) }",
+            "MAIN:",
+            "for-each(/*/RepeatableNode).call(body01())"),
+        translateTemplate(lines(
+            "{ND-RepeatableNode} a",
+            "  {context:$c = ND-RepeatableInRepeatableNode[at 2]} b",
+            "    {ND-RepeatableInRepeatableNode} c",
+            "      {..} ${$c::BT-00-Text-In-Repeatable-Node}")));
+  }
+
+  @Test
+  void testContextDeclaration_NestedInRepeatingNode_ParentContextAfterALineThatLeavesIt() {
+    // The line above left the element of the line named, so its field or node is selected again, without its brackets
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01() -> { #1: text('a')",
+            "for-each(RepeatableInRepeatableNode[../TextField/normalize-space(text()) = 'x']).call(body0101()) }",
+            "let body0101() -> { #1.1: text('b')",
+            "for-each(../TextField).call(body010101()) }",
+            "let body010101() -> { #1.1.1: text('c')",
+            "for-each(../RepeatableInRepeatableNode).call(body01010101()) }",
+            "let body01010101() -> { text('d') }",
+            "MAIN:",
+            "for-each(/*/RepeatableNode).call(body01())"),
+        translateTemplate(lines(
+            "{ND-RepeatableNode} a",
+            "  {ND-RepeatableInRepeatableNode[BT-00-Text-In-Repeatable-Node == 'x']} b",
+            "    {BT-00-Text-In-Repeatable-Node} c",
+            "      {..} d")));
+  }
+
+
+  @Test
+  void testContextDeclaration_NestedInRepeatingNode_Plain() {
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01() -> { #1: text('a')",
+            "for-each(NonRepeatableSubNode).call(body0101()) }",
+            "let body0101() -> { text('b') }",
+            "MAIN:",
+            "for-each(/*/RepeatableNode).call(body01())"),
+        translateTemplate(lines(
+            "{ND-RepeatableNode} a",
+            "  {ND-NonRepeatableSubNode} b")));
+  }
+
+  @Test
+  void testContextDeclaration_NestedInRepeatingNode_Predicate() {
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01() -> { #1: text('a')",
+            "for-each(NonRepeatableSubNode[TextField/normalize-space(text()) = 'x']).call(body0101()) }",
+            "let body0101() -> { text('b') }",
+            "MAIN:",
+            "for-each(/*/RepeatableNode).call(body01())"),
+        translateTemplate(lines(
+            "{ND-RepeatableNode} a",
+            "  {ND-NonRepeatableSubNode[BT-00-Text-In-NonRepeatableSubNode == 'x']} b")));
+  }
+
+  @Test
+  void testContextDeclaration_NestedInRepeatingNode_SameContextUnderPredicatedLine() {
+    // A line after the predicated line repeats its predicate; a line nested in it stands in its element
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01() -> { #1: text('a')",
+            "for-each(NonRepeatableSubNode[TextField/normalize-space(text()) = 'x']).call(body0101())",
+            "for-each(NonRepeatableSubNode[TextField/normalize-space(text()) = 'x']).call(body0102()) }",
+            "let body0101() -> { text('b') }",
+            "let body0102() -> { #1.2: text('c')",
+            "for-each(.).call(body010201()) }",
+            "let body010201() -> { text('d') }",
+            "MAIN:",
+            "for-each(/*/RepeatableNode).call(body01())"),
+        translateTemplate(lines(
+            "{ND-RepeatableNode} a",
+            "  {ND-NonRepeatableSubNode[BT-00-Text-In-NonRepeatableSubNode == 'x']} b",
+            "  {.} c",
+            "    {.} d")));
+  }
+
+  @Test
+  void testContextDeclaration_NestedInRepeatingNode_ParentContextUnderPredicatedLine() {
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01() -> { #1: text('a')",
+            "for-each(NonRepeatableSubNode[TextField/normalize-space(text()) = 'x']).call(body0101()) }",
+            "let body0101() -> { #1.1: text('b')",
+            "for-each(RepeatableSubSubNode).call(body010101()) }",
+            "let body010101() -> { #1.1.1: text('c')",
+            "for-each(..).call(body01010101()) }",
+            "let body01010101() -> { text('d') }",
+            "MAIN:",
+            "for-each(/*/RepeatableNode).call(body01())"),
+        translateTemplate(lines(
+            "{ND-RepeatableNode} a",
+            "  {ND-NonRepeatableSubNode[BT-00-Text-In-NonRepeatableSubNode == 'x']} b",
+            "    {ND-RepeatableSubSubNode} c",
+            "      {..} d")));
+  }
+
+  @Test
+  void testContextDeclaration_NestedInRepeatingNode_AbsoluteReference() {
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01() -> { #1: text('a')",
+            "for-each(/*/SubNode).call(body0101()) }",
+            "let body0101() -> { text('b') }",
+            "MAIN:",
+            "for-each(/*/RepeatableNode).call(body01())"),
+        translateTemplate(lines(
+            "{ND-RepeatableNode} a",
+            "  {/ND-SubNode} b")));
+  }
+
+  @Test
+  void testContextDeclaration_NestedInRepeatingNode_AbsoluteReferenceWithIndex() {
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01() -> { #1: text('a')",
+            "for-each((/*/RepeatableNode)[2]).call(body0101()) }",
+            "let body0101() -> { text('b') }",
+            "MAIN:",
+            "for-each(/*/RepeatableNode).call(body01())"),
+        translateTemplate(lines(
+            "{ND-RepeatableNode} a",
+            "  {/ND-RepeatableNode[at 2]} b")));
+  }
+
+  @Test
+  void testContextDeclaration_AttributeFieldInIndexedLine() {
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01() -> { eval(./@attribute) }",
+            "MAIN:",
+            "for-each((/*/RepeatableNode/TextField)[2]).call(body01())"),
+        translateTemplate("{BT-00-Text-In-Repeatable-Node[at 2]} ${BT-00-Attribute-In-Repeatable-Node}"));
+  }
+
+  @Test
+  void testContextDeclaration_SameAndParentContextUnderPredicatedLine() {
+    // Both lines stand in the element of the line above
+    assertEquals(
+        lines(
+            "TEMPLATES:",
+            "let body01() -> { #1: text('a')",
+            "for-each(.).call(body0101())",
+            "for-each(.).call(body0102()) }",
+            "let body0101() -> { text('b') }",
+            "let body0102() -> { text('c') }",
+            "MAIN:",
+            "for-each(/*/RepeatableNode[TextField/normalize-space(text()) = 'x']).call(body01())"),
+        translateTemplate(lines(
+            "{ND-RepeatableNode[BT-00-Text-In-Repeatable-Node == 'x']} a",
+            "  {.} b",
+            "  {..} c")));
+  }
+
+  // #endregion Context declarations of nested template lines ------------------
 }

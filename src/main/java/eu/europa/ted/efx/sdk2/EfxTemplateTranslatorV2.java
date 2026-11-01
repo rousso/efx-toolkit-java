@@ -170,6 +170,13 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
    */
   ContentBlockStack blockStack = new ContentBlockStack();
 
+  /**
+   * The block of the line above the template line being translated, which the line is nested in:
+   * the root of its section or of the declared templates for a line at the top, or none for the
+   * first line.
+   */
+  private ContentBlock blockAbove;
+
   @SuppressWarnings("unused")
   private EfxTemplateTranslatorV2() {
     this(null, null, null, null);
@@ -1174,56 +1181,54 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
         this.exitParentContextDeclaration();
         break;
       case "/":
-        this.exitRootContextDeclaration();
+        this.declareRootLineContext();
         break;
       default:
+        final Context declared = this.declaredContextOf(ctx);
+        Variable contextVariable = null;
         if (ctx.contextVariableInitializer() != null) {
-          Context declared = this.expressions.contextAssignedBy(ctx.contextVariableInitializer());
-          Variable contextVariable =
+          contextVariable =
               this.getContextVariable(ctx.contextVariableInitializer(), declared.relativePath());
           this.stack.peek(Variables.class).add(contextVariable);
-          this.exitContextDeclaration(declared, contextVariable);
-        } else {
-          this.exitContextDeclaration(
-              this.expressions.contextOf(ctx.getRuleContext(ParserRuleContext.class, 0)), null);
         }
+        this.declareContext(declared, contextVariable);
         break;
     }
   }
 
   private void exitSameContextDeclaration() {
-    Context currentContext = this.blockStack.currentContext();
-
-    // Verify that efxContext.peek() gives the same result as blockStack.currentContext()
-    assert this.efxContext.isEmpty() || currentContext.symbol().equals(this.efxContext.peek().symbol())
-        : "Context mismatch: blockStack.currentContext()=" + currentContext.symbol()
-            + " but efxContext.peek()=" + this.efxContext.peek().symbol();
-
-    PathExpression contextPath = currentContext.absolutePath();
-    String symbol = currentContext.symbol();
-    if (currentContext.isFieldContext()) {
-      this.exitFieldContextDeclaration(symbol, contextPath, null);
-    } else if (currentContext.isNodeContext()) {
-      this.exitNodeContextDeclaration(symbol, contextPath, currentContext.variable());
+    final Context currentContext = this.blockStack.currentContext();
+    // A line nested in the line before it stands in that line's element. A line after it, at the
+    // same level, stands in the same line above, so it takes that line's context as it is.
+    if (this.blockAbove != null && this.blockAbove == this.blockStack.peek()) {
+      this.declareLineContext(currentContext);
+    } else {
+      this.declareContext(currentContext, null);
     }
   }
 
   private void exitParentContextDeclaration() {
-    Context parentContext = this.blockStack.parentContext();
+    this.declareLineContext(this.blockStack.parentContext());
+  }
 
-    // Verify that efxContext.peekParent() gives the same result as blockStack.parentContext()
-    Context efxParentContext = this.efxContext.peekParentContext();
-    assert efxParentContext == null || parentContext.symbol().equals(efxParentContext.symbol())
-        : "Context mismatch: blockStack.parentContext()=" + parentContext.symbol()
-            + " but efxContext.peekParent()=" + efxParentContext.symbol();
+  /**
+   * Declares the root as the context of a template line that writes it, {@code /}, or that
+   * declares no context.
+   */
+  private void declareRootLineContext() {
+    this.declareLineContext(
+        new NodeContext(this.symbols.getRootNodeId(), this.symbols.getRootPath()));
+  }
 
-    PathExpression contextPath = parentContext.absolutePath();
-    String symbol = parentContext.symbol();
-    if (parentContext.isFieldContext()) {
-      this.exitFieldContextDeclaration(symbol, contextPath, null);
-    } else if (parentContext.isNodeContext()) {
-      this.exitNodeContextDeclaration(symbol, contextPath, parentContext.variable());
-    }
+  /**
+   * Declares the context of a template line that names a context by its absolute path: the root,
+   * or the context of another line. Its path from the context above is the path between the
+   * two.
+   *
+   * @param named the context the line names
+   */
+  private void declareLineContext(final Context named) {
+    this.declareContext(this.relativizeContext(named, this.contextAbove()), null);
   }
 
   // #region Conditional template blocks --------------------------------------
@@ -1351,9 +1356,11 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
 
   @Override
   public void enterTemplateLine(TemplateLineContext ctx) {
-    this.enterTemplateLine(ctx, this.getIndentLevel(ctx.indentation()));
+    final int indentLevel = this.getIndentLevel(ctx.indentation());
+    this.enterTemplateLine(ctx, indentLevel);
+    this.blockAbove = this.blockStack.blockAtLevel(indentLevel - 1);
     if (ctx.contextDeclarationBlock() == null) {
-      this.exitRootContextDeclaration();
+      this.declareRootLineContext();
       this.stack.push(new Variables());
     }
   }
@@ -1390,6 +1397,14 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
     }
   }
 
+  /**
+   * @return the context of the line above the template line being translated, which the line is
+   *         nested in, or {@code null} when there is none, as for a line at the top
+   */
+  private Context contextAbove() {
+    return this.blockAbove != null ? this.blockAbove.getContext() : null;
+  }
+
   @Override
   public void exitTemplateLine(TemplateLineContext ctx) {
     final Context lineContext = this.efxContext.pop();
@@ -1415,18 +1430,16 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
       if (this.blockStack.peek() instanceof TemplateInvocation) {
         throw InvalidIndentationException.noNestingOnInvocations(ctx);
       }
-        this.blockStack.pushChild(outlineNumber, this.relativizeContext(lineContext, this.blockStack.currentContext()), variables,
-            contentTemplates);
+      this.blockStack.pushChild(outlineNumber, lineContext, variables, contentTemplates);
     } else if (indentLevel == 0) {
       // A top-level line is a new block of the current section, also when it follows a declared
       // template and its lines.
       this.blockStack.clear();
       final ContentBlock sectionRoot = this.viewTemplate.getSection(this.translatorContext.getCurrentSection()).getRoot();
-      this.blockStack.push(sectionRoot.addChild(outlineNumber, this.relativizeContext(lineContext, sectionRoot.getContext()), variables,
+      this.blockStack.push(sectionRoot.addChild(outlineNumber, lineContext, variables,
           contentTemplates));
     } else {
-      this.blockStack.pushSibling(outlineNumber, this.relativizeContext(lineContext, this.blockStack.parentContext()), variables,
-          contentTemplates);
+      this.blockStack.pushSibling(outlineNumber, lineContext, variables, contentTemplates);
     }
   }
 
@@ -1447,6 +1460,38 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
 
     this.blockStack.clear();
     this.blockStack.push(this.viewTemplate.getTemplateDeclarations().addChild(template.name, contentTemplates, template.parameters));
+  }
+
+  /**
+   * Translates the context a template line declares by a field or a node, or by a context
+   * variable assigned one, where the line stands: in the context of the line above, so that an
+   * index after the reference, and every position, condition and reference in its brackets, is
+   * read within the element of that line, as in an expression.
+   *
+   * @param declaration the context declaration of the line
+   * @return the context it declares: the absolute path of its field or node, and its path from
+   *         the context above
+   */
+  private Context declaredContextOf(final ContextDeclarationContext declaration) {
+    final Context contextAbove = this.contextAbove();
+    if (contextAbove == null) {
+      return this.translatedContextOf(declaration);
+    }
+    this.efxContext.push(contextAbove);
+    final Context declared = this.translatedContextOf(declaration);
+    this.efxContext.pop();
+    return declared;
+  }
+
+  /**
+   * @param declaration the context declaration of a template line, by a field or a node, or by a
+   *        context variable assigned one
+   * @return the context it declares, translated in the current context
+   */
+  private Context translatedContextOf(final ContextDeclarationContext declaration) {
+    return declaration.contextVariableInitializer() != null
+        ? this.expressions.contextAssignedBy(declaration.contextVariableInitializer())
+        : this.expressions.contextOf(declaration.getRuleContext(ParserRuleContext.class, 0));
   }
 
   private Context relativizeContext(Context childContext, Context parentContext) {
