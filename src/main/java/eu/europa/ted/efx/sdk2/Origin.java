@@ -261,8 +261,7 @@ abstract class Origin<E extends TypedExpression> {
   }
 
   /**
-   * A field. Its value is the value step on its path. It records the context it is read from,
-   * which its error names.
+   * A field. Its value is the value step on its path. It records the context its error names.
    */
   static final class FieldOrigin extends PathOrigin {
 
@@ -274,7 +273,8 @@ abstract class Origin<E extends TypedExpression> {
      * @param translator the visitor
      * @param reference the reference to the field
      * @param fieldId the field
-     * @param contextSymbol the context the field is read from, or {@code null} for the root
+     * @param contextSymbol the context its error names: the context of the expression the field
+     *        is written in, also after {@code ::}, or {@code null} for an absolute reference
      */
     FieldOrigin(final EfxExpressionVisitor translator, final ParserRuleContext reference,
         final String fieldId, final String contextSymbol) {
