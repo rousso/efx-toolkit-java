@@ -7,7 +7,8 @@
 # (LogicalOperators, StringFunctions, NumericFunctions, DateTimeFunctions, ConversionFunctions,
 # SequenceFunctions, TemplateFunctions), each built-in's overloads in their order, and an overload
 # over T once per value type in the order T knows them (text, indicator, number, date, time,
-# duration); then the keywords and the properties, in the order of EfxKeyword and
+# duration); a form folded into a longer one, whose extra parameters it makes optional, has no
+# line of its own. Then the keywords and the properties, in the order of EfxKeyword and
 # EfxLinkedProperty.
 #
 # Written once from the hand-written list it replaces (EfxBuiltInFunction, deleted in P5.1), with
