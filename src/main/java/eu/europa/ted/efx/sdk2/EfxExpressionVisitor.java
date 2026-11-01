@@ -105,8 +105,8 @@ import eu.europa.ted.efx.util.EfxRegexValidator;
  * <p>The grammar does not type expressions: each visit translates its subtree and returns an
  * {@link Operand}, the translated expression with what it is written as. The parent reads each
  * operand as a value, as a path or as a context, and the catalogue of built-ins decides what each
- * operator and built-in accepts and gives. The composites (lists, conditionals, iterations and
- * brackets) check their own parts.</p>
+ * operator and built-in accepts and gives. The composites (lists, conditionals, iterations,
+ * predicates and indexes) check their own parts.</p>
  *
  * <p>The template and rules translators hold a visitor for the expressions their files contain.
  * Their behaviour in expressions is given by subclasses: the template's allows the built-ins that
@@ -130,8 +130,24 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   /** An iteration, as a type error names it. */
   private static final Construct ITERATION = Construct.of("Iteration 'for'", "body");
 
-  /** A bracket after a field, a node or a value, as a type error names it. */
-  private static final Construct BRACKET = Construct.of("Bracket", "sequence", "content");
+  /** A predicate after a field or a node, as a type error names it. */
+  private static final Construct PREDICATE = Construct.of("Predicate", "sequence", "condition");
+
+  /** An index after a sequence, as a type error names it. */
+  private static final Construct INDEX = Construct.of("Index", "sequence", "position");
+
+  /**
+   * What the error of a predicate whose condition is a number suggests: the index it may mean.
+   */
+  private static final List<String> SELECT_BY_POSITION =
+      List.of("To select by position, write [at n].");
+
+  /**
+   * The variable that an index binds its position to, where the position is read once before the
+   * element is selected. Like every name the translator generates, it starts with a prefix that no
+   * declaration may give.
+   */
+  private static final String INDEX_VARIABLE = CallStackV2.RESERVED_PREFIX + "index";
 
   /** A context override, as a type error names it. */
   private static final Construct CONTEXT_OVERRIDE = Construct.operator("::", 2);
@@ -151,9 +167,9 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   private final Map<Variable, Context> contextsOfVariables = new IdentityHashMap<>();
 
   /**
-   * The reads made in each context while it is the current one, so that a bracket can tell
-   * whether its content reads the context it is translated in. A reference is resolved only
-   * through {@link #relativePathOfField}, {@link #relativePathOfNode},
+   * The reads made in each context while it is the current one, so that an index can tell whether
+   * its position reads what the target language would read differently for each element. A
+   * reference is resolved only through {@link #relativePathOfField}, {@link #relativePathOfNode},
    * {@link #absolutePathOfCurrentContext}, {@link #absolutePathOfField} and
    * {@link #absolutePathOfNode}, and a dictionary is only looked up by {@link #lookUp}, which
    * count the read in the current context.
@@ -472,26 +488,33 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   }
 
   /**
-   * A field with its predicates, where a context is declared or a field is taken as it is.
+   * A field with its predicates and indexes, where a context is declared or a field is taken as
+   * it is.
    */
   @Override
   public Operand<?> visitFieldContext(final FieldContextContext ctx) {
-    return this.withPredicates(this.visitOnlyChild(ctx), ctx.predicate());
+    return this.withBrackets(this.visitOnlyChild(ctx), ctx.contextBracket());
   }
 
   /**
-   * A node with its predicates, where a context is declared.
+   * A node with its predicates and indexes, where a context is declared.
    */
   @Override
   public Operand<?> visitNodeContext(final NodeContextContext ctx) {
-    return this.withPredicates(this.visitOnlyChild(ctx), ctx.predicate());
+    return this.withBrackets(this.visitOnlyChild(ctx), ctx.contextBracket());
   }
 
-  private Operand<?> withPredicates(final Operand<?> reference,
-      final List<PredicateContext> predicates) {
+  /**
+   * Applies the predicates and the indexes after the reference of a context, in the order they
+   * are written.
+   */
+  private Operand<?> withBrackets(final Operand<?> reference,
+      final List<ContextBracketContext> brackets) {
     Operand<?> selected = reference;
-    for (final PredicateContext predicate : predicates) {
-      selected = selected.indexedBy(predicate.expression());
+    for (final ContextBracketContext bracket : brackets) {
+      selected = bracket.predicate() != null
+          ? selected.filteredBy(bracket.predicate().expression())
+          : selected.indexedBy(bracket.position);
     }
     return selected;
   }
@@ -743,8 +766,15 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   // #region Brackets ---------------------------------------------------------
 
   /**
-   * A bracket: after a field or a node, a filter or a position among the elements its path
-   * selects; after a dictionary, a key; after a value, a position in its sequence.
+   * A predicate, or a key in brackets after the name of a dictionary.
+   */
+  @Override
+  public Operand<?> visitFilteredExpression(final FilteredExpressionContext ctx) {
+    return this.visit(ctx.expression(0)).filteredBy(ctx.expression(1));
+  }
+
+  /**
+   * An index: the element at a position in a sequence.
    */
   @Override
   public Operand<?> visitIndexedExpression(final IndexedExpressionContext ctx) {
@@ -752,79 +782,141 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   }
 
   /**
-   * A bracket after a field or a node. Its content is read in the context of the field or node, as
-   * each element the path selects: a condition filters the elements, and a number selects one of
-   * them, by its position in the whole sequence the path selects. A number is computed once, so it
-   * must not read the field or node.
+   * A predicate after a field or a node. Its condition is read in the context of the field or
+   * node, as each element the path selects, and keeps the elements for which it holds.
    *
    * @param path the path of the field or the node
    * @param origin the field or the node
-   * @param content the content of the bracket
-   * @return the elements the bracket selects, with the origin of the field or node
-   * @throws InvalidUsageException if a number reads the field or node
+   * @param condition the condition of the predicate
+   * @return the elements the predicate keeps, with the origin of the field or node
+   * @throws TypeMismatchException if the condition is not an indicator
    */
-  Operand<?> positionInPath(final PathExpression path, final PathOrigin origin,
-      final ExpressionContext content) {
+  Operand<?> filtered(final PathExpression path, final PathOrigin origin,
+      final ExpressionContext condition) {
     origin.pushElementContext();
-    final Reads reads = this.readsInCurrentContext();
-    final int readsBefore = reads.ofContext();
-    final Operand<?> selector = this.visit(content);
-    final TypedExpression value = selector.value();
-    final Operands bracket =
-        new Operands(BRACKET, List.of(new Operand<>(path, origin), selector), List.of(path, value));
-    final PathExpression selected;
-    if (value.is(EfxDataType.Boolean.class)) {
-      selected = origin.filter(path, bracket.converted(1, BooleanExpression.class, content));
-    } else if (value.is(EfxDataType.Number.class)) {
-      rejectIndexReadingContext(content, readsBefore, reads.ofContext());
-      selected = this.elementAt(path, bracket.converted(1, NumericExpression.class, content));
-    } else {
-      throw bracket.rejected(1, List.of(ParameterType.INDICATOR, ParameterType.NUMBER), content);
-    }
+    final PathExpression selected = origin.filter(path,
+        predicate(new Operand<>(path, origin), path, this.visit(condition))
+            .converted(1, BooleanExpression.class, condition));
     this.readsInContexts.remove(this.efxContext.pop());
     return new Operand<>(selected, origin);
   }
 
   /**
-   * The element at a position in the whole sequence a path selects, rather than at that position
-   * among the children of each parent, which the predicate on the last step of the path would
-   * select.
+   * A predicate after a value, which is rejected: a value has no elements that the condition could
+   * be read from. The condition is translated only so that the error names its type.
+   *
+   * @param sequence the value
+   * @param condition the condition of the predicate
+   * @return the error
    */
-  private PathExpression elementAt(final PathExpression path, final NumericExpression index) {
-    final Class<? extends EfxDataType.Primitive> primitive =
-        EfxTypeLattice.toPrimitive(path.getDataType());
-    return this.script.composeIndexer(
-        this.inParentheses(path, SequencePath.fromEfxDataType.get(primitive)), index,
-        ScalarPath.fromEfxDataType.get(primitive));
+  TypeMismatchException predicateOnValue(final Operand<?> sequence,
+      final ExpressionContext condition) {
+    return predicate(sequence, sequence.expression(), this.visit(condition))
+        .rejected(0, List.of(ParameterType.PATH), this.stack.peekParserContext());
   }
 
   /**
-   * A bracket after a value: a position in the sequence of its values. A single value is a
-   * sequence of one. The position is computed once, so it must read neither the context nor the
-   * root, by a path or by a lookup in a dictionary: the target language reads the content for each
-   * value, which has no element that a path or a lookup could start from. What the content reads
-   * in a bracket of its own is read from the elements of that bracket.
+   * Gives the operands of a predicate. A number for its condition is a position written as a
+   * predicate, so its errors suggest the index.
+   *
+   * @param sequence what the predicate follows
+   * @param elements the elements the predicate reads from it
+   * @param condition the condition, translated
+   * @return the operands
+   */
+  private static Operands predicate(final Operand<?> sequence, final TypedExpression elements,
+      final Operand<?> condition) {
+    final TypedExpression value = condition.value();
+    return new Operands(PREDICATE, List.of(sequence, condition), List.of(elements, value),
+        value.is(EfxDataType.Number.class) ? SELECT_BY_POSITION : List.of());
+  }
+
+  /**
+   * An index after a field or a node: the element at a position in the whole sequence the path
+   * selects, rather than at that position among the children of each parent, which a predicate on
+   * the last step of the path would select. The position is read once, where the expression
+   * stands. It is bound before the element is selected if it reads the context, which the target
+   * language would read from each element instead.
+   *
+   * @param path the path of the field or the node
+   * @param origin the field or the node
+   * @param position the position the index selects
+   * @return the element at that position, with the origin of the field or node
+   * @throws TypeMismatchException if the position is not a number
+   */
+  Operand<?> positionInPath(final PathExpression path, final PathOrigin origin,
+      final ExpressionContext position) {
+    final Reads reads = this.readsInCurrentContext();
+    final int readsBefore = reads.ofContext();
+    final Operand<?> index = this.visit(position);
+    final NumericExpression number = new Operands(INDEX,
+        List.of(new Operand<>(path, origin), index), List.of(path, index.value()))
+            .converted(1, NumericExpression.class, position);
+    final Class<? extends EfxDataType.Primitive> primitive =
+        EfxTypeLattice.toPrimitive(path.getDataType());
+    final Class<? extends SequencePath> elementsType = SequencePath.fromEfxDataType.get(primitive);
+    final SequencePath elements = this.inParentheses(path, elementsType);
+    final Class<? extends ScalarPath> type = ScalarPath.fromEfxDataType.get(primitive);
+    return new Operand<>(reads.ofContext() > readsBefore
+        ? this.elementAtBoundPosition(elements, elementsType, number, type)
+        : this.script.composeIndexer(elements, number, type), origin);
+  }
+
+  /**
+   * An index after a value: the value at a position in the sequence of its values. A single value
+   * is a sequence of one. The position is read once, where the expression stands. It is bound
+   * before the value is selected if it reads the context or the root, by a path or by a lookup in a
+   * dictionary: the target language would read it for each value, which has no element that a
+   * path or a lookup could start from.
    *
    * @param sequence the value
-   * @param content the content of the bracket
+   * @param position the position the index selects
    * @return the value at that position
-   * @throws InvalidUsageException if the position reads the context or the root
+   * @throws TypeMismatchException if the operand has no value or the position is not a number
    */
-  Operand<?> positionInValue(final Operand<?> sequence, final ExpressionContext content) {
+  Operand<?> positionInValue(final Operand<?> sequence, final ExpressionContext position) {
     final TypedExpression given = sequence.value();
     final Reads reads = this.readsInCurrentContext();
     final int readsBefore = reads.all();
-    final Operand<?> position = this.visit(content);
-    final Operands bracket =
-        new Operands(BRACKET, List.of(sequence, position), List.of(given, position.value()));
-    final TypedExpression value = bracket.valueAt(0, this.stack.peekParserContext());
-    final NumericExpression index = bracket.converted(1, NumericExpression.class, content);
-    rejectIndexReadingContext(content, readsBefore, reads.all());
+    final Operand<?> index = this.visit(position);
+    final Operands operands =
+        new Operands(INDEX, List.of(sequence, index), List.of(given, index.value()));
+    final TypedExpression value = operands.valueAt(0, this.stack.peekParserContext());
+    final NumericExpression number = operands.converted(1, NumericExpression.class, position);
     final Class<? extends SequenceExpression> listType = this.sequenceTypeOf(value);
     final SequenceExpression list = value instanceof PathExpression
         ? this.inParentheses(value, listType)
         : TypedExpression.from(value, listType);
-    return this.operand(this.script.composeIndexer(list, index, this.scalarTypeOf(value)));
+    final Class<? extends ScalarExpression> type = this.scalarTypeOf(value);
+    return this.operand(reads.all() > readsBefore
+        ? this.elementAtBoundPosition(list, listType, number, type)
+        : this.script.composeIndexer(list, number, type));
+  }
+
+  /**
+   * The element at a position that is bound before the element is selected, so that the target
+   * language reads it once rather than for each element of the sequence. The binding is in
+   * parentheses, so that a step, a predicate or an operator after it applies to the element:
+   * {@code (for $__index in position return sequence[$__index])}.
+   *
+   * @param <T> the class of the element
+   * @param sequence the sequence
+   * @param sequenceType the class of the sequence
+   * @param position the position, a single number
+   * @param type the class of the element
+   * @return the element at that position
+   */
+  private <T extends ScalarExpression> T elementAtBoundPosition(final SequenceExpression sequence,
+      final Class<? extends SequenceExpression> sequenceType, final NumericExpression position,
+      final Class<T> type) {
+    final IteratorListExpression binding =
+        this.script.composeIteratorList(List.of(this.script.composeIteratorExpression(
+            this.script.composeVariableDeclaration(INDEX_VARIABLE, NumericExpression.class),
+            TypedExpression.from(position, NumericSequenceExpression.class))));
+    final T element = this.script.composeIndexer(sequence,
+        this.script.composeVariableReference(INDEX_VARIABLE, NumericExpression.class), type);
+    return this.inParentheses(
+        this.script.composeForExpression(binding, element, sequenceType), type);
   }
 
   /**
@@ -847,23 +939,6 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
                 Construct.of("Dictionary '" + reference.getText() + "'", "key")),
             dictionary.type),
         new DictionaryOrigin(this, reference, dictionary.name));
-  }
-
-  /**
-   * An index is computed once, where the expression stands. The target language evaluates the
-   * content of a bracket for each element instead, so content that reads the context would give a
-   * different number for each element; it is rejected.
-   *
-   * @param content the content of the bracket, translated in the current context
-   * @param readsBefore the reads the content must not make, counted before it was translated
-   * @param readsAfter the same reads, counted after
-   * @throws InvalidUsageException if translating the content made such a read
-   */
-  private static void rejectIndexReadingContext(final ExpressionContext content,
-      final int readsBefore, final int readsAfter) {
-    if (readsAfter > readsBefore) {
-      throw InvalidUsageException.indexReadsContext(content);
-    }
   }
 
   /**

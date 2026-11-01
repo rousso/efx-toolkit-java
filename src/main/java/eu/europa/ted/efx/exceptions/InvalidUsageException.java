@@ -37,8 +37,7 @@ public class InvalidUsageException extends EfxCompilationException {
         INVALID_ENDPOINT_NAME,
         INVALID_FORMAT_OPTIONS,
         UNIT_FOR_LIST,
-        NO_UNIT_NOT_APPLICABLE,
-        INDEX_READS_CONTEXT
+        NO_UNIT_NOT_APPLICABLE
     }
 
     private static final String SHORTHAND_REQUIRES_CODE_OR_INDICATOR = "Indirect label reference shorthand #{%1$s}, requires a field of type 'code' or 'indicator'. Field %1$s is of type %2$s.";
@@ -56,7 +55,6 @@ public class InvalidUsageException extends EfxCompilationException {
     private static final String INVALID_FORMAT_OPTIONS = "A number of decimals can only format a number, and short, medium or long only a date or a time.";
     private static final String UNIT_FOR_LIST = "A unit can only be displayed with a single value. Add no-unit to display the values without their unit.";
     private static final String NO_UNIT_NOT_APPLICABLE = "no-unit can only be used for an amount, a measure or a duration.";
-    private static final String INDEX_READS_CONTEXT = "The index '%s' reads a field or a node from its context. An index is computed once, where the expression stands: bind it to a variable first, and index with the variable.";
 
     private final ErrorCode errorCode;
 
@@ -132,16 +130,5 @@ public class InvalidUsageException extends EfxCompilationException {
 
     public static InvalidUsageException noUnitNotApplicable(ParserRuleContext ctx) {
         return new InvalidUsageException(ErrorCode.NO_UNIT_NOT_APPLICABLE, ctx, NO_UNIT_NOT_APPLICABLE);
-    }
-
-    /**
-     * An index is a number computed once, where the expression stands, so it cannot read the
-     * context that the target language would evaluate it in, once for each element.
-     *
-     * @param index the content of the bracket
-     * @return the exception that rejects it
-     */
-    public static InvalidUsageException indexReadsContext(ParserRuleContext index) {
-        return new InvalidUsageException(ErrorCode.INDEX_READS_CONTEXT, index, INDEX_READS_CONTEXT, index.getText());
     }
 }

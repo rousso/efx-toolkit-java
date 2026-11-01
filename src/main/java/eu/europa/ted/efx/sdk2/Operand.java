@@ -81,13 +81,24 @@ final class Operand<E extends TypedExpression> {
   }
 
   /**
-   * Translates a bracket after the operand.
+   * Translates a predicate after the operand, or a lookup after the name of a dictionary, which is
+   * written as one.
    *
-   * @param content the content of the bracket
-   * @return the operand selected by the bracket
+   * @param condition the condition of the predicate, or the key of the lookup
+   * @return the operand selected by the predicate, or the values the key indexes
    */
-  Operand<?> indexedBy(final ExpressionContext content) {
-    return this.origin.indexedBy(this.expression, content);
+  Operand<?> filteredBy(final ExpressionContext condition) {
+    return this.origin.filteredBy(this.expression, condition);
+  }
+
+  /**
+   * Translates an index after the operand.
+   *
+   * @param position the position the index selects
+   * @return the operand selected by the index
+   */
+  Operand<?> indexedBy(final ExpressionContext position) {
+    return this.origin.indexedBy(this.expression, position);
   }
 
   /**

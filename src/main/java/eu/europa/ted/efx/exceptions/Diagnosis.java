@@ -15,6 +15,7 @@ package eu.europa.ted.efx.exceptions;
 
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.types.EfxTypeTokenLookup;
@@ -25,7 +26,9 @@ import eu.europa.ted.efx.model.types.EfxTypeTokenLookup;
  *
  * <p>Every type error starts with the same two sentences, whichever part of the translator finds
  * it: "Operator '==' cannot take 'text' and 'number'. Its right operand must be 'text'." Types are
- * named as a declaration writes them, with a star for a sequence, and a node is 'node'.</p>
+ * named as a declaration writes them, with a star for a sequence, and a node is 'node'. Where the
+ * mistake suggests what was meant, a sentence that says what to write instead follows them, such as
+ * "To select by position, write [at n]."</p>
  */
 public final class Diagnosis {
 
@@ -33,6 +36,7 @@ public final class Diagnosis {
   private final List<TypedExpression> operands;
   private final int position;
   private final List<String> requirements;
+  private final List<String> suggestions;
 
   /**
    * @param construct the construct that rejects an operand
@@ -43,20 +47,53 @@ public final class Diagnosis {
    */
   public Diagnosis(final Construct construct, final List<? extends TypedExpression> operands,
       final int position, final List<String> requirements) {
+    this(construct, operands, position, requirements, List.of());
+  }
+
+  /**
+   * @param construct the construct that rejects an operand
+   * @param operands all its operands, in order, as it read them
+   * @param position the position of the operand it rejects
+   * @param requirements what that position takes, each as a message says it: a type in quotes,
+   *        such as 'text', or a phrase, such as "a field reference"
+   * @param suggestions what to write instead, each a sentence, such as "To select by position,
+   *        write [at n]."; none where the mistake suggests nothing
+   */
+  public Diagnosis(final Construct construct, final List<? extends TypedExpression> operands,
+      final int position, final List<String> requirements, final List<String> suggestions) {
     this.construct = construct;
     this.operands = List.copyOf(operands);
     this.position = position;
     this.requirements = List.copyOf(requirements);
+    this.suggestions = List.copyOf(suggestions);
   }
 
   /**
    * @return the two sentences: what the construct was given, and what the operand at fault must
-   *         be
+   *         be; then what to write instead, if the mistake suggests it
    */
   public String describe() {
-    return String.format("%s cannot take %s. Its %s must be %s.", this.construct.getName(),
+    return this.sentences(Stream.empty());
+  }
+
+  /**
+   * @param explanation why the operand at fault does not fit, as the reference it is written as
+   *        tells it, such as "Field 'BT-1' may return multiple values from context 'ND-1'."
+   * @return the two sentences, then the explanation, then what to write instead, if the mistake
+   *         suggests it
+   */
+  public String describe(final String explanation) {
+    return this.sentences(Stream.of(explanation));
+  }
+
+  private String sentences(final Stream<String> explanation) {
+    final String reason = String.format("%s cannot take %s. Its %s must be %s.",
+        this.construct.getName(),
         joined(this.operands.stream().map(Diagnosis::typeOf).collect(Collectors.toList()), "and"),
         this.construct.roleOf(this.position), joined(this.requirements, "or"));
+    return Stream.of(Stream.of(reason), explanation, this.suggestions.stream())
+        .flatMap(sentences -> sentences)
+        .collect(Collectors.joining(" "));
   }
 
   private static String typeOf(final TypedExpression operand) {
