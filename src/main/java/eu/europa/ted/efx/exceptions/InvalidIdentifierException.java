@@ -25,13 +25,15 @@ public class InvalidIdentifierException extends EfxCompilationException {
         UNDECLARED_IDENTIFIER,
         IDENTIFIER_ALREADY_DECLARED,
         NOT_A_CONTEXT_VARIABLE,
-        UNDECLARED_ENDPOINT
+        UNDECLARED_ENDPOINT,
+        IDENTIFIER_IS_RESERVED
     }
 
     private static final String UNDECLARED_IDENTIFIER = "Identifier '%s' is not declared.";
     private static final String IDENTIFIER_ALREADY_DECLARED = "Identifier '%s' is already declared in this scope.";
     private static final String NOT_A_CONTEXT_VARIABLE = "Variable '%s' is not a context variable.";
     private static final String UNDECLARED_ENDPOINT = "Dynamic function '%s' references undeclared API endpoint '%s'.";
+    private static final String IDENTIFIER_IS_RESERVED = "Identifier '%s' is reserved: the translator generates the names that start with '%s'.";
 
     private final ErrorCode errorCode;
 
@@ -58,5 +60,19 @@ public class InvalidIdentifierException extends EfxCompilationException {
 
     public static InvalidIdentifierException undeclaredEndpoint(ParserRuleContext ctx, String functionName, String endpointName) {
         return new InvalidIdentifierException(ErrorCode.UNDECLARED_ENDPOINT, ctx, UNDECLARED_ENDPOINT, functionName, endpointName);
+    }
+
+    /**
+     * A declaration that gives a name the translator keeps for the variables it generates.
+     *
+     * @param ctx the declaration
+     * @param identifierName the name declared
+     * @param reservedPrefix what the names the translator generates start with
+     * @return the exception that rejects the declaration
+     */
+    public static InvalidIdentifierException identifierIsReserved(ParserRuleContext ctx,
+            String identifierName, String reservedPrefix) {
+        return new InvalidIdentifierException(ErrorCode.IDENTIFIER_IS_RESERVED, ctx,
+                IDENTIFIER_IS_RESERVED, identifierName, reservedPrefix);
     }
 }

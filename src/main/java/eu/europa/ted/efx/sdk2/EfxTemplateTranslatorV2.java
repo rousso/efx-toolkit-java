@@ -24,18 +24,16 @@ import java.util.Optional;
 import org.antlr.v4.runtime.BaseErrorListener;
 import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CharStreams;
-import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.atn.DecisionInfo;
 import org.antlr.v4.runtime.atn.ParseInfo;
 import org.antlr.v4.runtime.atn.ProfilingATNSimulator;
-import org.antlr.v4.runtime.tree.ParseTree;
-import org.antlr.v4.runtime.tree.ParseTreeWalker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import eu.europa.ted.eforms.sdk.component.SdkComponent;
 import eu.europa.ted.eforms.sdk.component.SdkComponentType;
+import eu.europa.ted.efx.exceptions.Construct;
 import eu.europa.ted.efx.exceptions.InvalidUsageException;
 import eu.europa.ted.efx.exceptions.InvalidIndentationException;
 import eu.europa.ted.efx.interfaces.EfxTemplateTranslator;
@@ -45,7 +43,6 @@ import eu.europa.ted.efx.interfaces.SymbolResolver;
 import eu.europa.ted.efx.interfaces.TranslatorOptions;
 import eu.europa.ted.efx.interfaces.TemplateSection;
 import eu.europa.ted.efx.interfaces.TranslatorContext;
-import eu.europa.ted.efx.model.CallStack;
 import eu.europa.ted.efx.model.Context;
 import eu.europa.ted.efx.util.EfxProfilerReportGenerator;
 import eu.europa.ted.efx.util.TranslatorTimings;
@@ -60,10 +57,8 @@ import eu.europa.ted.efx.model.expressions.scalar.DurationExpression;
 import eu.europa.ted.efx.model.expressions.scalar.NumericExpression;
 import eu.europa.ted.efx.model.expressions.iteration.IteratorListExpression;
 import eu.europa.ted.efx.model.expressions.scalar.NumericPath;
-import eu.europa.ted.efx.model.expressions.scalar.ScalarExpression;
 import eu.europa.ted.efx.model.expressions.scalar.StringExpression;
 import eu.europa.ted.efx.model.expressions.scalar.TimeExpression;
-import eu.europa.ted.efx.model.expressions.sequence.BooleanSequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.DateSequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.DurationSequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.NumericSequenceExpression;
@@ -96,28 +91,52 @@ import eu.europa.ted.efx.model.types.EfxDataType;
 import eu.europa.ted.efx.model.types.FieldTypes;
 import eu.europa.ted.efx.model.variables.Dictionary;
 import eu.europa.ted.efx.model.variables.Function;
-import eu.europa.ted.efx.model.variables.StrictArguments;
-import eu.europa.ted.efx.model.variables.ParsedParameter;
 import eu.europa.ted.efx.model.variables.ParsedParameters;
 import eu.europa.ted.efx.model.variables.Template;
 import eu.europa.ted.efx.model.variables.Variable;
 import eu.europa.ted.efx.model.variables.Variables;
-import eu.europa.ted.efx.model.expressions.sequence.MultilingualStringSequencePath;
 import eu.europa.ted.efx.sdk2.EfxParser.*;
 
 /**
- * The EfxTemplateTranslator extends the {@link EfxExpressionTranslatorV2} to provide additional
- * translation capabilities for EFX templates. If has been implemented as an extension to the
- * EfxExpressionTranslator in order to keep things simpler when one only needs to translate EFX
- * expressions (like the condition associated with a business rule).
+ * The EfxTemplateTranslator translates EFX templates. It listens to the rules of a template file
+ * that are not expressions, and asks an {@link EfxExpressionVisitor} for each expression, field
+ * context and node context they hold. Its visitor may call the built-ins that only templates may
+ * call, such as the formatting functions.
  */
 @SdkComponent(versions = {"2"}, componentType = SdkComponentType.EFX_TEMPLATE_TRANSLATOR)
-public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
+public class EfxTemplateTranslatorV2 extends TranslatorListener
     implements EfxTemplateTranslator {
 
   private static final Logger logger = LoggerFactory.getLogger(EfxTemplateTranslatorV2.class);
 
   private static final String UNEXPECTED_INDENTATION = "Unexpected indentation tracker state.";
+
+  /**
+   * The variable that the translator's own loops bind each item to: the numbers, durations,
+   * dates and times it formats and the asset ids of a label. It starts with the prefix that no
+   * declaration may give, so it cannot hide a variable of the template that a label's asset type
+   * or label type reads inside the loop.
+   */
+  private static final String ITEM_VARIABLE = TranslationContext.RESERVED_PREFIX + "item";
+
+  /** The condition of a conditional template block, as a type error names it. */
+  private static final Construct WHEN = Construct.of("'when'", "condition");
+
+  /** The key of a dictionary declaration, as a type error names it. */
+  private static final Construct BY = Construct.of("'by'", "key");
+
+  /** The URL of a hyperlink, as a type error names it. */
+  private static final Construct HYPERLINK = Construct.of("Hyperlink", "URL");
+
+  /** A label block, as a type error names it with the one of its parts that is at fault. */
+  private static final String LABEL_BLOCK = "Label block";
+
+  /** The parts of a label block, each as a type error names it. */
+  private static final Construct ASSET_TYPE = Construct.of(LABEL_BLOCK, "asset type");
+  private static final Construct LABEL_TYPE = Construct.of(LABEL_BLOCK, "label type");
+  private static final Construct ASSET_ID = Construct.of(LABEL_BLOCK, "asset id");
+  private static final Construct PLURALISER = Construct.of(LABEL_BLOCK, "pluraliser");
+  private static final Construct LABEL_KEY = Construct.of(LABEL_BLOCK, "key");
 
   private static final String LABEL_TYPE_NAME = getLexerSymbol(EfxLexer.LABEL_TYPE_NAME);
   private static final String LABEL_TYPE_WHEN = getLexerSymbol(EfxLexer.LABEL_TYPE_WHEN_TRUE).replace("-true", "");
@@ -159,17 +178,38 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
    */
   ContentBlockStack blockStack = new ContentBlockStack();
 
+  /**
+   * The block of the line above the template line being translated, which the line is nested in:
+   * the root of its section or of the declared templates for a line at the top, or none for the
+   * first line.
+   */
+  private ContentBlock blockAbove;
+
   @SuppressWarnings("unused")
   private EfxTemplateTranslatorV2() {
-    super();
+    this(null, null, null, null);
   }
 
   public EfxTemplateTranslatorV2(final MarkupGenerator markupGenerator,
       final SymbolResolver symbolResolver, final ScriptGenerator scriptGenerator,
       final BaseErrorListener errorListener) {
     super(symbolResolver, scriptGenerator, errorListener);
-
     this.markup = markupGenerator;
+  }
+
+  @Override
+  EfxExpressionVisitor visitorOf(final TranslationContext translation) {
+    return new TemplateExpressionVisitor(translation);
+  }
+
+  /**
+   * Translates a single expression, in which the built-ins that only templates may call may be
+   * called.
+   */
+  @Override
+  public String translateExpression(final String expression, final String... arguments) {
+    return new EfxExpressionTranslatorV2(this.symbols, this.script, this.errorListener,
+        TemplateExpressionVisitor::new).translateExpression(expression, arguments);
   }
 
   /**
@@ -212,30 +252,14 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
     final CharStream resolvedInput =
         new IncludeProcessor(options.getIncludedFileResolver()).resolve(charStream);
 
-    final EfxLexer lexer = new EfxLexer(resolvedInput);
-    final CommonTokenStream tokens = new CommonTokenStream(lexer);
-    final EfxParser parser = new EfxParser(tokens);
-    parser.setErrorHandler(new EfxErrorStrategy());
+    final EfxParser parser = this.parserOf(resolvedInput);
 
     // Enable profiling if requested
     if (options != null && options.isProfilerEnabled()) {
       parser.setInterpreter(new ProfilingATNSimulator(parser));
     }
 
-    if (errorListener != null) {
-      lexer.removeErrorListeners();
-      lexer.addErrorListener(errorListener);
-      parser.removeErrorListeners();
-      parser.addErrorListener(errorListener);
-    }
-
-    final ParseTree tree = parser.templateFile();
-
-    // The declarations of a previous template must not be visible in this one.
-    this.stack = new CallStack();
-
-    final ParseTreeWalker walker = new ParseTreeWalker();
-    walker.walk(this, tree);
+    this.translate(parser.templateFile());
     assert this.stack.empty() : "Stack should be empty at this point.";
 
     final String output = this.viewTemplate.render(this.markup, this.translatorContext).script.trim();
@@ -293,133 +317,21 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
   }
 
   @Override
-  public void enterStringFunctionDeclaration(StringFunctionDeclarationContext ctx) {
+  public void enterFunctionDeclaration(FunctionDeclarationContext ctx) {
     this.stack.push(new ParsedParameters());
   }
 
+  /**
+   * Declares a function. Its body must give a value of the declared type.
+   */
   @Override
-  public void exitStringFunctionDeclaration(StringFunctionDeclarationContext ctx) {
-      this.exitFunctionDeclaration(ctx.functionName.getText(), StringExpression.class);
-  }
-
-  @Override
-  public void enterBooleanFunctionDeclaration(BooleanFunctionDeclarationContext ctx) {
-    this.stack.push(new ParsedParameters());
-  }
-
-  @Override
-  public void exitBooleanFunctionDeclaration(BooleanFunctionDeclarationContext ctx) {
-      this.exitFunctionDeclaration(ctx.functionName.getText(), BooleanExpression.class);
-  }
-
-  @Override
-  public void enterNumericFunctionDeclaration(NumericFunctionDeclarationContext ctx) {
-    this.stack.push(new ParsedParameters());
-  }
-
-  @Override
-  public void exitNumericFunctionDeclaration(NumericFunctionDeclarationContext ctx) {
-      this.exitFunctionDeclaration(ctx.functionName.getText(), NumericExpression.class);
-  }
-
-  @Override
-  public void enterDateFunctionDeclaration(DateFunctionDeclarationContext ctx) {
-    this.stack.push(new ParsedParameters());
-  }
-
-  @Override
-  public void exitDateFunctionDeclaration(DateFunctionDeclarationContext ctx) {
-      this.exitFunctionDeclaration(ctx.functionName.getText(), DateExpression.class);
-  }
-
-  @Override
-  public void enterTimeFunctionDeclaration(TimeFunctionDeclarationContext ctx) {
-    this.stack.push(new ParsedParameters());
-  }
-
-  @Override
-  public void exitTimeFunctionDeclaration(TimeFunctionDeclarationContext ctx) {
-      this.exitFunctionDeclaration(ctx.functionName.getText(), TimeExpression.class);
-  }
-
-  @Override
-  public void enterDurationFunctionDeclaration(DurationFunctionDeclarationContext ctx) {
-    this.stack.push(new ParsedParameters());
-  }
-
-  @Override
-  public void exitDurationFunctionDeclaration(DurationFunctionDeclarationContext ctx) {
-      this.exitFunctionDeclaration(ctx.functionName.getText(), DurationExpression.class);
-  }
-
-  // Sequence function declarations
-
-  @Override
-  public void enterStringSequenceFunctionDeclaration(StringSequenceFunctionDeclarationContext ctx) {
-    this.stack.push(new ParsedParameters());
-  }
-
-  @Override
-  public void exitStringSequenceFunctionDeclaration(StringSequenceFunctionDeclarationContext ctx) {
-      this.exitFunctionDeclaration(ctx.functionName.getText(), StringSequenceExpression.class);
-  }
-
-  @Override
-  public void enterNumericSequenceFunctionDeclaration(NumericSequenceFunctionDeclarationContext ctx) {
-    this.stack.push(new ParsedParameters());
-  }
-
-  @Override
-  public void exitNumericSequenceFunctionDeclaration(NumericSequenceFunctionDeclarationContext ctx) {
-      this.exitFunctionDeclaration(ctx.functionName.getText(), NumericSequenceExpression.class);
-  }
-
-  @Override
-  public void enterBooleanSequenceFunctionDeclaration(BooleanSequenceFunctionDeclarationContext ctx) {
-    this.stack.push(new ParsedParameters());
-  }
-
-  @Override
-  public void exitBooleanSequenceFunctionDeclaration(BooleanSequenceFunctionDeclarationContext ctx) {
-      this.exitFunctionDeclaration(ctx.functionName.getText(), BooleanSequenceExpression.class);
-  }
-
-  @Override
-  public void enterDateSequenceFunctionDeclaration(DateSequenceFunctionDeclarationContext ctx) {
-    this.stack.push(new ParsedParameters());
-  }
-
-  @Override
-  public void exitDateSequenceFunctionDeclaration(DateSequenceFunctionDeclarationContext ctx) {
-      this.exitFunctionDeclaration(ctx.functionName.getText(), DateSequenceExpression.class);
-  }
-
-  @Override
-  public void enterTimeSequenceFunctionDeclaration(TimeSequenceFunctionDeclarationContext ctx) {
-    this.stack.push(new ParsedParameters());
-  }
-
-  @Override
-  public void exitTimeSequenceFunctionDeclaration(TimeSequenceFunctionDeclarationContext ctx) {
-      this.exitFunctionDeclaration(ctx.functionName.getText(), TimeSequenceExpression.class);
-  }
-
-  @Override
-  public void enterDurationSequenceFunctionDeclaration(DurationSequenceFunctionDeclarationContext ctx) {
-    this.stack.push(new ParsedParameters());
-  }
-
-  @Override
-  public void exitDurationSequenceFunctionDeclaration(DurationSequenceFunctionDeclarationContext ctx) {
-      this.exitFunctionDeclaration(ctx.functionName.getText(), DurationSequenceExpression.class);
-  }
-
-  private <T extends TypedExpression> void exitFunctionDeclaration(String functionName,
-      Class<T> expressionType) {
-    var expression = this.stack.pop(expressionType);
+  public void exitFunctionDeclaration(FunctionDeclarationContext ctx) {
+    var expression = this.expressions.valueAs(ctx.expression(),
+        EfxExpressionVisitor.typeOf(ctx.typeDeclaration()),
+        Construct.of("Function '" + ctx.typeDeclaration().getText() + ":?"
+            + ctx.functionName.getText() + "'", "value"));
     var parameters = this.stack.pop(ParsedParameters.class);
-
-    var function = new Function(functionName, parameters, expression);
+    var function = new Function(ctx.functionName.getText(), parameters, expression);
     this.stack.declareFunction(function);
     this.viewTemplate.addFunction(function);
   }
@@ -525,7 +437,7 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
   @Override
   public void exitComputedExpressionBlock(ComputedExpressionBlockContext ctx) {
     FormatOptions options = ctx.formatOptions() != null ? this.stack.pop(FormatOptions.class) : new DefaultFormatOptions(false);
-    TypedExpression value = this.stack.pop(TypedExpression.class);
+    TypedExpression value = this.expressions.valueOf(ctx.expression(), EXPRESSION_BLOCK);
     Optional<NumberFormatOptions> numberOptions = options.forNumbers();
     if (value.is(EfxDataType.DurationScalar.class) && numberOptions.isPresent()) {
       this.stack.push(this.createFormattedExpressionBlockFragment(TypedExpression.from(value, DurationExpression.class),
@@ -582,7 +494,8 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
   @Override
   public void exitLinkedExpressionBlock(LinkedExpressionBlockContext ctx) {
-    var url = this.stack.pop(StringExpression.class);
+    var url =
+        this.expressions.valueAs(ctx.linkBlock().expression(), StringExpression.class, HYPERLINK);
     var value = this.stack.pop(FormatContentTemplateFragment.class);
     this.stack.push(new HyperlinkContentTemplateFragment(value, url));
   }
@@ -597,7 +510,7 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
     PathExpression field = this.symbols.getRelativePathOfField(fieldId, this.efxContext.symbol());
     if (!options.formatsValue()) {
       return new FormatContentTemplateFragment(field.is(EfxDataType.String.class)
-          ? this.composeFieldValueReference(fieldId, field)
+          ? this.expressions.fieldValueOf(fieldId, field)
           : this.script.composeFieldRawValueReference(field));
     }
     String fieldType = this.symbols.getTypeOfField(fieldId);
@@ -608,7 +521,7 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
         return this.createFormattedExpressionBlockFragment(field,
             this.symbols.getAttributeFieldIdOfField(fieldId), options);
       default:
-        return this.createFormattedExpressionBlockFragment(this.composeFieldValueReference(fieldId, field), options);
+        return this.createFormattedExpressionBlockFragment(this.expressions.fieldValueOf(fieldId, field), options);
     }
   }
 
@@ -724,19 +637,22 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
   private StringSequenceExpression composeFormattedSequence(NumericSequenceExpression numbers, NumberFormatOptions options) {
     IteratorListExpression iterators = this.script.composeIteratorList(List.of(this.script.composeIteratorExpression(
-        this.script.composeVariableDeclaration("item", NumericExpression.class), numbers)));
+        this.script.composeVariableDeclaration(ITEM_VARIABLE, NumericExpression.class), numbers)));
     return this.script.composeForExpression(iterators,
-        this.composeFormattedNumber(this.script.composeVariableReference("item", NumericExpression.class), options),
+        this.composeFormattedNumber(
+            this.script.composeVariableReference(ITEM_VARIABLE, NumericExpression.class), options),
         StringSequenceExpression.class);
   }
 
   private StringSequenceExpression composeFormattedSequence(DurationSequenceExpression durations,
       NumberFormatOptions options) {
     IteratorListExpression iterators = this.script.composeIteratorList(List.of(this.script.composeIteratorExpression(
-        this.script.composeVariableDeclaration("item", DurationExpression.class), durations)));
+        this.script.composeVariableDeclaration(ITEM_VARIABLE, DurationExpression.class),
+        durations)));
     return this.script.composeForExpression(iterators,
         this.composeFormattedNumber(
-            this.composeGetNumberFromDuration(this.script.composeVariableReference("item", DurationExpression.class)),
+            this.composeGetNumberFromDuration(
+                this.script.composeVariableReference(ITEM_VARIABLE, DurationExpression.class)),
             options),
         StringSequenceExpression.class);
   }
@@ -762,9 +678,10 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
   private StringSequenceExpression composeFormattedSequence(DateSequenceExpression dates, DateTimeFormatOptions options) {
     IteratorListExpression iterators = this.script.composeIteratorList(List.of(this.script.composeIteratorExpression(
-        this.script.composeVariableDeclaration("item", DateExpression.class), dates)));
+        this.script.composeVariableDeclaration(ITEM_VARIABLE, DateExpression.class), dates)));
     return this.script.composeForExpression(iterators,
-        this.composeFormattedScalar(this.script.composeVariableReference("item", DateExpression.class), options),
+        this.composeFormattedScalar(
+            this.script.composeVariableReference(ITEM_VARIABLE, DateExpression.class), options),
         StringSequenceExpression.class);
   }
 
@@ -781,9 +698,10 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
   private StringSequenceExpression composeFormattedSequence(TimeSequenceExpression times, DateTimeFormatOptions options) {
     IteratorListExpression iterators = this.script.composeIteratorList(List.of(this.script.composeIteratorExpression(
-        this.script.composeVariableDeclaration("item", TimeExpression.class), times)));
+        this.script.composeVariableDeclaration(ITEM_VARIABLE, TimeExpression.class), times)));
     return this.script.composeForExpression(iterators,
-        this.composeFormattedScalar(this.script.composeVariableReference("item", TimeExpression.class), options),
+        this.composeFormattedScalar(
+            this.script.composeVariableReference(ITEM_VARIABLE, TimeExpression.class), options),
         StringSequenceExpression.class);
   }
 
@@ -821,11 +739,12 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
    */
   private StringSequenceExpression composeGetUnitCode(DurationExpression duration) {
     IteratorListExpression iterators = this.script.composeIteratorList(List.of(this.script.composeIteratorExpression(
-        this.script.composeVariableDeclaration("item", DurationExpression.class),
+        this.script.composeVariableDeclaration(ITEM_VARIABLE, DurationExpression.class),
         new DurationSequenceExpression(duration.getScript()))));
     return this.script.composeForExpression(iterators,
         this.script.composeConditionalExpression(
-            this.composeIsYearMonthDuration(this.script.composeVariableReference("item", DurationExpression.class)),
+            this.composeIsYearMonthDuration(
+                this.script.composeVariableReference(ITEM_VARIABLE, DurationExpression.class)),
             this.script.getStringLiteralFromUnquotedString("MONTH"),
             this.script.getStringLiteralFromUnquotedString("DAY"), StringExpression.class),
         StringSequenceExpression.class);
@@ -879,7 +798,8 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
     // New in EFX-2: Pluralisation of labels based on a supplied quantity.
     // The quantity is on top of the stack, above the assetId, so it is popped first.
-    NumericExpression quantity = ctx.pluraliser() != null ? this.stack.pop(NumericExpression.class)
+    NumericExpression quantity = ctx.pluraliser() != null
+        ? this.labelPart(ctx, NumericExpression.class, PLURALISER)
         : NumericExpression.empty();
 
     if (!this.stack.empty() && StringSequenceExpression.class.isAssignableFrom(this.stack.peek().getClass()) && ctx.assetId() != null) {
@@ -901,7 +821,8 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
       // Standard implementation as originally intended by EFX 1
 
-      StringExpression assetId = ctx.assetId() != null ? this.stack.pop(StringExpression.class)
+      StringExpression assetId = ctx.assetId() != null
+          ? this.labelPart(ctx, StringExpression.class, ASSET_ID)
           : this.script.getStringLiteralFromUnquotedString("");
       this.exitStandardLabelReference(ctx, assetId, quantity);
     }
@@ -914,15 +835,27 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
    * @param assetId The assetId of the label to render.
    */
   private void exitStandardLabelReference(StandardLabelReferenceContext ctx, StringExpression assetId, NumericExpression quantity) {
-    StringExpression labelType = ctx.labelType() != null ? this.stack.pop(StringExpression.class)
+    StringExpression labelType = ctx.labelType() != null
+        ? this.labelPart(ctx, StringExpression.class, LABEL_TYPE)
         : this.script.getStringLiteralFromUnquotedString("");
-    StringExpression assetType = ctx.assetType() != null ? this.stack.pop(StringExpression.class)
+    StringExpression assetType = ctx.assetType() != null
+        ? this.labelPart(ctx, StringExpression.class, ASSET_TYPE)
         : this.script.getStringLiteralFromUnquotedString("");
 
     StringExpression key = this.script.composeStringConcatenation(
         List.of(assetType, this.script.getStringLiteralFromUnquotedString("|"), labelType,
             this.script.getStringLiteralFromUnquotedString("|"), assetId));
     this.stack.push(new LabelFromKeyContentTemplateFragment(key, quantity));
+  }
+
+  /**
+   * Returns the variable that a label's loop binds each of its asset ids to.
+   */
+  private Variable composeAssetIdVariable() {
+    return new Variable(ITEM_VARIABLE,
+        this.script.composeVariableDeclaration(ITEM_VARIABLE, StringExpression.class),
+        StringExpression.empty(),
+        this.script.composeVariableReference(ITEM_VARIABLE, StringExpression.class));
   }
 
   /**
@@ -935,14 +868,14 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
    */
   private void exitStandardLabelReference(StandardLabelReferenceContext ctx, StringSequenceExpression assetIdSequence,
       NumericExpression quantity) {
-    StringExpression labelType = ctx.labelType() != null ? this.stack.pop(StringExpression.class)
+    StringExpression labelType = ctx.labelType() != null
+        ? this.labelPart(ctx, StringExpression.class, LABEL_TYPE)
         : this.script.getStringLiteralFromUnquotedString("");
-    StringExpression assetType = ctx.assetType() != null ? this.stack.pop(StringExpression.class)
+    StringExpression assetType = ctx.assetType() != null
+        ? this.labelPart(ctx, StringExpression.class, ASSET_TYPE)
         : this.script.getStringLiteralFromUnquotedString("");
 
-    Variable loopVariable = new Variable("item",
-        this.script.composeVariableDeclaration("item", StringExpression.class), StringExpression.empty(),
-        this.script.composeVariableReference("item", StringExpression.class));
+    Variable loopVariable = this.composeAssetIdVariable();
 
     StringSequenceExpression keys = this.script.composeDistinctValuesFunction(
         this.script.composeForExpression(
@@ -963,9 +896,12 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
   @Override
   public void exitShorthandBtLabelReference(ShorthandBtLabelReferenceContext ctx) {
-    NumericExpression quantity = ctx.pluraliser() != null ? this.stack.pop(NumericExpression.class) : NumericExpression.empty();
+    NumericExpression quantity = ctx.pluraliser() != null
+        ? this.labelPart(ctx, NumericExpression.class, PLURALISER)
+        : NumericExpression.empty();
     StringExpression assetId = this.script.getStringLiteralFromUnquotedString(ctx.BtId().getText());
-    StringExpression labelType = ctx.labelType() != null ? this.stack.pop(StringExpression.class)
+    StringExpression labelType = ctx.labelType() != null
+        ? this.labelPart(ctx, StringExpression.class, LABEL_TYPE)
         : this.script.getStringLiteralFromUnquotedString("");
     StringExpression key = this.script.composeStringConcatenation(
         List.of(this.script.getStringLiteralFromUnquotedString(ASSET_TYPE_BT),
@@ -977,8 +913,11 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
   @Override
   public void exitShorthandFieldLabelReference(ShorthandFieldLabelReferenceContext ctx) {
     final String fieldId = ctx.FieldId().getText();
-    NumericExpression quantity = ctx.pluraliser() != null ? this.stack.pop(NumericExpression.class) : NumericExpression.empty();
-    StringExpression labelType = ctx.labelType() != null ? this.stack.pop(StringExpression.class)
+    NumericExpression quantity = ctx.pluraliser() != null
+        ? this.labelPart(ctx, NumericExpression.class, PLURALISER)
+        : NumericExpression.empty();
+    StringExpression labelType = ctx.labelType() != null
+        ? this.labelPart(ctx, StringExpression.class, LABEL_TYPE)
         : this.script.getStringLiteralFromUnquotedString("");
 
     if (labelType.getScript().equals("value")) {
@@ -996,7 +935,9 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
   @Override
   public void exitShorthandIndirectLabelReference(ShorthandIndirectLabelReferenceContext ctx) {
     // New in EFX-2: Pluralisation of labels based on a supplied quantity
-    NumericExpression quantity = ctx.pluraliser() != null ? this.stack.pop(NumericExpression.class) : NumericExpression.empty();
+    NumericExpression quantity = ctx.pluraliser() != null
+        ? this.labelPart(ctx, NumericExpression.class, PLURALISER)
+        : NumericExpression.empty();
     this.shorthandIndirectLabelReference(ctx.FieldId().getText(), quantity);
   }
 
@@ -1008,11 +949,9 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
     final Context currentContext = this.efxContext.peek();
     final NumericExpression quantity = pluraliser.isEmpty() ? this.composeQuantityOfUnit(fieldId) : pluraliser;
     final String fieldType = this.symbols.getTypeOfField(fieldId);
-    final PathExpression valueReference = this.composeFieldValueReference(fieldId,
+    final PathExpression valueReference = this.expressions.fieldValueOf(fieldId,
         this.symbols.getRelativePathOfField(fieldId, currentContext.symbol()));
-    Variable loopVariable = new Variable("item",
-        this.script.composeVariableDeclaration("item", StringExpression.class), StringExpression.empty(),
-        this.script.composeVariableReference("item", StringExpression.class));
+    Variable loopVariable = this.composeAssetIdVariable();
     switch (fieldType) {
       case "indicator": {
         StringSequenceExpression keys = this.script.composeDistinctValuesFunction(
@@ -1097,7 +1036,9 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
   public void exitShorthandLabelReferenceFromContext(ShorthandLabelReferenceFromContextContext ctx) {
 
     // New in EFX-2: Pluralisation of labels based on a supplied quantity
-    NumericExpression quantity = ctx.pluraliser() != null ? this.stack.pop(NumericExpression.class) : NumericExpression.empty();
+    NumericExpression quantity = ctx.pluraliser() != null
+        ? this.labelPart(ctx, NumericExpression.class, PLURALISER)
+        : NumericExpression.empty();
 
     final String labelType = ctx.LabelType().getText();
     if (this.efxContext.isFieldContext()) {
@@ -1137,6 +1078,25 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
     this.shorthandIndirectLabelReference(this.efxContext.symbol(), NumericExpression.empty());
   }
 
+  /**
+   * Takes a part of a label block off the stack, where the part, or its expression block, left
+   * it, and converts it to the class the part requires. The error of a part that does not convert
+   * names that part alone, since each part is taken, and checked, on its own.
+   *
+   * @param <T> the class the part requires
+   * @param labelBlock the label block, where an error is reported
+   * @param type the class the part requires
+   * @param part the part, as a type error names it, such as {@link #ASSET_ID}
+   * @return the part, converted to that class
+   * @throws eu.europa.ted.efx.exceptions.TypeMismatchException if the part does not convert to
+   *         that class
+   */
+  private <T extends TypedExpression> T labelPart(final ParserRuleContext labelBlock,
+      final Class<T> type, final Construct part) {
+    return this.expressions.operandsOf(part, List.of(this.stack.pop(TypedExpression.class)))
+        .converted(0, type, labelBlock);
+  }
+
   @Override
   public void exitAssetType(AssetTypeContext ctx) {
     if (ctx.expressionBlock() == null) {
@@ -1162,8 +1122,10 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
   @Override
   public void exitComputedLabelReference(ComputedLabelReferenceContext ctx) {
-    NumericExpression quantity = ctx.pluraliser() != null ? this.stack.pop(NumericExpression.class) : NumericExpression.empty();
-    StringExpression expression = this.stack.pop(StringExpression.class);
+    NumericExpression quantity = ctx.pluraliser() != null
+        ? this.labelPart(ctx, NumericExpression.class, PLURALISER)
+        : NumericExpression.empty();
+    StringExpression expression = this.labelPart(ctx, StringExpression.class, LABEL_KEY);
     this.stack.push(new LabelFromExpressionContentTemplateFragment(expression, quantity));
   }
 
@@ -1180,13 +1142,25 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
     this.viewTemplate.addDictionary(dictionary);
   }
 
+  /**
+   * Leaves the path of the indexed field for the declaration, and switches to the context of the
+   * field, which the key is read in.
+   */
   @Override
   public void exitDictionaryIndexClause(DictionaryIndexClauseContext ctx) {
-    this.efxContext.pushFieldContext(getFieldId(ctx.fieldContext()));
+    final Context index = this.expressions.contextOf(ctx.fieldContext());
+    this.stack.push(index.relativePath());
+    this.efxContext.pushFieldContext(index.symbol());
   }
 
+  /**
+   * Takes the value of the key as the text it is, and then switches back from the context of the
+   * indexed field. The value is taken first, so that a field of the key that may repeat is
+   * reported with the context the key reads it from.
+   */
   @Override
   public void exitDictionaryKeyClause(DictionaryKeyClauseContext ctx) {
+    this.stack.push(this.expressions.valueAs(ctx.expression(), StringExpression.class, BY));
     this.efxContext.pop();
   }
 
@@ -1195,128 +1169,6 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
   // #endregion Label Blocks #{...} -------------------------------------------
   
   // #region Expression Blocks ${...} -----------------------------------------
-
-  // #region Formatting functions (template-only) --------------------------------
-
-  @Override
-  public void exitLateBoundFormatShortFunction(LateBoundFormatShortFunctionContext ctx) {
-    if (EfxDataType.Date.class.isAssignableFrom(this.stack.peekType().getDataType())) {
-      this.stack.push(this.script.composeFormatDateShort(this.stack.pop(DateExpression.class)));
-    } else {
-      this.stack.push(this.script.composeFormatTimeShort(this.stack.pop(TimeExpression.class)));
-    }
-  }
-
-  @Override
-  public void exitFormatNumberFunction(FormatNumberFunctionContext ctx) {
-    final StringExpression format = this.stack.pop(StringExpression.class);
-    final NumericExpression number = this.stack.pop(NumericExpression.class);
-    this.stack.push(this.script.composeNumberFormatting(number, format));
-  }
-
-  @Override
-  public void exitFormatShortDateFunction(FormatShortDateFunctionContext ctx) {
-    this.stack.push(this.script.composeFormatDateShort(this.stack.pop(DateExpression.class)));
-  }
-
-  @Override
-  public void exitFormatShortTimeFunction(FormatShortTimeFunctionContext ctx) {
-    this.stack.push(this.script.composeFormatTimeShort(this.stack.pop(TimeExpression.class)));
-  }
-
-  @Override
-  public void exitFormatShortDateTimeFunction(FormatShortDateTimeFunctionContext ctx) {
-    TimeExpression time = this.stack.pop(TimeExpression.class);
-    DateExpression date = this.stack.pop(DateExpression.class);
-    this.stack.push(this.script.composeStringConcatenation(List.of(
-        this.script.composeFormatDateShort(date),
-        this.script.getStringLiteralFromUnquotedString(" "),
-        this.script.composeFormatTimeShort(time))));
-  }
-
-  @Override
-  public void exitLateBoundFormatMediumFunction(LateBoundFormatMediumFunctionContext ctx) {
-    if (EfxDataType.Date.class.isAssignableFrom(this.stack.peekType().getDataType())) {
-      this.stack.push(this.script.composeFormatDateMedium(this.stack.pop(DateExpression.class)));
-    } else {
-      this.stack.push(this.script.composeFormatTimeMedium(this.stack.pop(TimeExpression.class)));
-    }
-  }
-
-  @Override
-  public void exitFormatMediumDateFunction(FormatMediumDateFunctionContext ctx) {
-    this.stack.push(this.script.composeFormatDateMedium(this.stack.pop(DateExpression.class)));
-  }
-
-  @Override
-  public void exitFormatMediumTimeFunction(FormatMediumTimeFunctionContext ctx) {
-    this.stack.push(this.script.composeFormatTimeMedium(this.stack.pop(TimeExpression.class)));
-  }
-
-  @Override
-  public void exitFormatMediumDateTimeFunction(FormatMediumDateTimeFunctionContext ctx) {
-    TimeExpression time = this.stack.pop(TimeExpression.class);
-    DateExpression date = this.stack.pop(DateExpression.class);
-    this.stack.push(this.script.composeStringConcatenation(List.of(
-        this.script.composeFormatDateMedium(date),
-        this.script.getStringLiteralFromUnquotedString(" "),
-        this.script.composeFormatTimeMedium(time))));
-  }
-
-  @Override
-  public void exitLateBoundFormatLongFunction(LateBoundFormatLongFunctionContext ctx) {
-    if (EfxDataType.Date.class.isAssignableFrom(this.stack.peekType().getDataType())) {
-      this.stack.push(this.script.composeFormatDateLong(this.stack.pop(DateExpression.class)));
-    } else {
-      this.stack.push(this.script.composeFormatTimeLong(this.stack.pop(TimeExpression.class)));
-    }
-  }
-
-  @Override
-  public void exitFormatLongDateFunction(FormatLongDateFunctionContext ctx) {
-    this.stack.push(this.script.composeFormatDateLong(this.stack.pop(DateExpression.class)));
-  }
-
-  @Override
-  public void exitFormatLongTimeFunction(FormatLongTimeFunctionContext ctx) {
-    this.stack.push(this.script.composeFormatTimeLong(this.stack.pop(TimeExpression.class)));
-  }
-
-  @Override
-  public void exitFormatLongDateTimeFunction(FormatLongDateTimeFunctionContext ctx) {
-    TimeExpression time = this.stack.pop(TimeExpression.class);
-    DateExpression date = this.stack.pop(DateExpression.class);
-    this.stack.push(this.script.composeStringConcatenation(List.of(
-        this.script.composeFormatDateLong(date),
-        this.script.getStringLiteralFromUnquotedString(" "),
-        this.script.composeFormatTimeLong(time))));
-  }
-
-  // #endregion Formatting functions ---------------------------------------------
-
-  // #region Preferred language functions ----------------------------------------
-
-  @Override
-  public void exitPreferredLanguageFunction(PreferredLanguageFunctionContext ctx) {
-    this.stack.push(this.script.getPreferredLanguage(this.stack.pop(MultilingualStringSequencePath.class)));
-  }
-
-  @Override
-  public void exitPreferredLanguageTextFunction(PreferredLanguageTextFunctionContext ctx) {
-    this.stack.push(this.script.getTextInPreferredLanguage(this.stack.pop(MultilingualStringSequencePath.class)));
-  }
-
-  @Override
-  public void exitFieldPreferredLanguageProperty(FieldPreferredLanguagePropertyContext ctx) {
-    this.stack.push(this.script.getPreferredLanguage(this.stack.pop(MultilingualStringSequencePath.class)));
-  }
-
-  @Override
-  public void exitFieldPreferredLanguageTextProperty(FieldPreferredLanguageTextPropertyContext ctx) {
-    this.stack.push(this.script.getTextInPreferredLanguage(this.stack.pop(MultilingualStringSequencePath.class)));
-  }
-
-  // #endregion Preferred language functions -------------------------------------
 
   /***
    * Handles the $value shorthand syntax which renders the value of the field declared as context in
@@ -1349,106 +1201,54 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
         this.exitParentContextDeclaration();
         break;
       case "/":
-        this.exitRootContextDeclaration();
+        this.declareRootLineContext();
         break;
       default:
-        PathExpression contextPath = this.stack.pop(PathExpression.class);
-        if (ctx.fieldContext() != null) {
-          String fieldId = getFieldId(ctx.fieldContext());
-          assert fieldId != null : "We should have been able to locate the FieldId declared as context.";
-          this.exitFieldContextDeclaration(fieldId, contextPath, null);
-        } else if (ctx.contextVariableInitializer() != null) {
-          Variable contextVariable = this.getContextVariable(ctx.contextVariableInitializer(), contextPath);
-          assert contextVariable != null : "We should have been able to locate the ContextVariable declared as context.";
+        final Context declared = this.declaredContextOf(ctx);
+        Variable contextVariable = null;
+        if (ctx.contextVariableInitializer() != null) {
+          contextVariable =
+              this.getContextVariable(ctx.contextVariableInitializer(), declared.relativePath());
           this.stack.peek(Variables.class).add(contextVariable);
-          if (ctx.contextVariableInitializer().fieldContext() != null) {
-            String fieldId = getFieldId(ctx.contextVariableInitializer().fieldContext());
-            this.exitFieldContextDeclaration(fieldId, contextPath, contextVariable);
-          } else if (ctx.contextVariableInitializer().nodeContext() != null) {
-            String nodeId = getNodeId(ctx.contextVariableInitializer().nodeContext());
-            assert nodeId != null : "We should have been able to locate the NodeId declared as context.";
-            this.exitNodeContextDeclaration(nodeId, contextPath, contextVariable);
-          }
-        } else if (ctx.nodeContext() != null) {
-          String nodeId = getNodeId(ctx.nodeContext());
-          assert nodeId != null : "We should have been able to locate the NodeId declared as context.";
-          this.exitNodeContextDeclaration(nodeId, contextPath, null);
         }
+        this.declareContext(declared, contextVariable);
         break;
     }
   }
 
   private void exitSameContextDeclaration() {
-    Context currentContext = this.blockStack.currentContext();
-
-    // Verify that efxContext.peek() gives the same result as blockStack.currentContext()
-    assert this.efxContext.isEmpty() || currentContext.symbol().equals(this.efxContext.peek().symbol())
-        : "Context mismatch: blockStack.currentContext()=" + currentContext.symbol()
-            + " but efxContext.peek()=" + this.efxContext.peek().symbol();
-
-    PathExpression contextPath = currentContext.absolutePath();
-    String symbol = currentContext.symbol();
-    if (currentContext.isFieldContext()) {
-      this.exitFieldContextDeclaration(symbol, contextPath, null);
-    } else if (currentContext.isNodeContext()) {
-      this.exitNodeContextDeclaration(symbol, contextPath, currentContext.variable());
+    final Context currentContext = this.blockStack.currentContext();
+    // A line nested in the line before it stands in that line's element. A line after it, at the
+    // same level, stands in the same line above, so it takes that line's context as it is.
+    if (this.blockAbove != null && this.blockAbove == this.blockStack.peek()) {
+      this.declareLineContext(currentContext);
+    } else {
+      this.declareContext(currentContext, null);
     }
   }
 
   private void exitParentContextDeclaration() {
-    Context parentContext = this.blockStack.parentContext();
-
-    // Verify that efxContext.peekParent() gives the same result as blockStack.parentContext()
-    Context efxParentContext = this.efxContext.peekParentContext();
-    assert efxParentContext == null || parentContext.symbol().equals(efxParentContext.symbol())
-        : "Context mismatch: blockStack.parentContext()=" + parentContext.symbol()
-            + " but efxContext.peekParent()=" + efxParentContext.symbol();
-
-    PathExpression contextPath = parentContext.absolutePath();
-    String symbol = parentContext.symbol();
-    if (parentContext.isFieldContext()) {
-      this.exitFieldContextDeclaration(symbol, contextPath, null);
-    } else if (parentContext.isNodeContext()) {
-      this.exitNodeContextDeclaration(symbol, contextPath, parentContext.variable());
-    }
+    this.declareLineContext(this.blockStack.parentContext());
   }
 
-  private void exitRootContextDeclaration() {
-    this.exitNodeContextDeclaration(this.symbols.getRootNodeId(), this.symbols.getRootPath(), null);
+  /**
+   * Declares the root as the context of a template line that writes it, {@code /}, or that
+   * declares no context.
+   */
+  private void declareRootLineContext() {
+    this.declareLineContext(
+        new NodeContext(this.symbols.getRootNodeId(), this.symbols.getRootPath()));
   }
 
-  private void exitFieldContextDeclaration(String fieldId, PathExpression contextPath, Variable contextVariable) {
-    var context = new FieldContext(fieldId, contextPath, contextVariable);
-    this.efxContext.push(context);
-    if (contextVariable != null) {
-      this.stack.declareIdentifier(contextVariable);
-      this.efxContext.declareContextVariable(contextVariable.name, context);
-    }
-  }
-
-  private void exitNodeContextDeclaration(String nodeId, PathExpression contextPath, Variable contextVariable) {
-    var context = new NodeContext(nodeId, contextPath, contextVariable);
-    this.efxContext.push(context);
-    if (contextVariable != null) {
-      this.stack.declareIdentifier(contextVariable);
-      this.efxContext.declareContextVariable(contextVariable.name, context);
-    }
-  }
-
-  private Variable getContextVariable(ContextVariableInitializerContext ctx,
-      PathExpression contextPath) {
-    if (ctx == null) {
-      return null;
-    }
-
-    final String variableName = ctx.variableName.getText();
-    final Class<? extends TypedExpression> variableType = contextPath.asScalar().getClass();
-
-    return new Variable(variableName,
-        this.script.composeVariableDeclaration(variableName, variableType),
-        this.script.contextualizePath(contextPath, contextPath),
-        this.script.composeVariableReference(variableName, variableType));
-
+  /**
+   * Declares the context of a template line that names a context by its absolute path: the root,
+   * or the context of another line. Its path from the context above is the path between the
+   * two.
+   *
+   * @param named the context the line names
+   */
+  private void declareLineContext(final Context named) {
+    this.declareContext(this.relativizeContext(named, this.contextAbove()), null);
   }
 
   // #region Conditional template blocks --------------------------------------
@@ -1457,120 +1257,59 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
   @Override
   public void exitWhenDisplayTemplate(WhenDisplayTemplateContext ctx) {
     var template = this.stack.pop(DisplayContentTemplate.class);
-    template.setCondition(this.stack.pop(BooleanExpression.class));
+    template.setCondition(
+        this.expressions.valueAs(ctx.expression(), BooleanExpression.class, WHEN));
     this.stack.push(template);
   }
 
   @Override
   public void exitWhenInvokeTemplate(WhenInvokeTemplateContext ctx) {
     var template = this.stack.pop(InvokeContentTemplate.class);
-    template.setCondition(this.stack.pop(BooleanExpression.class));
+    template.setCondition(
+        this.expressions.valueAs(ctx.expression(), BooleanExpression.class, WHEN));
     this.stack.push(template);
   }
 
-  @Override
-  public void enterInvokeTemplate(InvokeTemplateContext ctx) {
-    final Template template = this.stack.getTemplate(ctx.templateName.getText());
-    this.stack.push(new StrictArguments(template));
-  }
-
+  /**
+   * Invokes a declared template, with its arguments matched against the parameters it declares.
+   */
   @Override
   public void exitInvokeTemplate(InvokeTemplateContext ctx) {
-    final StrictArguments arguments = this.stack.pop(StrictArguments.class);
-    this.stack.push(new InvokeContentTemplate(ctx.templateName.getText(), arguments));
+    final Template template = this.stack.getTemplate(ctx.templateName.getText());
+    this.stack.push(new InvokeContentTemplate(ctx.templateName.getText(),
+        this.expressions.argumentsOf(ctx, template, ctx.argumentList(),
+            Construct.template(ctx.templateName.getText(), template.parameters.size()))));
   }
   
   // #endregion Conditional template blocks ---------------------------------
 
   // #region Variable Initializers --------------------------------------------
 
+  /**
+   * A variable is initialized with a value of its declared type.
+   */
   @Override
-  public void exitStringVariableInitializer(StringVariableInitializerContext ctx) {
-    this.exitVariableInitializer(ctx.variableName.getText(), StringExpression.class);
-  }
-
-  @Override
-  public void exitBooleanVariableInitializer(BooleanVariableInitializerContext ctx) {
-    this.exitVariableInitializer(ctx.variableName.getText(), BooleanExpression.class);
-  }
-
-  @Override
-  public void exitNumericVariableInitializer(NumericVariableInitializerContext ctx) {
-    this.exitVariableInitializer(ctx.variableName.getText(), NumericExpression.class);
-  }
-
-  @Override
-  public void exitDateVariableInitializer(DateVariableInitializerContext ctx) {
-    this.exitVariableInitializer(ctx.variableName.getText(), DateExpression.class);
-  }
-
-  @Override
-  public void exitTimeVariableInitializer(TimeVariableInitializerContext ctx) {
-    this.exitVariableInitializer(ctx.variableName.getText(), TimeExpression.class);
-  }
-
-  @Override
-  public void exitDurationVariableInitializer(DurationVariableInitializerContext ctx) {
-    this.exitVariableInitializer(ctx.variableName.getText(), DurationExpression.class);
-  }
-
-  private void exitVariableInitializer(
-      String variableName, Class<? extends ScalarExpression> expressionType) {
-    var expression = this.stack.pop(expressionType);
+  public void exitTypedVariableInitializer(TypedVariableInitializerContext ctx) {
+    var variableName = ctx.variableName.getText();
+    var expression = this.expressions.initialValueOf(ctx);
     var variable = new Variable(variableName,
         this.script.composeVariableDeclaration(variableName, expression.getClass()),
         expression,
         this.script.composeVariableReference(variableName, expression.getClass()));
-    this.stack.push(variable);
+    this.exitVariableInitializer(ctx, variable);
   }
 
-  @Override
-  public void exitVariableInitializer(VariableInitializerContext arg0) {
-    var variable = this.stack.pop(Variable.class);
-    this.stack.declareIdentifier(variable);
-    this.stack.peek(Variables.class).add(variable);
-  }
-
-  // Sequence variable initializers
-
-  @Override
-  public void exitStringSequenceVariableInitializer(StringSequenceVariableInitializerContext ctx) {
-    this.exitSequenceVariableInitializer(ctx.variableName.getText(), StringSequenceExpression.class);
-  }
-
-  @Override
-  public void exitNumericSequenceVariableInitializer(NumericSequenceVariableInitializerContext ctx) {
-    this.exitSequenceVariableInitializer(ctx.variableName.getText(), NumericSequenceExpression.class);
-  }
-
-  @Override
-  public void exitBooleanSequenceVariableInitializer(BooleanSequenceVariableInitializerContext ctx) {
-    this.exitSequenceVariableInitializer(ctx.variableName.getText(), BooleanSequenceExpression.class);
-  }
-
-  @Override
-  public void exitDateSequenceVariableInitializer(DateSequenceVariableInitializerContext ctx) {
-    this.exitSequenceVariableInitializer(ctx.variableName.getText(), DateSequenceExpression.class);
-  }
-
-  @Override
-  public void exitTimeSequenceVariableInitializer(TimeSequenceVariableInitializerContext ctx) {
-    this.exitSequenceVariableInitializer(ctx.variableName.getText(), TimeSequenceExpression.class);
-  }
-
-  @Override
-  public void exitDurationSequenceVariableInitializer(DurationSequenceVariableInitializerContext ctx) {
-    this.exitSequenceVariableInitializer(ctx.variableName.getText(), DurationSequenceExpression.class);
-  }
-
-  private void exitSequenceVariableInitializer(
-      String variableName, Class<? extends SequenceExpression> expressionType) {
-    var expression = this.stack.pop(expressionType);
-    var variable = new Variable(variableName,
-        this.script.composeVariableDeclaration(variableName, expression.getClass()),
-        expression,
-        this.script.composeVariableReference(variableName, expression.getClass()));
-    this.stack.push(variable);
+  /**
+   * A variable of a context declaration block is declared at once, so that the initializers after
+   * it can read it. The variable of a global declaration is declared when the declaration exits.
+   */
+  private void exitVariableInitializer(VariableInitializerContext initializer, Variable variable) {
+    if (initializer.getParent() instanceof VariableListContext) {
+      this.stack.declareIdentifier(variable);
+      this.stack.peek(Variables.class).add(variable);
+    } else {
+      this.stack.push(variable);
+    }
   }
 
   // #endregion Variable Initializers -----------------------------------------
@@ -1579,13 +1318,15 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
   @Override
   public void exitLinkedTextBlock(LinkedTextBlockContext ctx) {
-    var url = this.stack.pop(StringExpression.class);
+    var url =
+        this.expressions.valueAs(ctx.linkBlock().expression(), StringExpression.class, HYPERLINK);
     this.stack.push(new HyperlinkContentTemplateFragment(new TextContentTemplateFragment(ctx.textBlock().getText()), url));
   }
 
   @Override
   public void exitLinkedLabelBlock(LinkedLabelBlockContext ctx) {
-    var url = this.stack.pop(StringExpression.class);
+    var url =
+        this.expressions.valueAs(ctx.linkBlock().expression(), StringExpression.class, HYPERLINK);
     var label = this.stack.pop(ContentTemplateFragment.class);
     this.stack.push(new HyperlinkContentTemplateFragment(label, url));
   }
@@ -1604,79 +1345,6 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
   // #endregion Context Declaration Blocks {...} ------------------------------
   
-  // #region Parameter Declarations -------------------------------------------
-
-  @Override
-  public void exitStringParameterDeclaration(StringParameterDeclarationContext ctx) {
-    this.exitParameterDeclaration(ctx.parameterName.getText(), StringExpression.class);
-  }
-
-  @Override
-  public void exitNumericParameterDeclaration(NumericParameterDeclarationContext ctx) {
-    this.exitParameterDeclaration(ctx.parameterName.getText(), NumericExpression.class);
-  }
-
-  @Override
-  public void exitBooleanParameterDeclaration(BooleanParameterDeclarationContext ctx) {
-    this.exitParameterDeclaration(ctx.parameterName.getText(), BooleanExpression.class);
-  }
-
-  @Override
-  public void exitDateParameterDeclaration(DateParameterDeclarationContext ctx) {
-    this.exitParameterDeclaration(ctx.parameterName.getText(), DateExpression.class);
-  }
-
-  @Override
-  public void exitTimeParameterDeclaration(TimeParameterDeclarationContext ctx) {
-    this.exitParameterDeclaration(ctx.parameterName.getText(), TimeExpression.class);
-  }
-
-  @Override
-  public void exitDurationParameterDeclaration(DurationParameterDeclarationContext ctx) {
-    this.exitParameterDeclaration(ctx.parameterName.getText(), DurationExpression.class);
-  }
-
-  // Sequence parameter declarations
-
-  @Override
-  public void exitStringSequenceParameterDeclaration(StringSequenceParameterDeclarationContext ctx) {
-    this.exitParameterDeclaration(ctx.parameterName.getText(), StringSequenceExpression.class);
-  }
-
-  @Override
-  public void exitNumericSequenceParameterDeclaration(NumericSequenceParameterDeclarationContext ctx) {
-    this.exitParameterDeclaration(ctx.parameterName.getText(), NumericSequenceExpression.class);
-  }
-
-  @Override
-  public void exitBooleanSequenceParameterDeclaration(BooleanSequenceParameterDeclarationContext ctx) {
-    this.exitParameterDeclaration(ctx.parameterName.getText(), BooleanSequenceExpression.class);
-  }
-
-  @Override
-  public void exitDateSequenceParameterDeclaration(DateSequenceParameterDeclarationContext ctx) {
-    this.exitParameterDeclaration(ctx.parameterName.getText(), DateSequenceExpression.class);
-  }
-
-  @Override
-  public void exitTimeSequenceParameterDeclaration(TimeSequenceParameterDeclarationContext ctx) {
-    this.exitParameterDeclaration(ctx.parameterName.getText(), TimeSequenceExpression.class);
-  }
-
-  @Override
-  public void exitDurationSequenceParameterDeclaration(DurationSequenceParameterDeclarationContext ctx) {
-    this.exitParameterDeclaration(ctx.parameterName.getText(), DurationSequenceExpression.class);
-  }
-
-  private void exitParameterDeclaration(String parameterName, Class<? extends TypedExpression> parameterType) {
-    ParsedParameter parameter = new ParsedParameter(parameterName,
-        this.script.composeParameterReference(parameterName, parameterType));
-    this.stack.declareIdentifier(parameter);
-    this.stack.peek(ParsedParameters.class).add(parameter);
-  }
-
-  // #endregion Parameter Declarations ----------------------------------------
-
   @Override
   public void enterSummarySection(SummarySectionContext ctx) {
     while (!this.blockStack.isEmpty()) {
@@ -1708,9 +1376,11 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
   @Override
   public void enterTemplateLine(TemplateLineContext ctx) {
-    this.enterTemplateLine(ctx, this.getIndentLevel(ctx.indentation()));
+    final int indentLevel = this.getIndentLevel(ctx.indentation());
+    this.enterTemplateLine(ctx, indentLevel);
+    this.blockAbove = this.blockStack.blockAtLevel(indentLevel - 1);
     if (ctx.contextDeclarationBlock() == null) {
-      this.exitRootContextDeclaration();
+      this.declareRootLineContext();
       this.stack.push(new Variables());
     }
   }
@@ -1747,6 +1417,14 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
     }
   }
 
+  /**
+   * @return the context of the line above the template line being translated, which the line is
+   *         nested in, or {@code null} when there is none, as for a line at the top
+   */
+  private Context contextAbove() {
+    return this.blockAbove != null ? this.blockAbove.getContext() : null;
+  }
+
   @Override
   public void exitTemplateLine(TemplateLineContext ctx) {
     final Context lineContext = this.efxContext.pop();
@@ -1772,18 +1450,16 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
       if (this.blockStack.peek() instanceof TemplateInvocation) {
         throw InvalidIndentationException.noNestingOnInvocations(ctx);
       }
-        this.blockStack.pushChild(outlineNumber, this.relativizeContext(lineContext, this.blockStack.currentContext()), variables,
-            contentTemplates);
+      this.blockStack.pushChild(outlineNumber, lineContext, variables, contentTemplates);
     } else if (indentLevel == 0) {
       // A top-level line is a new block of the current section, also when it follows a declared
       // template and its lines.
       this.blockStack.clear();
       final ContentBlock sectionRoot = this.viewTemplate.getSection(this.translatorContext.getCurrentSection()).getRoot();
-      this.blockStack.push(sectionRoot.addChild(outlineNumber, this.relativizeContext(lineContext, sectionRoot.getContext()), variables,
+      this.blockStack.push(sectionRoot.addChild(outlineNumber, lineContext, variables,
           contentTemplates));
     } else {
-      this.blockStack.pushSibling(outlineNumber, this.relativizeContext(lineContext, this.blockStack.parentContext()), variables,
-          contentTemplates);
+      this.blockStack.pushSibling(outlineNumber, lineContext, variables, contentTemplates);
     }
   }
 
@@ -1804,6 +1480,38 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
     this.blockStack.clear();
     this.blockStack.push(this.viewTemplate.getTemplateDeclarations().addChild(template.name, contentTemplates, template.parameters));
+  }
+
+  /**
+   * Translates the context a template line declares by a field or a node, or by a context
+   * variable assigned one, where the line stands: in the context of the line above, so that an
+   * index after the reference, and every position, condition and reference in its brackets, is
+   * read within the element of that line, as in an expression.
+   *
+   * @param declaration the context declaration of the line
+   * @return the context it declares: the absolute path of its field or node, and its path from
+   *         the context above
+   */
+  private Context declaredContextOf(final ContextDeclarationContext declaration) {
+    final Context contextAbove = this.contextAbove();
+    if (contextAbove == null) {
+      return this.translatedContextOf(declaration);
+    }
+    this.efxContext.push(contextAbove);
+    final Context declared = this.translatedContextOf(declaration);
+    this.efxContext.pop();
+    return declared;
+  }
+
+  /**
+   * @param declaration the context declaration of a template line, by a field or a node, or by a
+   *        context variable assigned one
+   * @return the context it declares, translated in the current context
+   */
+  private Context translatedContextOf(final ContextDeclarationContext declaration) {
+    return declaration.contextVariableInitializer() != null
+        ? this.expressions.contextAssignedBy(declaration.contextVariableInitializer())
+        : this.expressions.contextOf(declaration.getRuleContext(ParserRuleContext.class, 0));
   }
 
   private Context relativizeContext(Context childContext, Context parentContext) {
@@ -1829,6 +1537,10 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
   // #endregion Template lines  -----------------------------------------------
   
   // #region Helpers ----------------------------------------------------------
+
+  private static String getLexerSymbol(int tokenType) {
+    return EfxLexer.VOCABULARY.getLiteralName(tokenType).replaceAll("^'|'$", "");
+  }
 
     private int getIndentLevel(IndentationContext ctx) {
 
@@ -1866,4 +1578,20 @@ public class EfxTemplateTranslatorV2 extends EfxExpressionTranslatorV2
 
   // #endregion Helpers -------------------------------------------------------
 
+
+  /**
+   * Translates the expressions of a template, which may call the built-ins that only templates may
+   * call, such as the formatting functions.
+   */
+  private static final class TemplateExpressionVisitor extends EfxExpressionVisitor {
+
+    TemplateExpressionVisitor(final TranslationContext translation) {
+      super(translation);
+    }
+
+    @Override
+    protected boolean translatesTemplateOnlyBuiltIns() {
+      return true;
+    }
+  }
 }

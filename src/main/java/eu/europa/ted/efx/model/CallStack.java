@@ -56,6 +56,13 @@ public class CallStack {
   private final TypeChecker typeChecker;
 
   /**
+   * What the names that the translator generates start with, which no declaration may give, so
+   * that no declaration can hide a generated name or be hidden by one; {@code null} when the
+   * translator keeps no name for itself.
+   */
+  private final String reservedPrefix;
+
+  /**
    * Tracks the current parser rule context for error reporting.
    * Mirrors the ANTLR parse tree walk via {@link #pushParserContext} / {@link #popParserContext}.
    */
@@ -156,7 +163,19 @@ public class CallStack {
    * @param typeChecker The type checker to use for type conversion checks.
    */
   public CallStack(TypeChecker typeChecker) {
+    this(typeChecker, null);
+  }
+
+  /**
+   * Creates a CallStack with a specific type checker that rejects the declaration of any name
+   * starting with the given prefix, which the translator keeps for the names it generates.
+   *
+   * @param typeChecker The type checker to use for type conversion checks.
+   * @param reservedPrefix What the names that the translator generates start with.
+   */
+  public CallStack(TypeChecker typeChecker, String reservedPrefix) {
     this.typeChecker = typeChecker;
+    this.reservedPrefix = reservedPrefix;
     this.frames = new Stack<>();
     this.frames.push(new StackFrame()); // The global scope
   }
@@ -232,9 +251,7 @@ public class CallStack {
    * @param identifier The identifier to declare.
    */
   public void declareIdentifier(Identifier identifier) {
-    if (this.inScope(identifier.name)) {
-      throw InvalidIdentifierException.alreadyDeclared(this.peekParserContext(), identifier.name);
-    }
+    this.checkDeclarable(identifier.name);
     this.frames.peek().declareIdentifier(identifier);
   }
 
@@ -244,24 +261,35 @@ public class CallStack {
    * @param identifier The identifier to declare.
    */
   public void declareGlobalIdentifier(Identifier identifier) {
-    if (this.inScope(identifier.name)) {
-      throw InvalidIdentifierException.alreadyDeclared(this.peekParserContext(), identifier.name);
-    }
+    this.checkDeclarable(identifier.name);
     this.globalIdentifierRegistry.put(identifier.name, identifier);
   }
 
   public void declareFunction(Function function) {
-    if (this.inScope(function.name)) {
-      throw InvalidIdentifierException.alreadyDeclared(this.peekParserContext(), function.name);
-    }
+    this.checkDeclarable(function.name);
     this.globalIdentifierRegistry.put(function.name, function);
   }
 
   public void declareTemplate(Template template) {
-    if (this.inScope(template.name)) {
-      throw InvalidIdentifierException.alreadyDeclared(this.peekParserContext(), template.name);
-    }
+    this.checkDeclarable(template.name);
     this.globalIdentifierRegistry.put(template.name, template);
+  }
+
+  /**
+   * Checks that a name can be declared.
+   *
+   * @param name The name being declared.
+   * @throws InvalidIdentifierException if the translator keeps the name for itself, or if the name
+   *         is already declared in scope.
+   */
+  private void checkDeclarable(String name) {
+    if (this.reservedPrefix != null && name.startsWith(this.reservedPrefix)) {
+      throw InvalidIdentifierException.identifierIsReserved(this.peekParserContext(), name,
+          this.reservedPrefix);
+    }
+    if (this.inScope(name)) {
+      throw InvalidIdentifierException.alreadyDeclared(this.peekParserContext(), name);
+    }
   }
 
   /**

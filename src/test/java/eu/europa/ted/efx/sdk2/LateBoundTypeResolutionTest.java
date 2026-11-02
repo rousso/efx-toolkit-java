@@ -16,17 +16,21 @@ package eu.europa.ted.efx.sdk2;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 
 import eu.europa.ted.efx.EfxTestsBase;
 import eu.europa.ted.efx.exceptions.TypeMismatchException;
+import eu.europa.ted.efx.exceptions.TypeMismatchException.ErrorCode;
 
 /**
  * Tests for late-bound type resolution logic.
  *
- * Organized by resolve method and CardinalityResolutionContext to clearly show coverage.
- * Each test is named: test[ResolveMethod]_[Context]_[scenario].
+ * Organized by the kind of reference and by what the place it is written in requires: a single
+ * value (Scalar), a sequence (Sequence) or either (Either). Each test is named:
+ * test[Reference]_[Requirement]_[scenario].
  */
 class LateBoundTypeResolutionTest extends EfxTestsBase {
 
@@ -124,12 +128,19 @@ class LateBoundTypeResolutionTest extends EfxTestsBase {
   }
 
   @Test
-  void testResolveFunctionInvocation_Sequence_ScalarFunction_Throws() {
-    TypeMismatchException ex = assertThrows(TypeMismatchException.class,
-        () -> translateTemplate(lines(
+  void testResolveFunctionInvocation_Sequence_ScalarFunction_IsPromoted() {
+    // Promotion: a scalar function where a sequence is required gives a sequence of one value.
+    assertEquals(
+        lines(
+            "GLOBALS:",
+            "string:f() -> { 'hi' }",
+            "TEMPLATES:",
+            "let body01() -> { text('count: ')eval(for $__item in count(udf:f()) return format-number($__item, '# ##0,#########')) }",
+            "MAIN:",
+            "for-each(/*).call(body01())"),
+        translateTemplate(lines(
             "let text:?f() = 'hi';",
             "display count: ${count(?f())};")));
-    assertEquals(TypeMismatchException.ErrorCode.IDENTIFIER_IS_SCALAR, ex.getErrorCode());
   }
 
   @Test
@@ -184,11 +195,10 @@ class LateBoundTypeResolutionTest extends EfxTestsBase {
   }
 
   @Test
-  void testResolveContextVariable_Sequence_Throws() {
-    TypeMismatchException ex = assertThrows(TypeMismatchException.class,
-        () -> translateExpressionWithContext("ND-Root",
-            "for context:$f in BT-00-Repeatable-Text return 'test' in $f"));
-    assertEquals(TypeMismatchException.ErrorCode.IDENTIFIER_IS_SCALAR, ex.getErrorCode());
+  void testResolveContextVariable_Sequence_IsPromoted() {
+    // Promotion: a context variable where a sequence is required gives a sequence of one value.
+    testExpressionTranslationWithContext("for $f in PathNode/RepeatableTextField return 'test' = $f/normalize-space(text())", "ND-Root",
+        "for context:$f in BT-00-Repeatable-Text return 'test' in $f");
   }
 
   @Test
@@ -220,12 +230,19 @@ class LateBoundTypeResolutionTest extends EfxTestsBase {
   }
 
   @Test
-  void testResolveRegularVariable_Sequence_ScalarVariable_Throws() {
-    TypeMismatchException ex = assertThrows(TypeMismatchException.class,
-        () -> translateTemplate(lines(
+  void testResolveRegularVariable_Sequence_ScalarVariable_IsPromoted() {
+    // Promotion: a scalar variable where a sequence is required gives a sequence of one value.
+    assertEquals(
+        lines(
+            "GLOBALS:",
+            "string:x='a'",
+            "TEMPLATES:",
+            "let body01() -> { text('count: ')eval(for $__item in count($x) return format-number($__item, '# ##0,#########')) }",
+            "MAIN:",
+            "for-each(/*).call(body01())"),
+        translateTemplate(lines(
             "let text:$x = 'a';",
             "display count: ${count($x)};")));
-    assertEquals(TypeMismatchException.ErrorCode.IDENTIFIER_IS_SCALAR, ex.getErrorCode());
   }
 
   @Test
@@ -296,7 +313,7 @@ class LateBoundTypeResolutionTest extends EfxTestsBase {
   void testLateBoundComparison_MismatchedFieldTypes_Throws() {
     TypeMismatchException ex = assertThrows(TypeMismatchException.class,
         () -> translateExpressionWithContext("ND-Root", "BT-00-Text == BT-00-Number"));
-    assertEquals(TypeMismatchException.ErrorCode.CANNOT_CONVERT, ex.getErrorCode());
+    assertEquals(TypeMismatchException.ErrorCode.INCOMPATIBLE_OPERANDS, ex.getErrorCode());
   }
 
   @Test
@@ -396,4 +413,188 @@ class LateBoundTypeResolutionTest extends EfxTestsBase {
   }
 
   // #endregion incompatibleOperands -----------------------------------------------
+
+  // #region operandOrigin ----------------------------------------------------------
+
+  // An operand whose value is a sequence where a single value is required names the reference it
+  // is written as, at the position of that reference, through any parentheses around it.
+
+  @Test
+  void testOperandOrigin_FieldReference() {
+    assertSequenceError(ErrorCode.FIELD_MAY_REPEAT, "1:12", "BT-00-Repeatable-Text",
+        () -> translateExpressionWithContext("ND-Root", "BT-00-Repeatable-Text == 'test'"));
+  }
+
+  @Test
+  void testOperandOrigin_ParenthesizedFieldReference() {
+    assertSequenceError(ErrorCode.FIELD_MAY_REPEAT, "1:13", "BT-00-Repeatable-Text",
+        () -> translateExpressionWithContext("ND-Root", "(BT-00-Repeatable-Text) == 'test'"));
+  }
+
+  @Test
+  void testOperandOrigin_NestedParentheses() {
+    assertSequenceError(ErrorCode.FIELD_MAY_REPEAT, "1:14", "BT-00-Repeatable-Text",
+        () -> translateExpressionWithContext("ND-Root", "((BT-00-Repeatable-Text)) == 'test'"));
+  }
+
+  @Test
+  void testOperandOrigin_ParenthesizedMultilingualField() {
+    assertSequenceError(ErrorCode.FIELD_IS_MULTILINGUAL, "1:13", "BT-00-Text-Multilingual",
+        () -> translateExpressionWithContext("ND-Root", "(BT-00-Text-Multilingual) == 'test'"));
+  }
+
+  @Test
+  void testOperandOrigin_AttributeReference() {
+    assertSequenceError(ErrorCode.FIELD_MAY_REPEAT, "1:12", "BT-00-Repeatable-Text",
+        () -> translateExpressionWithContext("ND-Root",
+            "BT-00-Repeatable-Text/@attribute == 'test'"));
+  }
+
+  @Test
+  void testOperandOrigin_ContextOverride() {
+    assertSequenceError(ErrorCode.FIELD_MAY_REPEAT, "1:12", "BT-00-Text-In-Repeatable-Node",
+        () -> translateExpressionWithContext("ND-Root",
+            "ND-RepeatableNode::BT-00-Text-In-Repeatable-Node == 'test'"));
+  }
+
+  @Test
+  void testOperandOrigin_ParenthesizedFunctionArgument() {
+    assertSequenceError(ErrorCode.FIELD_MAY_REPEAT, "1:24", "BT-00-Repeatable-Text",
+        () -> translateExpressionWithContext("ND-Root", "upper-case((BT-00-Repeatable-Text))"));
+  }
+
+  @Test
+  void testOperandOrigin_SequenceFunction() {
+    assertSequenceError(ErrorCode.IDENTIFIER_IS_SEQUENCE, "2:16", "$f",
+        () -> translateTemplate(lines(
+            "let text*:?f() = ['a', 'b'];",
+            "with BT-00-Text[?f() == 'a'] display foo;")));
+  }
+
+  @Test
+  void testOperandOrigin_ParenthesizedSequenceFunction() {
+    assertSequenceError(ErrorCode.IDENTIFIER_IS_SEQUENCE, "2:17", "$f",
+        () -> translateTemplate(lines(
+            "let text*:?f() = ['a', 'b'];",
+            "with BT-00-Text[(?f()) == 'a'] display foo;")));
+  }
+
+  @Test
+  void testOperandOrigin_ParenthesizedSequenceVariable() {
+    assertSequenceError(ErrorCode.IDENTIFIER_IS_SEQUENCE, "2:17", "$items",
+        () -> translateTemplate(lines(
+            "let text*:$items = ['a', 'b'];",
+            "with BT-00-Text[($items) == 'a'] display foo;")));
+  }
+
+  @Test
+  void testOperandOrigin_DictionaryLookup() {
+    assertSequenceError(ErrorCode.DICTIONARY_IS_SEQUENCE, "2:16", "$dic",
+        () -> translateTemplate(lines(
+            "let $dic index BT-00-Number by BT-00-Text;",
+            "with BT-00-Text[$dic['key'] == 1] display foo;")));
+  }
+
+  @Test
+  void testOperandOrigin_ParenthesizedDictionaryLookup() {
+    assertSequenceError(ErrorCode.DICTIONARY_IS_SEQUENCE, "2:17", "$dic",
+        () -> translateTemplate(lines(
+            "let $dic index BT-00-Number by BT-00-Text;",
+            "with BT-00-Text[($dic['key']) == 1] display foo;")));
+  }
+
+  @Test
+  void testOperandOrigin_ListItem() {
+    assertSequenceError(ErrorCode.FIELD_MAY_REPEAT, "1:24", "BT-00-Repeatable-Text",
+        () -> translateExpressionWithContext("ND-Root", "count(['a', BT-00-Repeatable-Text])"));
+  }
+
+  @Test
+  void testOperandOrigin_ConditionalBranch_SequenceJoins() {
+    // A branch takes a sequence: the conditional takes the join of its branches (P4.4).
+    testExpressionTranslationWithContext(
+        "(if (PathNode/IndicatorField) then PathNode/RepeatableTextField/normalize-space(text()) else 'x')",
+        "ND-Root", "if BT-00-Indicator then BT-00-Repeatable-Text else 'x'");
+  }
+
+  @Test
+  void testOperandOrigin_ConditionalCondition() {
+    assertSequenceError(ErrorCode.FIELD_MAY_REPEAT, "1:15", "BT-00-Repeatable-Indicator",
+        () -> translateExpressionWithContext("ND-Root",
+            "if BT-00-Repeatable-Indicator then 'a' else 'x'"));
+  }
+
+  @Test
+  void testOperandOrigin_Predicate_NamesThePredicateContext() {
+    TypeMismatchException ex = assertThrows(TypeMismatchException.class,
+        () -> translateExpressionWithContext("ND-Root",
+            "BT-00-Text[(BT-00-Repeatable-Indicator)] is present"));
+    assertEquals(ErrorCode.FIELD_MAY_REPEAT, ex.getErrorCode());
+    assertEquals("line 1:24 Type mismatch. Predicate cannot take 'text' and 'indicator*'. Its"
+        + " condition must be 'indicator'. Field 'BT-00-Repeatable-Indicator' may return multiple"
+        + " values from context 'BT-00-Text': use a sequence expression or change the context.",
+        ex.getMessage());
+  }
+
+  @Test
+  void testOperandOrigin_Indexer() {
+    assertSequenceError(ErrorCode.FIELD_MAY_REPEAT, "1:26", "BT-00-Repeatable-Number",
+        () -> translateExpressionWithContext("ND-Root", "['a', 'b'][at BT-00-Repeatable-Number]"));
+  }
+
+  @Test
+  void testOperandOrigin_DictionaryKey_NamesTheIndexedField() {
+    TypeMismatchException ex = assertThrows(TypeMismatchException.class,
+        () -> translateTemplate(lines(
+            "let $dic index BT-00-Number by BT-00-Repeatable-Text;",
+            "display ${$dic['a']};")));
+    assertEquals(ErrorCode.FIELD_MAY_REPEAT, ex.getErrorCode());
+    assertEquals("line 1:31 Type mismatch. 'by' cannot take 'text*'. Its key must be 'text'."
+        + " Field 'BT-00-Repeatable-Text' may return multiple values from context 'BT-00-Number':"
+        + " use a sequence expression or change the context.", ex.getMessage());
+  }
+
+  @Test
+  void testOperandOrigin_FunctionBody() {
+    assertSequenceError(ErrorCode.FIELD_MAY_REPEAT, "1:17", "BT-00-Repeatable-Text",
+        () -> translateTemplate(lines(
+            "let text:?f() = (BT-00-Repeatable-Text);",
+            "display ${?f()};")));
+  }
+
+  @Test
+  void testOperandOrigin_VariableInitializer() {
+    assertSequenceError(ErrorCode.FIELD_MAY_REPEAT, "1:15", "BT-00-Repeatable-Text",
+        () -> translateTemplate(lines(
+            "let text:$x = (BT-00-Repeatable-Text);",
+            "display ${$x};")));
+  }
+
+  @Test
+  void testOperandOrigin_TemplateCondition() {
+    assertSequenceError(ErrorCode.FIELD_MAY_REPEAT, "1:6", "BT-00-Repeatable-Indicator",
+        () -> translateTemplate(lines(
+            "when (BT-00-Repeatable-Indicator) display foo",
+            "otherwise display bar;")));
+  }
+
+  @Test
+  void testOperandOrigin_LinkTarget() {
+    assertSequenceError(ErrorCode.FIELD_MAY_REPEAT, "1:25", "BT-00-Repeatable-Text",
+        () -> translateTemplate("{ND-Root} link ${'x'} @{(BT-00-Repeatable-Text)}"));
+  }
+
+  /**
+   * Asserts that the translation fails with the given code, at the given line and column, naming
+   * the given identifier.
+   */
+  private static void assertSequenceError(final ErrorCode code, final String position,
+      final String identifier, final Executable translation) {
+    TypeMismatchException ex = assertThrows(TypeMismatchException.class, translation);
+    assertEquals(code, ex.getErrorCode());
+    assertTrue(ex.getMessage().startsWith("line " + position + " "), ex::getMessage);
+    assertTrue(ex.getMessage().contains("'" + identifier + "'"), ex::getMessage);
+  }
+
+  // #endregion operandOrigin -------------------------------------------------------
 }

@@ -1,7 +1,12 @@
 package eu.europa.ted.efx;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import org.antlr.v4.runtime.misc.ParseCancellationException;
+import org.junit.jupiter.api.function.Executable;
+
+import eu.europa.ted.efx.exceptions.ThrowingErrorListener;
 import eu.europa.ted.efx.interfaces.TranslatorOptions;
 import eu.europa.ted.efx.mock.DependencyFactoryMock;
 import eu.europa.ted.efx.model.DecimalFormat;
@@ -85,6 +90,19 @@ public abstract class EfxTestsBase {
       throw new AssertionError(
           "Generated XPath is not valid: " + xpath + "\n" + e.getMessage(), e);
     }
+  }
+
+  /**
+   * Asserts that a translation fails with a syntax error: the parser's own
+   * {@link ParseCancellationException}, as the {@link ThrowingErrorListener} raises it, and not one
+   * of the compilation errors that extend it.
+   *
+   * @param translation the translation
+   */
+  protected static void assertSyntaxError(final Executable translation) {
+    final ParseCancellationException exception =
+        assertThrows(ParseCancellationException.class, translation);
+    assertEquals(ParseCancellationException.class, exception.getClass(), exception::toString);
   }
 
   protected String lines(String... lines) {

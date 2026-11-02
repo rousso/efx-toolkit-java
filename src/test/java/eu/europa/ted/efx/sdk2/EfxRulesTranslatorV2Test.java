@@ -188,6 +188,36 @@ class EfxRulesTranslatorV2Test extends EfxTestsBase {
     assertAllOutputs(testName, outputFiles);
   }
 
+  @Test
+  void testAssert_RepeatableCondition_NamesTheField() {
+    String rules = lines(
+        "---- STAGE 1a ----",
+        "",
+        "WITH ND-Root",
+        "    ASSERT (BT-00-Repeatable-Indicator)",
+        "    AS ERROR R-K7P-M2Q",
+        "    FOR BT-00-Text IN 1");
+    TypeMismatchException exception = assertThrows(TypeMismatchException.class,
+        () -> translator.translateRules(rules));
+    assertEquals(TypeMismatchException.ErrorCode.FIELD_MAY_REPEAT, exception.getErrorCode());
+    assertEquals("line 4:12 Type mismatch. 'ASSERT' cannot take 'indicator*'. Its condition must"
+        + " be 'indicator'. Field 'BT-00-Repeatable-Indicator' may return multiple values from"
+        + " context 'ND-Root': use a sequence expression or change the context.",
+        exception.getMessage());
+  }
+
+  @Test
+  void testAssert_TextCondition_Throws() {
+    String rules = lines(
+        "---- STAGE 1a ----",
+        "",
+        "WITH ND-Root",
+        "    ASSERT 'a'",
+        "    AS ERROR R-K7P-M2Q",
+        "    FOR BT-00-Text IN 1");
+    assertThrows(TypeMismatchException.class, () -> translator.translateRules(rules));
+  }
+
   //#endregion ASSERT and REPORT tests
 
   //#region WHEN/OTHERWISE tests
@@ -326,6 +356,42 @@ class EfxRulesTranslatorV2Test extends EfxTestsBase {
   @Test
   void testVariable_StageLevel() throws IOException {
     String testName = "testVariable_StageLevel";
+    Map<String, String> outputFiles = translator.translateRules(readInput(testName));
+
+    assertEquals(7, outputFiles.size(), "Should generate exactly 7 files");
+    assertAllOutputs(testName, outputFiles);
+  }
+
+  @Test
+  void testVariable_Numeric_GlobalLevel() throws IOException {
+    String testName = "testVariable_Numeric_GlobalLevel";
+    Map<String, String> outputFiles = translator.translateRules(readInput(testName));
+
+    assertEquals(7, outputFiles.size(), "Should generate exactly 7 files");
+    assertAllOutputs(testName, outputFiles);
+  }
+
+  @Test
+  void testVariable_Date_GlobalLevel() throws IOException {
+    String testName = "testVariable_Date_GlobalLevel";
+    Map<String, String> outputFiles = translator.translateRules(readInput(testName));
+
+    assertEquals(7, outputFiles.size(), "Should generate exactly 7 files");
+    assertAllOutputs(testName, outputFiles);
+  }
+
+  @Test
+  void testVariable_Time_GlobalLevel() throws IOException {
+    String testName = "testVariable_Time_GlobalLevel";
+    Map<String, String> outputFiles = translator.translateRules(readInput(testName));
+
+    assertEquals(7, outputFiles.size(), "Should generate exactly 7 files");
+    assertAllOutputs(testName, outputFiles);
+  }
+
+  @Test
+  void testVariable_Duration_GlobalLevel() throws IOException {
+    String testName = "testVariable_Duration_GlobalLevel";
     Map<String, String> outputFiles = translator.translateRules(readInput(testName));
 
     assertEquals(7, outputFiles.size(), "Should generate exactly 7 files");
@@ -725,7 +791,7 @@ class EfxRulesTranslatorV2Test extends EfxTestsBase {
     String rules = readInput("testApiCall_TypeMismatch_InArithmeticExpression");
     TypeMismatchException exception = assertThrows(TypeMismatchException.class,
         () -> translator.translateRules(rules));
-    assertEquals(TypeMismatchException.ErrorCode.CANNOT_CONVERT, exception.getErrorCode());
+    assertEquals(TypeMismatchException.ErrorCode.INCOMPATIBLE_OPERANDS, exception.getErrorCode());
   }
 
   @Test
