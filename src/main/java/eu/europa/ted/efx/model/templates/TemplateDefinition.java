@@ -2,7 +2,6 @@ package eu.europa.ted.efx.model.templates;
 
 import java.util.List;
 
-import eu.europa.ted.efx.model.variables.ParsedArguments;
 import eu.europa.ted.efx.model.variables.ParsedParameters;
 
 /**
@@ -29,7 +28,7 @@ public class TemplateDefinition extends ContentBlock {
    */
   public TemplateDefinition(final ContentBlock parent, final String name,
       final List<ContentTemplate> contentTemplates, ParsedParameters parameters) {
-    super(parent, name, 0, contentTemplates, null, parameters, new ParsedArguments(parameters));
+    super(parent, name, 0, contentTemplates, null, parameters, parameters.toArguments());
   }
   
 

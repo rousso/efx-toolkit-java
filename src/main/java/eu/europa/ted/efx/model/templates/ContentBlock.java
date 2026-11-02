@@ -14,8 +14,8 @@ import eu.europa.ted.efx.interfaces.MarkupGenerator;
 import eu.europa.ted.efx.interfaces.Parameter;
 import eu.europa.ted.efx.interfaces.TranslatorContext;
 import eu.europa.ted.efx.model.Context;
-import eu.europa.ted.efx.model.variables.ParsedArgument;
-import eu.europa.ted.efx.model.variables.ParsedArguments;
+import eu.europa.ted.efx.model.signatures.ParsedArgument;
+import eu.europa.ted.efx.model.signatures.ParsedArguments;
 import eu.europa.ted.efx.model.variables.ParsedParameter;
 import eu.europa.ted.efx.model.variables.ParsedParameters;
 import eu.europa.ted.efx.model.variables.Variables;
@@ -34,7 +34,7 @@ public class ContentBlock {
   protected final Context context;
   protected final Queue<ContentBlock> children = new LinkedList<>();
   protected final ParsedParameters parameters;
-  protected final ParsedArguments arguments;
+  protected final ParsedArguments<ParsedParameter> arguments;
 
   private ContentBlock(String id) {
     this.parent = null;
@@ -44,12 +44,12 @@ public class ContentBlock {
     this.context = null;
     this.number = 0;
     this.parameters = new ParsedParameters();
-    this.arguments = new ParsedArguments(this.parameters);
+    this.arguments = this.parameters.toArguments();
   }
 
   public ContentBlock(final ContentBlock parent, final String id, final int number,
       final List<ContentTemplate> contentTemplates, Context contextPath, ParsedParameters parameters,
-      ParsedArguments arguments) {
+      ParsedArguments<ParsedParameter> arguments) {
     this.parent = parent;
     this.id = id;
     this.indentationLevel = parent.indentationLevel + 1;
@@ -63,7 +63,7 @@ public class ContentBlock {
   public ContentBlock(final ContentBlock parent, final String id, final int number,
       final List<ContentTemplate> contentTemplates, Context contextPath, Variables variables) {
     this(parent, id, number, contentTemplates, contextPath, new ParsedParameters(variables),
-        new ParsedArguments(variables));
+        variables.toArguments());
   }
 
   public static ContentBlock newRootBlock(String id) {
@@ -193,7 +193,7 @@ public class ContentBlock {
     return this.parent.getContext();
   }
 
-  protected Set<ParsedArgument> getOwnArguments() {
+  protected Set<ParsedArgument<ParsedParameter>> getOwnArguments() {
     return this.arguments.toSet();
   }
 
@@ -202,20 +202,16 @@ public class ContentBlock {
   }
 
   protected Set<ParsedParameter> getAllParameters() {
-    if (this.parent == null) {
-      return new LinkedHashSet<>(this.getOwnArguments());
-    }
-    final Set<ParsedParameter> merged = new LinkedHashSet<>();
-    merged.addAll(this.parent.getAllArguments());
-    merged.addAll(this.getOwnArguments());
-    return merged;
+    return this.getAllArguments().stream()
+        .map(argument -> argument.parameter)
+        .collect(Collectors.toCollection(LinkedHashSet::new));
   }
 
-  protected Set<ParsedArgument> getAllArguments() {
+  protected Set<ParsedArgument<ParsedParameter>> getAllArguments() {
     if (this.parent == null) {
       return new LinkedHashSet<>(this.getOwnArguments());
     }
-    final Set<ParsedArgument> merged = new LinkedHashSet<>();
+    final Set<ParsedArgument<ParsedParameter>> merged = new LinkedHashSet<>();
     merged.addAll(this.parent.getAllArguments());
     merged.addAll(this.getOwnArguments());
     return merged;
@@ -262,10 +258,14 @@ public class ContentBlock {
     Set<Argument> args = new LinkedHashSet<>();
     if (this.parent != null) {
       args.addAll(this.parent.getAllArguments().stream()
-          .map(a -> new Argument.Impl(a.name, markupGenerator.getEfxDataTypeEquivalent(a.dataType), a.referenceExpression))
+          .map(a -> new Argument.Impl(a.parameter.name,
+              markupGenerator.getEfxDataTypeEquivalent(a.parameter.dataType),
+              a.parameter.referenceExpression))
           .collect(Collectors.toCollection(LinkedHashSet::new)));
     }
-    args.addAll(this.getOwnArguments().stream().map(a -> new Argument.Impl(a.name, markupGenerator.getEfxDataTypeEquivalent(a.dataType), a.value))
+    args.addAll(this.getOwnArguments().stream()
+        .map(a -> new Argument.Impl(a.parameter.name,
+            markupGenerator.getEfxDataTypeEquivalent(a.parameter.dataType), a.value))
         .collect(Collectors.toCollection(LinkedHashSet::new)));
     var invocation = markupGenerator.renderFragmentInvocation(this.id, args, translatorContext);
     return markupGenerator.renderContextLoop(this.context.relativePath(), invocation, args);

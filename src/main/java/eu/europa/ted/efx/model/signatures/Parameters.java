@@ -219,14 +219,13 @@ public class Parameters<P extends Parameter> extends LinkedList<P> {
   }
 
   private Match converted(final List<? extends TypedExpression> arguments) {
+    List<P> parameters = new ArrayList<>();
     List<TypedExpression> values = new ArrayList<>();
-    List<Class<? extends TypedExpression>> types = new ArrayList<>();
     for (int position = 0; position < arguments.size(); position++) {
-      ParameterType type = this.typeAt(position);
-      values.add(type.convert(arguments.get(position)));
-      types.add(type.expressionTypeOf(arguments.get(position)));
+      parameters.add(this.parameterAt(position));
+      values.add(this.typeAt(position).convert(arguments.get(position)));
     }
-    return Match.of(new Arguments(values, types));
+    return Match.of(new ParsedArguments<>(parameters, values));
   }
 
   private ParameterType typeAt(final int position) {

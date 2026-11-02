@@ -37,10 +37,10 @@ import eu.europa.ted.efx.model.expressions.TypedExpression;
 public final class Resolution {
 
   private final Parameters<?> parameters;
-  private final Arguments arguments;
+  private final ParsedArguments<?> arguments;
   private final Mismatch mismatch;
 
-  private Resolution(final Parameters<?> parameters, final Arguments arguments,
+  private Resolution(final Parameters<?> parameters, final ParsedArguments<?> arguments,
       final Mismatch mismatch) {
     this.parameters = parameters;
     this.arguments = arguments;
@@ -100,7 +100,7 @@ public final class Resolution {
    * @return the arguments, converted to the parameters of the parameter list that takes them
    * @throws IllegalStateException if none does
    */
-  public Arguments getArguments() {
+  public ParsedArguments<?> getArguments() {
     this.requireResolved();
     return this.arguments;
   }

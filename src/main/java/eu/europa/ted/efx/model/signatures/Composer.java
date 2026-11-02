@@ -20,7 +20,7 @@ import eu.europa.ted.efx.model.expressions.sequence.SequenceExpression;
 
 /**
  * Translates a call of an {@link Overload}: it calls the {@link ScriptGenerator} method of the
- * overload with the converted {@link Arguments}.
+ * overload with the converted {@link ParsedArguments}.
  *
  * <p>Most composers are a lambda. A generic method of {@link ScriptGenerator}, such as
  * {@link ScriptGenerator#composeUnionFunction}, cannot be called from a lambda for an unknown
@@ -38,7 +38,7 @@ public interface Composer {
    * @param arguments the converted arguments of the call
    * @return the translated call
    */
-  TypedExpression compose(ScriptGenerator script, Arguments arguments);
+  TypedExpression compose(ScriptGenerator script, ParsedArguments<?> arguments);
 
   /**
    * Composes a generic function of one sequence, such as {@code sort}.
@@ -86,25 +86,25 @@ public interface Composer {
   }
 
   private static <T extends SequenceExpression> T applySequence(final SequenceFunction function,
-      final ScriptGenerator script, final Arguments arguments, final Class<T> type) {
+      final ScriptGenerator script, final ParsedArguments<?> arguments, final Class<T> type) {
     return function.apply(script, arguments.at(0, type), type);
   }
 
   private static <T extends SequenceExpression> T applySequencePair(
-      final SequencePairFunction function, final ScriptGenerator script, final Arguments arguments,
-      final Class<T> type) {
+      final SequencePairFunction function, final ScriptGenerator script,
+      final ParsedArguments<?> arguments, final Class<T> type) {
     return function.apply(script, arguments.at(0, type), arguments.at(1, type), type);
   }
 
   private static <T extends SequenceExpression> T applySubsequence(
-      final SubsequenceFunction function, final ScriptGenerator script, final Arguments arguments,
-      final Class<T> type) {
+      final SubsequenceFunction function, final ScriptGenerator script,
+      final ParsedArguments<?> arguments, final Class<T> type) {
     return function.apply(script, arguments.at(0, type), arguments.numericAt(1), type);
   }
 
   private static <T extends SequenceExpression> T applySubsequenceWithLength(
       final SubsequenceWithLengthFunction function, final ScriptGenerator script,
-      final Arguments arguments, final Class<T> type) {
+      final ParsedArguments<?> arguments, final Class<T> type) {
     return function.apply(script, arguments.at(0, type), arguments.numericAt(1),
         arguments.numericAt(2), type);
   }

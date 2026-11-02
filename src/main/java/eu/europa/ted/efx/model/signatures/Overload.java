@@ -56,7 +56,7 @@ public final class Overload {
    * @param arguments the arguments, converted to this overload's parameters
    * @return the translated call
    */
-  public TypedExpression compose(final ScriptGenerator script, final Arguments arguments) {
+  public TypedExpression compose(final ScriptGenerator script, final ParsedArguments<?> arguments) {
     return this.composer.compose(script, arguments);
   }
 

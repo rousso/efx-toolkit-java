@@ -3,6 +3,7 @@ package eu.europa.ted.efx.model.variables;
 
 import eu.europa.ted.efx.model.ParsedEntity;
 import eu.europa.ted.efx.model.signatures.Parameters;
+import eu.europa.ted.efx.model.signatures.ParsedArguments;
 import eu.europa.ted.efx.model.types.EfxDataType;
 
 import java.util.LinkedHashMap;
@@ -43,6 +44,18 @@ public class ParsedParameters extends Parameters<ParsedParameter> implements Par
     }  
 
 
+
+    /**
+     * Gives each parameter as the argument a template passes down to its blocks: the value of each
+     * is the parameter's own reference.
+     *
+     * @return the parameters, each with its reference expression
+     */
+    public ParsedArguments<ParsedParameter> toArguments() {
+        return new ParsedArguments<>(this,
+                this.stream().map(parameter -> parameter.referenceExpression)
+                        .collect(Collectors.toList()));
+    }
 
     public Map<String, Class<? extends EfxDataType>> toMap() {
         var map = new LinkedHashMap<String, Class<? extends EfxDataType>>();

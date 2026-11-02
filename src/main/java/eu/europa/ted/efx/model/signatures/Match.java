@@ -22,20 +22,20 @@ import eu.europa.ted.efx.model.expressions.TypedExpression;
  */
 public final class Match {
 
-  private final Arguments arguments;
+  private final ParsedArguments<?> arguments;
   private final int position;
   private final ParameterType required;
   private final TypedExpression argument;
 
-  private Match(final Arguments arguments, final int position, final ParameterType required,
-      final TypedExpression argument) {
+  private Match(final ParsedArguments<?> arguments, final int position,
+      final ParameterType required, final TypedExpression argument) {
     this.arguments = arguments;
     this.position = position;
     this.required = required;
     this.argument = argument;
   }
 
-  static Match of(final Arguments arguments) {
+  static Match of(final ParsedArguments<?> arguments) {
     return new Match(arguments, -1, null, null);
   }
 
@@ -66,7 +66,7 @@ public final class Match {
    * @return the arguments, each converted to the expression class of its parameter
    * @throws IllegalStateException if the arguments do not match
    */
-  public Arguments getArguments() {
+  public ParsedArguments<?> getArguments() {
     if (!this.isMatched()) {
       throw new IllegalStateException("The arguments do not match the parameters");
     }
