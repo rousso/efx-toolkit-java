@@ -2867,6 +2867,28 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
   }
 
   @Test
+  void testFunctionDeclaration_ReservedName_Throws() {
+    var template = lines(
+        "let number:?__twice(number:$n) = $n * 2;",
+        "display ${?__twice(21)};");
+    InvalidIdentifierException exception =
+        assertThrows(InvalidIdentifierException.class, () -> translateTemplate(template));
+    assertEquals(InvalidIdentifierException.ErrorCode.IDENTIFIER_IS_RESERVED,
+        exception.getErrorCode());
+  }
+
+  @Test
+  void testTemplateDeclaration_ReservedName_Throws() {
+    var template = lines(
+        "let template:__greeting() display Hello;",
+        "invoke __greeting();");
+    InvalidIdentifierException exception =
+        assertThrows(InvalidIdentifierException.class, () -> translateTemplate(template));
+    assertEquals(InvalidIdentifierException.ErrorCode.IDENTIFIER_IS_RESERVED,
+        exception.getErrorCode());
+  }
+
+  @Test
   void testComputedExpressionBlock_Node_Throws() {
     assertThrows(TypeMismatchException.class,
         () -> translateTemplate("{ND-Root} ${ND-SubNode}"));

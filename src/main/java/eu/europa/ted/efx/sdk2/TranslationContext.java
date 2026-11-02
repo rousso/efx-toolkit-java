@@ -15,6 +15,7 @@ package eu.europa.ted.efx.sdk2;
 
 import eu.europa.ted.efx.interfaces.ScriptGenerator;
 import eu.europa.ted.efx.interfaces.SymbolResolver;
+import eu.europa.ted.efx.interfaces.TypeChecker;
 import eu.europa.ted.efx.model.CallStack;
 import eu.europa.ted.efx.model.ContextStack;
 
@@ -28,9 +29,16 @@ import eu.europa.ted.efx.model.ContextStack;
  */
 final class TranslationContext {
 
+  /**
+   * What the names the translator generates start with, such as the variable an index binds its
+   * position to. The call stack rejects a declaration that gives such a name, so that no
+   * declaration can hide a generated name or be hidden by one.
+   */
+  static final String RESERVED_PREFIX = "__";
+
   private final SymbolResolver symbols;
   private final ScriptGenerator script;
-  private final CallStack stack = new CallStackV2();
+  private final CallStack stack = new CallStack(TypeChecker.V2, RESERVED_PREFIX);
   private final ContextStack efxContext;
 
   TranslationContext(final SymbolResolver symbols, final ScriptGenerator script) {

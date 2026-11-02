@@ -117,7 +117,7 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
    * declaration may give, so it cannot hide a variable of the template that a label's asset type
    * or label type reads inside the loop.
    */
-  private static final String ITEM_VARIABLE = CallStackV2.RESERVED_PREFIX + "item";
+  private static final String ITEM_VARIABLE = TranslationContext.RESERVED_PREFIX + "item";
 
   /** The condition of a conditional template block, as a type error names it. */
   private static final Construct WHEN = Construct.of("'when'", "condition");

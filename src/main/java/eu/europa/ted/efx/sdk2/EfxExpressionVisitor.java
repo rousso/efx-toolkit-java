@@ -147,7 +147,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * element is selected. Like every name the translator generates, it starts with a prefix that no
    * declaration may give.
    */
-  private static final String INDEX_VARIABLE = CallStackV2.RESERVED_PREFIX + "index";
+  private static final String INDEX_VARIABLE = TranslationContext.RESERVED_PREFIX + "index";
 
   /** A context override, as a type error names it. */
   private static final Construct CONTEXT_OVERRIDE = Construct.operator("::", 2);
