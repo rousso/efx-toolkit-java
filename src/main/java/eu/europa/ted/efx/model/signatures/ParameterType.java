@@ -43,8 +43,8 @@ import eu.europa.ted.efx.model.types.EfxDataType;
  * checked, and only the parameter types of a bound signature accept and convert arguments.</p>
  *
  * <p>Outside a signature, {@link #T} and {@link #T_SEQUENCE} also give the type of a value that a
- * late-bound composite, such as a conditional or a list, takes from one of its operands:
- * {@link #boundBy} binds them as a signature is bound.</p>
+ * construct takes from one of its arguments: {@link #boundBy} binds them as a signature is
+ * bound.</p>
  *
  * <p>The constants are named after the type vocabulary of the autocomplete catalogue.</p>
  */
@@ -91,6 +91,12 @@ public interface ParameterType {
 
   /** A sequence of the value primitive {@code T} stands for, or a single value promoted to one. */
   ParameterType T_SEQUENCE = TypeVariableParameterType.SEQUENCE;
+
+  /**
+   * A single value or a sequence of the value primitive {@code T} stands for, taken as it is: a
+   * single value stays one, so a construct that takes it keeps the cardinality it is given.
+   */
+  ParameterType T_OR_T_SEQUENCE = TypeVariableParameterType.EITHER;
 
   /** A reference to a field or a node, taken as a path rather than as its value. */
   ParameterType PATH = new PathParameterType(PathExpression.class, "a field or node reference");
@@ -183,14 +189,25 @@ public interface ParameterType {
   String describe();
 
   /**
-   * Converts an accepted argument to {@link #getExpressionType()}, as
+   * Gives the expression class an accepted argument is converted to.
+   *
+   * @param argument an argument this parameter type accepts
+   * @return {@link #getExpressionType()}; for {@link #T_OR_T_SEQUENCE} once bound, the class of the
+   *         argument's cardinality
+   */
+  default Class<? extends TypedExpression> expressionTypeOf(TypedExpression argument) {
+    return this.getExpressionType();
+  }
+
+  /**
+   * Converts an accepted argument to {@link #expressionTypeOf its class}, as
    * {@link eu.europa.ted.efx.model.CallStack#pop(Class)} does on the call stack.
    *
    * @param argument an argument this parameter type accepts
    * @return the argument itself if it already has that class, otherwise its conversion
    */
   default TypedExpression convert(TypedExpression argument) {
-    Class<? extends TypedExpression> type = this.getExpressionType();
+    Class<? extends TypedExpression> type = this.expressionTypeOf(argument);
     return type.isInstance(argument) ? argument : TypedExpression.from(argument, type);
   }
 }

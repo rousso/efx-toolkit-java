@@ -13,6 +13,8 @@
  */
 package eu.europa.ted.efx.sdk2;
 
+import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
+
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -20,13 +22,13 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.function.IntFunction;
 import java.util.stream.Collectors;
 
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.tree.ParseTree;
 
-import eu.europa.ted.efx.exceptions.Construct;
 import eu.europa.ted.efx.exceptions.Diagnosis;
 import eu.europa.ted.efx.exceptions.InvalidArgumentException;
 import eu.europa.ted.efx.exceptions.InvalidIdentifierException;
@@ -62,13 +64,14 @@ import eu.europa.ted.efx.model.expressions.sequence.SequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.SequencePath;
 import eu.europa.ted.efx.model.expressions.sequence.StringSequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.TimeSequenceExpression;
+import eu.europa.ted.efx.model.signatures.Arguments;
 import eu.europa.ted.efx.model.signatures.BuiltIn;
 import eu.europa.ted.efx.model.signatures.BuiltIns;
 import eu.europa.ted.efx.model.signatures.ConditionOperators;
+import eu.europa.ted.efx.model.signatures.Construct;
 import eu.europa.ted.efx.model.signatures.ConversionFunctions;
 import eu.europa.ted.efx.model.signatures.DateTimeFunctions;
 import eu.europa.ted.efx.model.signatures.LogicalOperators;
-import eu.europa.ted.efx.model.signatures.Match;
 import eu.europa.ted.efx.model.signatures.Mismatch;
 import eu.europa.ted.efx.model.signatures.Mismatch.Rejection;
 import eu.europa.ted.efx.model.signatures.NumericFunctions;
@@ -85,7 +88,6 @@ import eu.europa.ted.efx.model.types.FieldTypes;
 import eu.europa.ted.efx.model.variables.Dictionary;
 import eu.europa.ted.efx.model.variables.Parametrised;
 import eu.europa.ted.efx.model.variables.ParsedArguments;
-import eu.europa.ted.efx.model.variables.StrictArguments;
 import eu.europa.ted.efx.model.variables.Variable;
 import eu.europa.ted.efx.sdk2.EfxParser.*;
 import eu.europa.ted.efx.sdk2.Origin.ContextVariableOrigin;
@@ -103,9 +105,10 @@ import eu.europa.ted.efx.util.EfxRegexValidator;
  *
  * <p>The grammar does not type expressions: each visit translates its subtree and returns an
  * {@link Operand}, the translated expression with what it is written as. The parent reads each
- * operand as a value, as a path or as a context, and the catalogue of built-ins decides what each
- * operator and built-in accepts and gives. The composites (lists, conditionals, iterations,
- * predicates and indexes) check their own parts.</p>
+ * operand as a value, as a path or as a context. Every construct is checked the same way, against
+ * the parameter lists of its {@link Construct}: the catalogue's built-ins then translate
+ * themselves, and the constructs the catalogue does not hold, such as lists, conditionals,
+ * iterations, predicates and indexes, are translated here.</p>
  *
  * <p>The template and rules translators hold a visitor for the expressions their files contain.
  * Their behaviour in expressions is given by subclasses: the template's allows the built-ins that
@@ -119,37 +122,12 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    */
   private static final String NO_CONTEXT = null;
 
-  /** Parentheses, as a type error names them. */
-  private static final Construct PARENTHESES = Construct.of("Parenthesised expression", "content");
-
-  /** A conditional, as a type error names it. */
-  private static final Construct CONDITIONAL =
-      Construct.of("Conditional 'if'", "condition", "then branch", "else branch");
-
-  /** An iteration, as a type error names it. */
-  private static final Construct ITERATION = Construct.of("Iteration 'for'", "body");
-
-  /** A predicate after a field or a node, as a type error names it. */
-  private static final Construct PREDICATE = Construct.of("Predicate", "sequence", "condition");
-
-  /** An index after a sequence, as a type error names it. */
-  private static final Construct INDEX = Construct.of("Index", "sequence", "position");
-
-  /**
-   * What the error of a predicate whose condition is a number suggests: the index it may mean.
-   */
-  private static final List<String> SELECT_BY_POSITION =
-      List.of("To select by position, write [at n].");
-
   /**
    * The variable that an index binds its position to, where the position is read once before the
    * element is selected. Like every name the translator generates, it starts with a prefix that no
    * declaration may give.
    */
   private static final String INDEX_VARIABLE = TranslationContext.RESERVED_PREFIX + "index";
-
-  /** A context override, as a type error names it. */
-  private static final Construct CONTEXT_OVERRIDE = Construct.operator("::", 2);
 
   private final SymbolResolver symbols;
   private final ScriptGenerator script;
@@ -216,37 +194,36 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   // #region Readings of an expression ----------------------------------------
 
   /**
-   * Translates an expression where a value of any type is taken, and nothing after checks its
-   * type: what a translation gives, such as the expression of a template block, and the body of an
-   * iteration. A node has no value, so it is rejected, as the operators and the built-ins that
-   * take a value reject it.
+   * Translates the expression that a construct takes as its one argument: the condition of a rule
+   * or of a template block, the value of a declaration, the expression of a template block. A
+   * single value where a sequence is required is promoted to one; a construct that takes a value
+   * of any type rejects only a node, which has no value.
    *
-   * @param expression an expression
-   * @param construct what takes the expression as its one operand, as a type error names it
-   * @return its value
-   * @throws TypeMismatchException if the expression is a node
-   */
-  TypedExpression valueOf(final ExpressionContext expression, final Construct construct) {
-    return this.onlyOperandOf(construct, expression).valueAt(0, expression);
-  }
-
-  /**
-   * Translates an expression where a value of one class is required: the condition of a clause,
-   * the value of a declaration, a part of a composite. A single value where a sequence is required
-   * is promoted to one.
-   *
-   * @param <T> the class of the value required
    * @param expression the expression
-   * @param type the class of the value required
-   * @param construct what takes the expression as its one operand, as a type error names it
-   * @return the value, converted to that class
+   * @param construct the construct, which has one parameter
+   * @return the value as the construct's argument, converted to its parameter, to be read with
+   *         the accessor of that parameter's type, such as {@link Arguments#booleanAt}
    * @throws TypeMismatchException if the value does not fit: a sequence where a single value is
    *         required, or a node, is reported by the reference the expression is written as where
    *         it explains the mistake, and any other value cannot be converted
    */
-  <T extends TypedExpression> T valueAs(final ExpressionContext expression, final Class<T> type,
-      final Construct construct) {
-    return this.onlyOperandOf(construct, expression).converted(0, type, expression);
+  Arguments valueOf(final ExpressionContext expression, final Construct construct) {
+    return this.checked(construct, List.of(this.visit(expression)), position -> expression);
+  }
+
+  /**
+   * Checks a value that a construct is given as it is, written as nothing the construct could
+   * name in its error, such as a part of a label block.
+   *
+   * @param value the value
+   * @param construct the construct, which has one parameter
+   * @param where where the error is reported
+   * @return the value as the construct's argument, converted to its parameter
+   * @throws TypeMismatchException if the value does not convert to what the construct takes
+   */
+  Arguments valueOf(final TypedExpression value, final Construct construct,
+      final ParserRuleContext where) {
+    return this.checked(construct, List.of(this.operand(value)), position -> where);
   }
 
   /**
@@ -257,27 +234,11 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * @throws TypeMismatchException if the value does not fit the declared type
    */
   TypedExpression initialValueOf(final TypedVariableInitializerContext initializer) {
-    return this.valueAs(initializer.expression(), typeOf(initializer.typeDeclaration()),
-        Construct.of("Variable '" + initializer.typeDeclaration().getText() + ":$"
-            + initializer.variableName.getText() + "'", "value"));
-  }
-
-  /**
-   * Gives the operands of a construct that are values given to it as they are, written as nothing
-   * the construct could name in its error, such as the parts of a label block.
-   *
-   * @param construct the construct, as a type error names it
-   * @param values the values of its operands, in order
-   * @return the operands, which convert each value to what its position takes
-   */
-  Operands operandsOf(final Construct construct, final List<? extends TypedExpression> values) {
-    return new Operands(construct,
-        values.stream().map(this::operand).collect(Collectors.toList()));
-  }
-
-  private Operands onlyOperandOf(final Construct construct, final ExpressionContext expression) {
-    final Operand<?> operand = this.visit(expression);
-    return new Operands(construct, List.of(operand));
+    return this.valueOf(initializer.expression(),
+        GrammarConstruct.of("Variable '" + initializer.typeDeclaration().getText() + ":$"
+            + initializer.variableName.getText() + "'",
+            parameter("value", ParameterType.of(typeOf(initializer.typeDeclaration())))))
+        .at(0, TypedExpression.class);
   }
 
   /**
@@ -667,7 +628,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   @Override
   public Operand<?> visitAttributeExpression(final AttributeExpressionContext ctx) {
     final String attribute = ctx.attributeName.getText();
-    return this.visit(ctx.expression()).readFromField(ctx, Construct.operator("/@" + attribute, 1),
+    return this.visit(ctx.expression()).readFromField(ctx, GrammarConstruct.step("/@" + attribute),
         (field, origin) -> new Operand<>(continuing(field,
             this.script.composeFieldAttributeReference(field, attribute, StringPath.class)),
             origin.asValue()));
@@ -676,22 +637,22 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   @Override
   public Operand<?> visitRawValueExpression(final RawValueExpressionContext ctx) {
     return this.visit(ctx.expression()).readFromField(ctx,
-        Construct.operator(":" + ctx.RawValue().getText(), 1),
+        GrammarConstruct.step(":" + ctx.RawValue().getText()),
         (field, origin) -> new Operand<>(this.script.composeFieldRawValueReference(field),
             origin.asValue()));
   }
 
   @Override
   public Operand<?> visitPreferredLanguageExpression(final PreferredLanguageExpressionContext ctx) {
-    return this.preferredLanguage(ctx, ctx.expression(), TemplateFunctions.PREFERRED_LANGUAGE,
-        Construct.operator(":" + ctx.PreferredLanguage().getText(), 1));
+    return this.preferredLanguage(ctx, ctx.expression(), AsWritten.operator(
+        ":" + ctx.PreferredLanguage().getText(), TemplateFunctions.PREFERRED_LANGUAGE));
   }
 
   @Override
   public Operand<?> visitPreferredLanguageTextExpression(
       final PreferredLanguageTextExpressionContext ctx) {
-    return this.preferredLanguage(ctx, ctx.expression(), TemplateFunctions.PREFERRED_LANGUAGE_TEXT,
-        Construct.operator(":" + ctx.PreferredLanguageText().getText(), 1));
+    return this.preferredLanguage(ctx, ctx.expression(), AsWritten.operator(
+        ":" + ctx.PreferredLanguageText().getText(), TemplateFunctions.PREFERRED_LANGUAGE_TEXT));
   }
 
   /**
@@ -701,15 +662,13 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    *
    * @param call the postfix form or the call of the function
    * @param field the operand
-   * @param builtIn the built-in
-   * @param construct the form, as a type error names it
+   * @param builtIn the built-in, as the form writes it
    * @return the result of the built-in
    */
   private Operand<?> preferredLanguage(final ParserRuleContext call, final ExpressionContext field,
-      final BuiltIn builtIn, final Construct construct) {
-    return this.visit(field).readFromField(call, construct,
-        (path, origin) -> this.pathCall(call, builtIn, construct,
-            List.of(new Operand<>(path, origin))));
+      final BuiltIn builtIn) {
+    return this.visit(field).readFromField(call, builtIn,
+        (path, origin) -> this.pathCall(call, builtIn, List.of(new Operand<>(path, origin))));
   }
 
   /**
@@ -739,9 +698,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
 
   private Context contextBefore(final ExpressionContext left) {
     final Operand<?> operand = this.visit(left);
-    return operand.context().orElseThrow(
-        () -> new Operands(CONTEXT_OVERRIDE, List.of(operand), List.of(operand.expression()))
-            .rejected(0, List.of(ParameterType.PATH), left));
+    return operand.context().orElseThrow(() -> this.unreadable(GrammarConstruct.CONTEXT_OVERRIDE,
+        List.of(operand), List.of(operand.expression()), 0, left));
   }
 
   /**
@@ -791,9 +749,11 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   Operand<?> filtered(final PathExpression path, final PathOrigin origin,
       final ExpressionContext condition) {
     origin.pushElementContext();
+    final Operand<?> test = this.visit(condition);
     final PathExpression selected = origin.filter(path,
-        predicate(new Operand<>(path, origin), path, this.visit(condition))
-            .converted(1, BooleanExpression.class, condition));
+        this.resolved(GrammarConstruct.PREDICATE, List.of(new Operand<>(path, origin), test),
+            List.of(path, test.value()), position -> condition,
+            TypeMismatchException::cannotConvert).getArguments().booleanAt(1));
     this.readsInContexts.remove(this.efxContext.pop());
     return new Operand<>(selected, origin);
   }
@@ -808,24 +768,9 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    */
   TypeMismatchException predicateOnValue(final Operand<?> sequence,
       final ExpressionContext condition) {
-    return predicate(sequence, sequence.expression(), this.visit(condition))
-        .rejected(0, List.of(ParameterType.PATH), this.stack.peekParserContext());
-  }
-
-  /**
-   * Gives the operands of a predicate. A number for its condition is a position written as a
-   * predicate, so its errors suggest the index.
-   *
-   * @param sequence what the predicate follows
-   * @param elements the elements the predicate reads from it
-   * @param condition the condition, translated
-   * @return the operands
-   */
-  private static Operands predicate(final Operand<?> sequence, final TypedExpression elements,
-      final Operand<?> condition) {
-    final TypedExpression value = condition.value();
-    return new Operands(PREDICATE, List.of(sequence, condition), List.of(elements, value),
-        value.is(EfxDataType.Number.class) ? SELECT_BY_POSITION : List.of());
+    final Operand<?> test = this.visit(condition);
+    return this.unreadable(GrammarConstruct.PREDICATE, List.of(sequence, test),
+        List.of(sequence.expression(), test.value()), 0, this.stack.peekParserContext());
   }
 
   /**
@@ -845,8 +790,10 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
       final ExpressionContext position) {
     final Reads reads = this.readsInCurrentContext();
     final int readsBefore = reads.ofContext();
-    final NumericExpression number = index(new Operand<>(path, origin), path,
-        this.visit(position)).converted(1, NumericExpression.class, position);
+    final Operand<?> index = this.visit(position);
+    final NumericExpression number = this.resolved(GrammarConstruct.INDEX_IN_PATH,
+        List.of(new Operand<>(path, origin), index), List.of(path, index.value()), at -> position,
+        TypeMismatchException::cannotConvert).getArguments().numericAt(1);
     final Class<? extends EfxDataType.Primitive> primitive =
         EfxTypeLattice.toPrimitive(path.getDataType());
     final Class<? extends SequencePath> elementsType = SequencePath.fromEfxDataType.get(primitive);
@@ -871,28 +818,18 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
     final TypedExpression given = sequence.value();
     final Reads reads = this.readsInCurrentContext();
     final int readsBefore = reads.all();
-    final Operands operands = index(sequence, given, this.visit(position));
-    final TypedExpression value = operands.valueAt(0, this.stack.peekParserContext());
-    final NumericExpression number = operands.converted(1, NumericExpression.class, position);
-    final Class<? extends SequenceExpression> listType = this.sequenceTypeOf(value);
-    final SequenceExpression list = value instanceof PathExpression
-        ? this.inParentheses(value, listType)
-        : TypedExpression.from(value, listType);
-    return this.operand(this.elementAt(list, listType, number, this.scalarTypeOf(value),
+    final Operand<?> index = this.visit(position);
+    final ParserRuleContext indexed = this.stack.peekParserContext();
+    final NumericExpression number = this.resolved(GrammarConstruct.INDEX_IN_VALUE,
+        List.of(sequence, index), List.of(given, index.value()),
+        at -> at == 0 ? indexed : position, TypeMismatchException::cannotConvert)
+        .getArguments().numericAt(1);
+    final Class<? extends SequenceExpression> listType = this.sequenceTypeOf(given);
+    final SequenceExpression list = given instanceof PathExpression
+        ? this.inParentheses(given, listType)
+        : TypedExpression.from(given, listType);
+    return this.operand(this.elementAt(list, listType, number, this.scalarTypeOf(given),
         reads.all() > readsBefore));
-  }
-
-  /**
-   * Gives the operands of an index.
-   *
-   * @param sequence what the index follows
-   * @param elements the elements the index selects from
-   * @param position the position, translated
-   * @return the operands
-   */
-  private static Operands index(final Operand<?> sequence, final TypedExpression elements,
-      final Operand<?> position) {
-    return new Operands(INDEX, List.of(sequence, position), List.of(elements, position.value()));
   }
 
   /**
@@ -958,8 +895,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
     this.readsInCurrentContext().countReadOfRoot();
     return new Operand<>(
         this.script.composeDictionaryLookup(dictionary.name,
-            this.valueAs(key, StringExpression.class,
-                Construct.of("Dictionary '" + reference.getText() + "'", "key")),
+            this.valueOf(key, GrammarConstruct.of("Dictionary '" + reference.getText() + "'",
+                parameter("key", ParameterType.TEXT))).stringAt(0),
             dictionary.type),
         new DictionaryOrigin(this, reference, dictionary.name));
   }
@@ -1120,8 +1057,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   public Operand<?> visitPresenceCondition(final PresenceConditionContext ctx) {
     final BuiltIn operator =
         ctx.modifier == null ? ConditionOperators.IS_PRESENT : ConditionOperators.IS_NOT_PRESENT;
-    return this.pathCall(ctx, operator, Construct.operator(operator.getName(), 1),
-        this.operandsOf(ctx));
+    return this.pathCall(ctx, operator, this.operandsOf(ctx));
   }
 
   @Override
@@ -1157,11 +1093,10 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   @Override
   public Operand<?> visitParenthesizedExpression(final ParenthesizedExpressionContext ctx) {
     final Operand<?> inner = this.visit(ctx.expression());
-    final TypedExpression value = new Operands(PARENTHESES, List.of(inner)).valueAt(0, ctx);
-    final Class<? extends TypedExpression> type = value instanceof SequenceExpression
-        ? this.sequenceTypeOf(value)
-        : this.scalarTypeOf(value);
-    return new Operand<>(this.inParentheses(value, type), inner.origin().asValue());
+    final Arguments content =
+        this.checked(GrammarConstruct.PARENTHESES, List.of(inner), position -> ctx);
+    return new Operand<>(this.inParentheses(content.at(0, TypedExpression.class),
+        content.typeAt(0)), inner.origin().asValue());
   }
 
   /**
@@ -1171,40 +1106,31 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    */
   @Override
   public Operand<?> visitConditionalExpression(final ConditionalExpressionContext ctx) {
-    final Operands parts = new Operands(CONDITIONAL, this.operandsOf(ctx));
-    return this.operand(this.conditional(ctx, parts, this.joinOfBranches(ctx, parts)));
+    final Arguments parts = this.checked(GrammarConstruct.CONDITIONAL, this.operandsOf(ctx),
+        position -> position == 1 ? ctx : ctx.expression(position));
+    return this.operand(this.conditional(parts, this.joinOfBranches(parts)));
   }
 
   /**
-   * Gives the class of a conditional, the join of its branches. The then branch binds {@code T},
-   * as the first argument of a generic built-in does, and the else branch must have its primitive,
-   * as a single value or as a sequence.
+   * Gives the class of a conditional, the join of its branches, which have one primitive.
    *
-   * @param ctx the conditional
-   * @param parts its condition and its two branches
+   * @param parts the condition and the two branches, checked
    * @return the sequence class of the primitive if either branch is a sequence, and its scalar
    *         class otherwise
-   * @throws TypeMismatchException if the then branch is a node, or the else branch is not of the
-   *         primitive of the then branch
    */
-  private Class<? extends TypedExpression> joinOfBranches(final ConditionalExpressionContext ctx,
-      final Operands parts) {
-    final TypedExpression then = parts.valueAt(1, ctx);
-    final ParameterType single = this.bindingOf(ParameterType.T, then);
-    final ParameterType sequence = this.bindingOf(ParameterType.T_SEQUENCE, then);
-    final TypedExpression otherwise =
-        parts.valueAt(2, List.of(single, sequence), ctx.expression(2));
-    return (then instanceof SequenceExpression || otherwise instanceof SequenceExpression
-        ? sequence
-        : single).getExpressionType();
+  private Class<? extends TypedExpression> joinOfBranches(final Arguments parts) {
+    final TypedExpression then = parts.at(1, TypedExpression.class);
+    return SequenceExpression.class.isAssignableFrom(parts.typeAt(1))
+        || SequenceExpression.class.isAssignableFrom(parts.typeAt(2))
+            ? this.sequenceTypeOf(then)
+            : this.scalarTypeOf(then);
   }
 
-  private <T extends TypedExpression> T conditional(final ConditionalExpressionContext ctx,
-      final Operands parts, final Class<T> type) {
-    final T otherwise = parts.converted(2, type, ctx.expression(2));
-    final T then = parts.converted(1, type, ctx.expression(1));
-    final BooleanExpression test = parts.converted(0, BooleanExpression.class, ctx.expression(0));
-    return this.script.composeConditionalExpression(test, then, otherwise, type);
+  private <T extends TypedExpression> T conditional(final Arguments parts, final Class<T> type) {
+    final ParameterType join = ParameterType.of(type);
+    return this.script.composeConditionalExpression(parts.booleanAt(0),
+        type.cast(join.convert(parts.at(1, TypedExpression.class))),
+        type.cast(join.convert(parts.at(2, TypedExpression.class))), type);
   }
 
   /**
@@ -1212,34 +1138,21 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    */
   @Override
   public Operand<?> visitList(final ListContext ctx) {
-    final List<ExpressionContext> expressions = ctx.expression();
-    final List<Operand<?>> items = new ArrayList<>(expressions.size());
-    final List<TypedExpression> values = new ArrayList<>(expressions.size());
-    for (final ExpressionContext item : expressions) {
-      final Operand<?> operand = this.visit(item);
-      items.add(operand);
-      values.add(operand.value());
-    }
-    final Operands list = new Operands(Construct.list(items.size()), items, values);
-    return this.operand(this.list(expressions, list, this.scalarTypeOf(list.valueAt(0, ctx))));
-  }
-
-  private <T extends ScalarExpression> SequenceExpression list(
-      final List<ExpressionContext> expressions, final Operands items, final Class<T> itemType) {
-    final List<T> list = new ArrayList<>(expressions.size());
-    for (int position = 0; position < expressions.size(); position++) {
-      list.add(items.converted(position, itemType, expressions.get(position)));
-    }
-    return this.script.composeList(list, this.sequenceTypeOf(list.get(0)));
+    final List<ExpressionContext> items = ctx.expression();
+    final Arguments list = this.checked(GrammarConstruct.LIST, this.operandsOf(ctx),
+        position -> position == 0 ? ctx : items.get(position));
+    return this.operand(this.script.composeList(list.getValues().stream()
+        .map(ScalarExpression.class::cast).collect(Collectors.toList()),
+        this.sequenceTypeOf(list.scalarAt(0))));
   }
 
   @Override
   public Operand<?> visitQuantifiedExpression(final QuantifiedExpressionContext ctx) {
     this.stack.pushStackFrame();
     final IteratorListExpression iterators = this.iteratorsOf(ctx.iteratorList());
-    final BooleanExpression condition = this.valueAs(ctx.expression(), BooleanExpression.class,
-        Construct.of("Quantifier '" + (ctx.Every() != null ? ctx.Every() : ctx.Some()).getText()
-            + "'", "condition"));
+    final BooleanExpression condition = this.valueOf(ctx.expression(),
+        GrammarConstruct.of("Quantifier '" + (ctx.Every() != null ? ctx.Every() : ctx.Some())
+            .getText() + "'", parameter("condition", ParameterType.INDICATOR))).booleanAt(0);
     final BooleanExpression quantified = ctx.Every() != null
         ? this.script.composeAllSatisfy(iterators, condition)
         : this.script.composeAnySatisfies(iterators, condition);
@@ -1255,7 +1168,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   public Operand<?> visitSequenceFromIteration(final SequenceFromIterationContext ctx) {
     this.stack.pushStackFrame();
     final IteratorListExpression iterators = this.iteratorsOf(ctx.iteratorList());
-    final TypedExpression body = this.valueOf(ctx.expression(), ITERATION);
+    final TypedExpression body =
+        this.valueOf(ctx.expression(), GrammarConstruct.ITERATION).at(0, TypedExpression.class);
     final SequenceExpression iteration =
         this.iteration(iterators, body, ctx.Distinct() != null, this.sequenceTypeOf(body));
     this.stack.popStackFrame();
@@ -1295,10 +1209,11 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
       final Class<? extends EfxDataType.Primitive> primitive = primitiveOf(ctx.primitiveType());
       final String name = ctx.variableName.getText();
       return this.iterator(name, ScalarExpression.fromEfxDataType.get(primitive),
-          EfxExpressionVisitor.this.valueAs(ctx.expression(),
-              SequenceExpression.fromEfxDataType.get(primitive),
-              Construct.of("Iterator '" + ctx.primitiveType().getText() + ":$" + name + "'",
-                  "sequence")));
+          EfxExpressionVisitor.this.valueOf(ctx.expression(),
+              GrammarConstruct.of("Iterator '" + ctx.primitiveType().getText() + ":$" + name + "'",
+                  parameter("sequence",
+                      ParameterType.of(SequenceExpression.fromEfxDataType.get(primitive)))))
+              .sequenceAt(0));
     }
 
     private <T extends ScalarExpression> IteratorExpression iterator(final String name,
@@ -1494,19 +1409,18 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   public Operand<?> visitFunctionInvocation(final FunctionInvocationContext ctx) {
     final String name = ctx.functionName.getText();
     final eu.europa.ted.efx.model.variables.Function function = this.stack.getFunction(name);
-    final ParsedArguments arguments = this.argumentsOf(ctx, function);
+    final Arguments arguments = this.invocationOf(ctx, function, ctx.argumentList());
     final ParameterType result = EfxTypeLattice.isSequence(function.dataType)
         ? ParameterType.T_SEQUENCE
         : ParameterType.T;
     return new Operand<>(
-        this.script.composeFunctionInvocation(name, arguments.getArgumentValues(),
+        this.script.composeFunctionInvocation(name, arguments.getValues(),
             this.bindingOf(result, function.expression).getExpressionType()),
         new IdentifierOrigin<>(this, ctx, name));
   }
 
   /**
-   * Translates the arguments of an invocation of a declared function, with
-   * {@link #argumentsOf(ParserRuleContext, Parametrised, ArgumentListContext, Construct)}.
+   * Translates the arguments of an invocation of a declared function.
    *
    * @param invocation the invocation
    * @param function the function invoked
@@ -1515,17 +1429,29 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    */
   ParsedArguments argumentsOf(final FunctionInvocationContext invocation,
       final Parametrised function) {
-    final String name =
-        invocation.FunctionPrefix().getText() + invocation.functionName.getText();
-    return this.argumentsOf(invocation, function, invocation.argumentList(),
-        Construct.function(name, function.parameters.size()));
+    return new ParsedArguments(function.parameters,
+        this.invocationOf(invocation, function, invocation.argumentList()).getValues());
   }
 
   /**
-   * Translates the arguments of an invocation of a declared function or template, and matches
-   * them against the parameters of the declaration, as the arguments of a built-in are matched
-   * against its overloads. The parameters reject an argument that does not fit them, a node
-   * included.
+   * Translates the arguments of an invocation of a declared template.
+   *
+   * @param invocation the invocation
+   * @param template the template invoked
+   * @param list the arguments, or {@code null} if there are none
+   * @return the arguments, each converted to the class of its parameter
+   * @throws InvalidArgumentException if the number of arguments or the type of one does not match
+   */
+  ParsedArguments argumentsOf(final ParserRuleContext invocation, final Parametrised template,
+      final ArgumentListContext list) {
+    return new ParsedArguments(template.parameters,
+        this.invocationOf(invocation, template, list).getValues());
+  }
+
+  /**
+   * Checks the arguments of an invocation of a declared function or template against the declared
+   * parameters, as the arguments of a call of a built-in are checked against its overloads. The
+   * parameters reject an argument that does not fit them, a node included.
    *
    * <p>An argument that does not fit is reported as such, even a sequence where a single value is
    * required. Only a context variable that holds a node is reported by itself, as it is wherever a
@@ -1534,38 +1460,36 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * @param call the invocation
    * @param declaration the function or template invoked
    * @param list the arguments, or {@code null} if there are none
-   * @param construct the invocation, as a type error names it, with an operand for each parameter
-   * @return the arguments, each converted to the class of its parameter
+   * @return the arguments, converted to the classes of the parameters
    * @throws InvalidArgumentException if the number of arguments or the type of one does not match
    * @throws TypeMismatchException if an argument is a context variable that holds a node
    */
-  ParsedArguments argumentsOf(final ParserRuleContext call, final Parametrised declaration,
-      final ArgumentListContext list, final Construct construct) {
-    final StrictArguments arguments = new StrictArguments(declaration);
+  private Arguments invocationOf(final ParserRuleContext call, final Parametrised declaration,
+      final ArgumentListContext list) {
     final List<Operand<?>> operands = new ArrayList<>();
     if (list != null) {
       for (final ArgumentContext argument : list.argument()) {
-        final Operand<?> operand = this.visit(argument.expression());
-        operands.add(operand);
-        arguments.addArgument(operand.value());
+        operands.add(this.visit(argument.expression()));
       }
     }
-    final Match match = declaration.parameters.match(arguments.getValues());
-    if (match.isCountMismatch()) {
+    final List<TypedExpression> arguments =
+        operands.stream().map(Operand::value).collect(Collectors.toList());
+    final Resolution resolution = declaration.resolve(arguments);
+    if (resolution.isResolved()) {
+      return resolution.getArguments();
+    }
+    final Mismatch mismatch = resolution.getMismatch();
+    if (mismatch.isArityMismatch()) {
       throw InvalidArgumentException.argumentNumberMismatch(declaration,
-          declaration.parameters.size(), arguments.getValues().size());
+          declaration.parameters.size(), arguments.size());
     }
-    if (!match.isMatched()) {
-      final Diagnosis diagnosis = new Diagnosis(construct, arguments.getValues(),
-          match.getPosition(), List.of(match.getRequired().describe()));
-      final Optional<TypeMismatchException> noValue =
-          operands.get(match.getPosition()).errorOf(Rejection.Kind.PATH, diagnosis);
-      if (noValue.isPresent()) {
-        throw noValue.get();
-      }
-      throw InvalidArgumentException.argumentTypeMismatch(call, diagnosis);
+    final Diagnosis diagnosis = mismatch.diagnose();
+    final Optional<TypeMismatchException> noValue =
+        operands.get(mismatch.getRejection().getPosition()).errorOf(Rejection.Kind.PATH, diagnosis);
+    if (noValue.isPresent()) {
+      throw noValue.get();
     }
-    return new ParsedArguments(declaration.parameters, match.getArguments().getValues());
+    throw InvalidArgumentException.argumentTypeMismatch(call, diagnosis);
   }
 
   // #endregion Function invocation -------------------------------------------
@@ -1863,15 +1787,15 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
 
   @Override
   public Operand<?> visitPreferredLanguageFunction(final PreferredLanguageFunctionContext ctx) {
-    return this.preferredLanguage(ctx, ctx.expression(), TemplateFunctions.PREFERRED_LANGUAGE,
-        Construct.function(ctx.PreferredLanguageFunction().getText(), 1));
+    return this.preferredLanguage(ctx, ctx.expression(), AsWritten.function(
+        ctx.PreferredLanguageFunction().getText(), TemplateFunctions.PREFERRED_LANGUAGE));
   }
 
   @Override
   public Operand<?> visitPreferredLanguageTextFunction(
       final PreferredLanguageTextFunctionContext ctx) {
-    return this.preferredLanguage(ctx, ctx.expression(), TemplateFunctions.PREFERRED_LANGUAGE_TEXT,
-        Construct.function(ctx.PreferredLanguageTextFunction().getText(), 1));
+    return this.preferredLanguage(ctx, ctx.expression(), AsWritten.function(
+        ctx.PreferredLanguageTextFunction().getText(), TemplateFunctions.PREFERRED_LANGUAGE_TEXT));
   }
 
   // Date, time and duration functions
@@ -1980,10 +1904,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * @return the result of the call
    */
   private Operand<?> call(final ParserRuleContext call, final BuiltIn function) {
-    final List<Operand<?>> operands = this.operandsOf(call);
-    return this.builtIn(call, function,
-        Construct.function(call.getStart().getText(), operands.size()), operands, Operand::value,
-        TypeMismatchException::cannotConvert);
+    return this.builtIn(call, AsWritten.function(call.getStart().getText(), function),
+        this.operandsOf(call), Operand::value, TypeMismatchException::cannotConvert);
   }
 
   /**
@@ -1996,8 +1918,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * @return the result of the condition
    */
   private Operand<?> condition(final ParserRuleContext condition, final BuiltIn operator) {
-    return this.builtIn(condition, operator, Construct.operator(operator.getName(), 1),
-        this.operandsOf(condition), Operand::value, TypeMismatchException::cannotConvert);
+    return this.builtIn(condition, operator, this.operandsOf(condition), Operand::value,
+        TypeMismatchException::cannotConvert);
   }
 
   /**
@@ -2005,14 +1927,13 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * argument of the wrong primitive cannot be converted.
    *
    * @param call the call
-   * @param builtIn the built-in called
-   * @param construct the call, as a type error names it
+   * @param builtIn the built-in called, as the call writes it
    * @param operands the operands of the call
    * @return the result of the call
    */
   private Operand<?> pathCall(final ParserRuleContext call, final BuiltIn builtIn,
-      final Construct construct, final List<Operand<?>> operands) {
-    return this.builtIn(call, builtIn, construct, operands, Operand::path,
+      final List<Operand<?>> operands) {
+    return this.builtIn(call, builtIn, operands, Operand::path,
         TypeMismatchException::cannotConvert);
   }
 
@@ -2025,8 +1946,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * @return the result of the operation
    */
   private Operand<?> operation(final ParserRuleContext operation, final BuiltIn operator) {
-    return this.builtIn(operation, operator, Construct.operator(operator.getName(), 2),
-        this.operandsOf(operation), Operand::value, TypeMismatchException::incompatibleOperands);
+    return this.builtIn(operation, operator, this.operandsOf(operation), Operand::value,
+        TypeMismatchException::incompatibleOperands);
   }
 
   private List<Operand<?>> operandsOf(final ParserRuleContext call) {
@@ -2039,38 +1960,110 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   }
 
   /**
-   * Resolves a built-in against the arguments its operands give, and composes the result.
-   *
-   * <p>An argument that no overload takes is reported by the reference the operand is written as,
-   * where the reference explains the mistake, such as a field that may repeat where a single value
-   * is required; any other mismatch gets the error the kind of call gives.</p>
+   * Checks the arguments its operands give a built-in, and translates the call with the built-in.
+   * A type error is reported at the call.
    *
    * @param call the call
-   * @param builtIn the built-in called
-   * @param construct the call, as a type error names it
+   * @param builtIn the built-in called, as the call writes it
    * @param operands the operands of the call
    * @param reading how the call reads each operand: as a value, or as a path
    * @param typeError the error of a mismatch that the operand's origin does not report
    * @return the result of the call
    */
   private Operand<?> builtIn(final ParserRuleContext call, final BuiltIn builtIn,
-      final Construct construct, final List<Operand<?>> operands,
-      final Function<Operand<?>, TypedExpression> reading,
+      final List<Operand<?>> operands, final Function<Operand<?>, TypedExpression> reading,
       final BiFunction<ParserRuleContext, Diagnosis, TypeMismatchException> typeError) {
     final List<TypedExpression> arguments =
         operands.stream().map(reading).collect(Collectors.toList());
     if (builtIn.isTemplateOnly() && !this.translatesTemplateOnlyBuiltIns()) {
       throw InvalidUsageException.templateOnlyFunction(call, builtIn.getName());
     }
-    final Resolution resolution = builtIn.resolve(arguments);
-    if (!resolution.isResolved()) {
-      final Mismatch mismatch = resolution.getMismatch();
-      final Rejection rejection = mismatch.getRejection();
-      final Diagnosis diagnosis = mismatch.diagnose(construct);
-      throw operands.get(rejection.getPosition()).errorOf(rejection.getKind(), diagnosis)
-          .orElseGet(() -> typeError.apply(call, diagnosis));
+    return this.operand(builtIn.compose(
+        this.resolved(builtIn, operands, arguments, position -> call, typeError), this.script));
+  }
+
+  /**
+   * Checks the parts of a construct that the grammar writes, read as values, with
+   * {@link #resolved}: a part that does not fit cannot be converted, and is reported where the
+   * construct places the error of its position. The part that binds {@code T}, such as the then
+   * branch of a conditional or the first item of a list, is reported at the construct, as the
+   * argument that binds it is reported at the call of a built-in; any other part where it stands.
+   *
+   * @param construct the construct
+   * @param parts its parts, in order
+   * @param where where the error of the part at a position is reported
+   * @return the values of the parts, converted to the parameters of the construct
+   * @throws TypeMismatchException if a part does not fit
+   */
+  private Arguments checked(final Construct construct, final List<Operand<?>> parts,
+      final IntFunction<ParserRuleContext> where) {
+    return this.resolved(construct, parts,
+        parts.stream().map(Operand::value).collect(Collectors.toList()), where,
+        TypeMismatchException::cannotConvert).getArguments();
+  }
+
+  /**
+   * Checks the arguments of a construct: the one way every operator, built-in, composite and
+   * clause is checked.
+   *
+   * @param construct the construct
+   * @param operands its operands, in order
+   * @param arguments what it reads from each operand, in the same order
+   * @param where where the error of the argument at a position is reported
+   * @param typeError the error of a mismatch that the operand's origin does not report
+   * @return the resolution, with the arguments converted to the parameter list that takes them
+   * @throws TypeMismatchException if no parameter list takes the arguments
+   */
+  private Resolution resolved(final Construct construct, final List<Operand<?>> operands,
+      final List<TypedExpression> arguments, final IntFunction<ParserRuleContext> where,
+      final BiFunction<ParserRuleContext, Diagnosis, TypeMismatchException> typeError) {
+    final Resolution resolution = construct.resolve(arguments);
+    if (resolution.isResolved()) {
+      return resolution;
     }
-    return this.operand(resolution.compose(this.script));
+    throw this.errorOf(resolution.getMismatch(), operands, where, typeError);
+  }
+
+  /**
+   * Gives the error of a mismatch. An argument is reported by the reference its operand is written
+   * as, where the reference explains the mistake, such as a field that may repeat where a single
+   * value is required; any other mismatch gets the error the kind of construct gives, where the
+   * construct places it.
+   *
+   * @param mismatch the mismatch
+   * @param operands the operands of the construct, in order
+   * @param where where the error of the argument at a position is reported
+   * @param typeError the error of a mismatch that the operand's origin does not report
+   * @return the error
+   */
+  private TypeMismatchException errorOf(final Mismatch mismatch, final List<Operand<?>> operands,
+      final IntFunction<ParserRuleContext> where,
+      final BiFunction<ParserRuleContext, Diagnosis, TypeMismatchException> typeError) {
+    final Rejection rejection = mismatch.getRejection();
+    final Diagnosis diagnosis = mismatch.diagnose();
+    return operands.get(rejection.getPosition()).errorOf(rejection.getKind(), diagnosis)
+        .orElseGet(() -> typeError.apply(where.apply(rejection.getPosition()), diagnosis));
+  }
+
+  /**
+   * Gives the error of an argument that a construct reads rather than resolves, where what the
+   * argument is written as cannot be read so: the left side of {@code ::} that names no context,
+   * or a value that a predicate follows, which has no elements. The error is the reference's
+   * where it explains the mistake, and otherwise says that the argument does not convert to what
+   * its parameter takes.
+   *
+   * @param construct the construct, which has one parameter list
+   * @param operands its operands, in order
+   * @param arguments what it reads from each operand, in the same order
+   * @param position the position of the argument that cannot be read
+   * @param where where the error is reported
+   * @return the error
+   */
+  private TypeMismatchException unreadable(final Construct construct,
+      final List<Operand<?>> operands, final List<TypedExpression> arguments, final int position,
+      final ParserRuleContext where) {
+    return this.errorOf(Mismatch.unreadable(construct, arguments, position), operands,
+        at -> where, TypeMismatchException::cannotConvert);
   }
 
   /**

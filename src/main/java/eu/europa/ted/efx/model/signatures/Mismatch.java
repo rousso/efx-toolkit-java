@@ -17,52 +17,69 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import eu.europa.ted.efx.exceptions.Construct;
 import eu.europa.ted.efx.exceptions.Diagnosis;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 
 /**
- * Why no overload of a {@link BuiltIn} applies to the arguments of a call: either no overload
- * takes that many arguments, or each overload that does rejects one of them.
+ * Why no parameter list of a {@link Construct} takes the arguments of a call: either none takes
+ * that many arguments, or each one that does rejects one of them.
  *
- * <p>A mismatch keeps the arguments and, for each overload of the right arity, the argument it
- * rejected. Its {@link #getRejection rejection} tells the translator which argument to report, and
- * its {@link #diagnose diagnosis} what the error says about it.</p>
+ * <p>A mismatch keeps the arguments and, for each parameter list of the right arity, the argument
+ * it rejected. Its {@link #getRejection rejection} tells the translator which argument to report,
+ * and its {@link #diagnose diagnosis} what the error says about it.</p>
  */
 public final class Mismatch {
 
-  private final BuiltIn builtIn;
+  private final Construct construct;
   private final List<TypedExpression> arguments;
   private final List<Rejection> rejections;
 
-  Mismatch(final BuiltIn builtIn, final List<? extends TypedExpression> arguments,
+  Mismatch(final Construct construct, final List<? extends TypedExpression> arguments,
       final List<Rejection> rejections) {
-    this.builtIn = builtIn;
+    this.construct = construct;
     this.arguments = List.copyOf(arguments);
     this.rejections = List.copyOf(rejections);
   }
 
   /**
+   * Gives the mismatch of an argument that a construct cannot read for what it is written as,
+   * although its type fits the parameter at its position: a text path where a context is
+   * required, for example, or a predicate after a value. The construct has one parameter list.
+   *
+   * @param construct the construct that cannot read the argument
+   * @param arguments the translated arguments of the call
+   * @param position the position of the argument it cannot read
+   * @return the mismatch, rejected at that position by the parameter there
+   */
+  public static Mismatch unreadable(final Construct construct,
+      final List<? extends TypedExpression> arguments, final int position) {
+    final Parameters<?> parameters = construct.getParameterLists().get(0);
+    final Match match = Match.rejected(position, parameters.parameterAt(position).getType(),
+        arguments.get(position));
+    return new Mismatch(construct, arguments, List.of(new Rejection(parameters, match)));
+  }
+
+  /**
    * Tells whether the mismatch is the number of arguments.
    *
-   * @return {@code true} if no overload takes that many arguments
+   * @return {@code true} if no parameter list takes that many arguments
    */
   public boolean isArityMismatch() {
     return this.rejections.isEmpty();
   }
 
   /**
-   * @return for each overload that takes that many arguments, the argument it rejected
+   * @return for each parameter list that takes that many arguments, the argument it rejected
    */
   public List<Rejection> getRejections() {
     return this.rejections;
   }
 
   /**
-   * Gives the rejection that explains the mismatch, whatever the order of the overloads.
+   * Gives the rejection that explains the mismatch, whatever the order of the parameter lists.
    *
-   * <p>An overload that rejects only a cardinality, since every primitive of the call fits it,
-   * explains the mismatch before any overload that rejects a primitive or a path. Among the rest,
+   * <p>A parameter list that rejects only a cardinality, since every primitive of the call fits
+   * it, explains the mismatch before any that rejects a primitive or a path. Among the rest,
    * the rejection at the furthest position explains it, and at the same position a primitive
    * failure before a path one.</p>
    *
@@ -79,16 +96,16 @@ public final class Mismatch {
   }
 
   /**
-   * Says what the error of the mismatch says: the construct the built-in is written as, with the
-   * types of all the arguments, and every type the position of the {@link #getRejection
-   * rejection} takes. Those are the types required by all the overloads that reject the same
-   * position in the same way, in the order of the catalogue, each once.
+   * Says what the error of the mismatch says: the construct, with the types of all the arguments,
+   * the role of the argument at the position of the {@link #getRejection rejection}, and every
+   * type that position takes. Those are the types required by all the parameter lists that reject
+   * the same position in the same way, in their order, each once. What the construct suggests for
+   * the arguments follows them.
    *
-   * @param construct the built-in as the call writes it, such as "Operator '+'"
    * @return the diagnosis of the mismatch
    * @throws IllegalStateException if the mismatch is the number of arguments
    */
-  public Diagnosis diagnose(final Construct construct) {
+  public Diagnosis diagnose() {
     final Rejection reported = this.getRejection();
     final List<String> requirements = this.rejections.stream()
         .filter(rejection -> rejection.getPosition() == reported.getPosition()
@@ -96,12 +113,15 @@ public final class Mismatch {
         .map(rejection -> rejection.getRequired().describe())
         .distinct()
         .collect(Collectors.toList());
-    return new Diagnosis(construct, this.arguments, reported.getPosition(), requirements);
+    return new Diagnosis(this.construct.describe(),
+        this.construct.roleOf(reported.getPosition(), this.arguments.size()), this.arguments,
+        requirements, this.construct.suggestionsFor(this.arguments));
   }
 
   @Override
   public String toString() {
-    return "no overload of '" + this.builtIn.getName() + "' takes (" + describe(this.arguments) + ")";
+    return "no parameter list of " + this.construct.describe() + " takes ("
+        + describe(this.arguments) + ")";
   }
 
   /**
@@ -116,23 +136,23 @@ public final class Mismatch {
   }
 
   /**
-   * The argument an overload rejected: the one {@link Parameters#match} reports.
+   * The argument a parameter list rejected: the one {@link Parameters#match} reports.
    */
   public static final class Rejection {
 
-    private final Overload overload;
+    private final Parameters<?> parameters;
     private final Match match;
 
-    Rejection(final Overload overload, final Match match) {
-      this.overload = overload;
+    Rejection(final Parameters<?> parameters, final Match match) {
+      this.parameters = parameters;
       this.match = match;
     }
 
     /**
-     * @return the overload that rejected the argument
+     * @return the parameter list that rejected the argument, as the construct declares it
      */
-    public Overload getOverload() {
-      return this.overload;
+    public Parameters<?> getParameters() {
+      return this.parameters;
     }
 
     /**

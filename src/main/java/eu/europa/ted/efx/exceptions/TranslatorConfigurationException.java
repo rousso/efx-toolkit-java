@@ -101,7 +101,7 @@ public class TranslatorConfigurationException extends IllegalStateException {
         "This indicates a bug in the rules translator.";
 
     private static final String AMBIGUOUS_OVERLOADS =
-        "Overloads %s of '%s' all apply to the arguments (%s). " +
+        "Overloads %s of %s all apply to the arguments (%s). " +
         "This indicates a defect in the signature catalogue. " +
         "Make the signatures of the built-in disjoint, and run CatalogueUnambiguityTest to verify them.";
 
@@ -178,9 +178,9 @@ public class TranslatorConfigurationException extends IllegalStateException {
                 expectedType.getSimpleName(), "empty stack");
     }
 
-    public static TranslatorConfigurationException ambiguousOverloads(String builtInName, String overloads,
-            String argumentTypes) {
+    public static TranslatorConfigurationException ambiguousOverloads(String construct,
+            String overloads, String argumentTypes) {
         return new TranslatorConfigurationException(ErrorCode.AMBIGUOUS_OVERLOADS, AMBIGUOUS_OVERLOADS,
-                overloads, builtInName, argumentTypes);
+                overloads, construct, argumentTypes);
     }
 }

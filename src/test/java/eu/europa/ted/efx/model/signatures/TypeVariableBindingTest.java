@@ -98,8 +98,10 @@ class TypeVariableBindingTest {
 
   private static void assertResolvesInEitherOrder(final BuiltIn builtIn, final Overload overload,
       final String first, final String second) {
-    assertSame(overload, resolve(builtIn, overload, first, second).getOverload());
-    assertSame(overload, resolve(builtIn, overload, second, first).getOverload());
+    assertSame(overload.getSignature().getParameters(),
+        resolve(builtIn, overload, first, second).getParameters());
+    assertSame(overload.getSignature().getParameters(),
+        resolve(builtIn, overload, second, first).getParameters());
   }
 
   private static void assertRejectedAtTheSecond(final BuiltIn builtIn, final Overload overload,
@@ -107,7 +109,7 @@ class TypeVariableBindingTest {
     Resolution resolution = resolve(builtIn, overload, first, second);
     assertFalse(resolution.isResolved());
     assertEquals(List.of(1), resolution.getMismatch().getRejections().stream()
-        .filter(rejection -> rejection.getOverload() == overload)
+        .filter(rejection -> rejection.getParameters() == overload.getSignature().getParameters())
         .map(Mismatch.Rejection::getPosition)
         .collect(Collectors.toList()));
   }

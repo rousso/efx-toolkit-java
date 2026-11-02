@@ -13,6 +13,11 @@
  */
 package eu.europa.ted.efx.sdk2;
 
+import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
+import static eu.europa.ted.efx.model.signatures.ParameterType.INDICATOR;
+import static eu.europa.ted.efx.model.signatures.ParameterType.NUMBER;
+import static eu.europa.ted.efx.model.signatures.ParameterType.TEXT;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -33,7 +38,6 @@ import org.slf4j.LoggerFactory;
 
 import eu.europa.ted.eforms.sdk.component.SdkComponent;
 import eu.europa.ted.eforms.sdk.component.SdkComponentType;
-import eu.europa.ted.efx.exceptions.Construct;
 import eu.europa.ted.efx.exceptions.InvalidUsageException;
 import eu.europa.ted.efx.exceptions.InvalidIndentationException;
 import eu.europa.ted.efx.interfaces.EfxTemplateTranslator;
@@ -44,6 +48,9 @@ import eu.europa.ted.efx.interfaces.TranslatorOptions;
 import eu.europa.ted.efx.interfaces.TemplateSection;
 import eu.europa.ted.efx.interfaces.TranslatorContext;
 import eu.europa.ted.efx.model.Context;
+import eu.europa.ted.efx.model.signatures.Arguments;
+import eu.europa.ted.efx.model.signatures.Construct;
+import eu.europa.ted.efx.model.signatures.ParameterType;
 import eu.europa.ted.efx.util.EfxProfilerReportGenerator;
 import eu.europa.ted.efx.util.TranslatorTimings;
 import eu.europa.ted.efx.model.Context.FieldContext;
@@ -120,23 +127,31 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
   private static final String ITEM_VARIABLE = TranslationContext.RESERVED_PREFIX + "item";
 
   /** The condition of a conditional template block, as a type error names it. */
-  private static final Construct WHEN = Construct.of("'when'", "condition");
+  private static final GrammarConstruct WHEN =
+      GrammarConstruct.of("'when'", parameter("condition", INDICATOR));
 
   /** The key of a dictionary declaration, as a type error names it. */
-  private static final Construct BY = Construct.of("'by'", "key");
+  private static final GrammarConstruct BY =
+      GrammarConstruct.of("'by'", parameter("key", TEXT));
 
   /** The URL of a hyperlink, as a type error names it. */
-  private static final Construct HYPERLINK = Construct.of("Hyperlink", "URL");
+  private static final GrammarConstruct HYPERLINK =
+      GrammarConstruct.of("Hyperlink", parameter("URL", TEXT));
 
   /** A label block, as a type error names it with the one of its parts that is at fault. */
   private static final String LABEL_BLOCK = "Label block";
 
   /** The parts of a label block, each as a type error names it. */
-  private static final Construct ASSET_TYPE = Construct.of(LABEL_BLOCK, "asset type");
-  private static final Construct LABEL_TYPE = Construct.of(LABEL_BLOCK, "label type");
-  private static final Construct ASSET_ID = Construct.of(LABEL_BLOCK, "asset id");
-  private static final Construct PLURALISER = Construct.of(LABEL_BLOCK, "pluraliser");
-  private static final Construct LABEL_KEY = Construct.of(LABEL_BLOCK, "key");
+  private static final GrammarConstruct ASSET_TYPE =
+      GrammarConstruct.of(LABEL_BLOCK, parameter("asset type", TEXT));
+  private static final GrammarConstruct LABEL_TYPE =
+      GrammarConstruct.of(LABEL_BLOCK, parameter("label type", TEXT));
+  private static final GrammarConstruct ASSET_ID =
+      GrammarConstruct.of(LABEL_BLOCK, parameter("asset id", TEXT));
+  private static final GrammarConstruct PLURALISER =
+      GrammarConstruct.of(LABEL_BLOCK, parameter("pluraliser", NUMBER));
+  private static final GrammarConstruct LABEL_KEY =
+      GrammarConstruct.of(LABEL_BLOCK, parameter("key", TEXT));
 
   private static final String LABEL_TYPE_NAME = getLexerSymbol(EfxLexer.LABEL_TYPE_NAME);
   private static final String LABEL_TYPE_WHEN = getLexerSymbol(EfxLexer.LABEL_TYPE_WHEN_TRUE).replace("-true", "");
@@ -326,10 +341,11 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
    */
   @Override
   public void exitFunctionDeclaration(FunctionDeclarationContext ctx) {
-    var expression = this.expressions.valueAs(ctx.expression(),
-        EfxExpressionVisitor.typeOf(ctx.typeDeclaration()),
-        Construct.of("Function '" + ctx.typeDeclaration().getText() + ":?"
-            + ctx.functionName.getText() + "'", "value"));
+    var expression = this.expressions.valueOf(ctx.expression(),
+        GrammarConstruct.of(Construct.functionName(ctx.typeDeclaration().getText() + ":?"
+            + ctx.functionName.getText()), parameter("value",
+                ParameterType.of(EfxExpressionVisitor.typeOf(ctx.typeDeclaration())))))
+        .at(0, TypedExpression.class);
     var parameters = this.stack.pop(ParsedParameters.class);
     var function = new Function(ctx.functionName.getText(), parameters, expression);
     this.stack.declareFunction(function);
@@ -437,7 +453,8 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
   @Override
   public void exitComputedExpressionBlock(ComputedExpressionBlockContext ctx) {
     FormatOptions options = ctx.formatOptions() != null ? this.stack.pop(FormatOptions.class) : new DefaultFormatOptions(false);
-    TypedExpression value = this.expressions.valueOf(ctx.expression(), EXPRESSION_BLOCK);
+    TypedExpression value =
+        this.expressions.valueOf(ctx.expression(), EXPRESSION_BLOCK).at(0, TypedExpression.class);
     Optional<NumberFormatOptions> numberOptions = options.forNumbers();
     if (value.is(EfxDataType.DurationScalar.class) && numberOptions.isPresent()) {
       this.stack.push(this.createFormattedExpressionBlockFragment(TypedExpression.from(value, DurationExpression.class),
@@ -495,7 +512,7 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
   @Override
   public void exitLinkedExpressionBlock(LinkedExpressionBlockContext ctx) {
     var url =
-        this.expressions.valueAs(ctx.linkBlock().expression(), StringExpression.class, HYPERLINK);
+        this.expressions.valueOf(ctx.linkBlock().expression(), HYPERLINK).stringAt(0);
     var value = this.stack.pop(FormatContentTemplateFragment.class);
     this.stack.push(new HyperlinkContentTemplateFragment(value, url));
   }
@@ -799,7 +816,7 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
     // New in EFX-2: Pluralisation of labels based on a supplied quantity.
     // The quantity is on top of the stack, above the assetId, so it is popped first.
     NumericExpression quantity = ctx.pluraliser() != null
-        ? this.labelPart(ctx, NumericExpression.class, PLURALISER)
+        ? this.labelPart(ctx, PLURALISER).numericAt(0)
         : NumericExpression.empty();
 
     if (!this.stack.empty() && StringSequenceExpression.class.isAssignableFrom(this.stack.peek().getClass()) && ctx.assetId() != null) {
@@ -822,7 +839,7 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
       // Standard implementation as originally intended by EFX 1
 
       StringExpression assetId = ctx.assetId() != null
-          ? this.labelPart(ctx, StringExpression.class, ASSET_ID)
+          ? this.labelPart(ctx, ASSET_ID).stringAt(0)
           : this.script.getStringLiteralFromUnquotedString("");
       this.exitStandardLabelReference(ctx, assetId, quantity);
     }
@@ -836,10 +853,10 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
    */
   private void exitStandardLabelReference(StandardLabelReferenceContext ctx, StringExpression assetId, NumericExpression quantity) {
     StringExpression labelType = ctx.labelType() != null
-        ? this.labelPart(ctx, StringExpression.class, LABEL_TYPE)
+        ? this.labelPart(ctx, LABEL_TYPE).stringAt(0)
         : this.script.getStringLiteralFromUnquotedString("");
     StringExpression assetType = ctx.assetType() != null
-        ? this.labelPart(ctx, StringExpression.class, ASSET_TYPE)
+        ? this.labelPart(ctx, ASSET_TYPE).stringAt(0)
         : this.script.getStringLiteralFromUnquotedString("");
 
     StringExpression key = this.script.composeStringConcatenation(
@@ -869,10 +886,10 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
   private void exitStandardLabelReference(StandardLabelReferenceContext ctx, StringSequenceExpression assetIdSequence,
       NumericExpression quantity) {
     StringExpression labelType = ctx.labelType() != null
-        ? this.labelPart(ctx, StringExpression.class, LABEL_TYPE)
+        ? this.labelPart(ctx, LABEL_TYPE).stringAt(0)
         : this.script.getStringLiteralFromUnquotedString("");
     StringExpression assetType = ctx.assetType() != null
-        ? this.labelPart(ctx, StringExpression.class, ASSET_TYPE)
+        ? this.labelPart(ctx, ASSET_TYPE).stringAt(0)
         : this.script.getStringLiteralFromUnquotedString("");
 
     Variable loopVariable = this.composeAssetIdVariable();
@@ -897,11 +914,11 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
   @Override
   public void exitShorthandBtLabelReference(ShorthandBtLabelReferenceContext ctx) {
     NumericExpression quantity = ctx.pluraliser() != null
-        ? this.labelPart(ctx, NumericExpression.class, PLURALISER)
+        ? this.labelPart(ctx, PLURALISER).numericAt(0)
         : NumericExpression.empty();
     StringExpression assetId = this.script.getStringLiteralFromUnquotedString(ctx.BtId().getText());
     StringExpression labelType = ctx.labelType() != null
-        ? this.labelPart(ctx, StringExpression.class, LABEL_TYPE)
+        ? this.labelPart(ctx, LABEL_TYPE).stringAt(0)
         : this.script.getStringLiteralFromUnquotedString("");
     StringExpression key = this.script.composeStringConcatenation(
         List.of(this.script.getStringLiteralFromUnquotedString(ASSET_TYPE_BT),
@@ -914,10 +931,10 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
   public void exitShorthandFieldLabelReference(ShorthandFieldLabelReferenceContext ctx) {
     final String fieldId = ctx.FieldId().getText();
     NumericExpression quantity = ctx.pluraliser() != null
-        ? this.labelPart(ctx, NumericExpression.class, PLURALISER)
+        ? this.labelPart(ctx, PLURALISER).numericAt(0)
         : NumericExpression.empty();
     StringExpression labelType = ctx.labelType() != null
-        ? this.labelPart(ctx, StringExpression.class, LABEL_TYPE)
+        ? this.labelPart(ctx, LABEL_TYPE).stringAt(0)
         : this.script.getStringLiteralFromUnquotedString("");
 
     if (labelType.getScript().equals("value")) {
@@ -936,7 +953,7 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
   public void exitShorthandIndirectLabelReference(ShorthandIndirectLabelReferenceContext ctx) {
     // New in EFX-2: Pluralisation of labels based on a supplied quantity
     NumericExpression quantity = ctx.pluraliser() != null
-        ? this.labelPart(ctx, NumericExpression.class, PLURALISER)
+        ? this.labelPart(ctx, PLURALISER).numericAt(0)
         : NumericExpression.empty();
     this.shorthandIndirectLabelReference(ctx.FieldId().getText(), quantity);
   }
@@ -1037,7 +1054,7 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
 
     // New in EFX-2: Pluralisation of labels based on a supplied quantity
     NumericExpression quantity = ctx.pluraliser() != null
-        ? this.labelPart(ctx, NumericExpression.class, PLURALISER)
+        ? this.labelPart(ctx, PLURALISER).numericAt(0)
         : NumericExpression.empty();
 
     final String labelType = ctx.LabelType().getText();
@@ -1083,18 +1100,15 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
    * it, and converts it to the class the part requires. The error of a part that does not convert
    * names that part alone, since each part is taken, and checked, on its own.
    *
-   * @param <T> the class the part requires
    * @param labelBlock the label block, where an error is reported
-   * @param type the class the part requires
-   * @param part the part, as a type error names it, such as {@link #ASSET_ID}
-   * @return the part, converted to that class
+   * @param part the part, such as {@link #ASSET_ID}
+   * @return the part as the construct's one argument, converted to the class it requires
    * @throws eu.europa.ted.efx.exceptions.TypeMismatchException if the part does not convert to
    *         that class
    */
-  private <T extends TypedExpression> T labelPart(final ParserRuleContext labelBlock,
-      final Class<T> type, final Construct part) {
-    return this.expressions.operandsOf(part, List.of(this.stack.pop(TypedExpression.class)))
-        .converted(0, type, labelBlock);
+  private Arguments labelPart(final ParserRuleContext labelBlock,
+      final GrammarConstruct part) {
+    return this.expressions.valueOf(this.stack.pop(TypedExpression.class), part, labelBlock);
   }
 
   @Override
@@ -1123,9 +1137,9 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
   @Override
   public void exitComputedLabelReference(ComputedLabelReferenceContext ctx) {
     NumericExpression quantity = ctx.pluraliser() != null
-        ? this.labelPart(ctx, NumericExpression.class, PLURALISER)
+        ? this.labelPart(ctx, PLURALISER).numericAt(0)
         : NumericExpression.empty();
-    StringExpression expression = this.labelPart(ctx, StringExpression.class, LABEL_KEY);
+    StringExpression expression = this.labelPart(ctx, LABEL_KEY).stringAt(0);
     this.stack.push(new LabelFromExpressionContentTemplateFragment(expression, quantity));
   }
 
@@ -1160,7 +1174,7 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
    */
   @Override
   public void exitDictionaryKeyClause(DictionaryKeyClauseContext ctx) {
-    this.stack.push(this.expressions.valueAs(ctx.expression(), StringExpression.class, BY));
+    this.stack.push(this.expressions.valueOf(ctx.expression(), BY).stringAt(0));
     this.efxContext.pop();
   }
 
@@ -1258,7 +1272,7 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
   public void exitWhenDisplayTemplate(WhenDisplayTemplateContext ctx) {
     var template = this.stack.pop(DisplayContentTemplate.class);
     template.setCondition(
-        this.expressions.valueAs(ctx.expression(), BooleanExpression.class, WHEN));
+        this.expressions.valueOf(ctx.expression(), WHEN).booleanAt(0));
     this.stack.push(template);
   }
 
@@ -1266,7 +1280,7 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
   public void exitWhenInvokeTemplate(WhenInvokeTemplateContext ctx) {
     var template = this.stack.pop(InvokeContentTemplate.class);
     template.setCondition(
-        this.expressions.valueAs(ctx.expression(), BooleanExpression.class, WHEN));
+        this.expressions.valueOf(ctx.expression(), WHEN).booleanAt(0));
     this.stack.push(template);
   }
 
@@ -1277,8 +1291,7 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
   public void exitInvokeTemplate(InvokeTemplateContext ctx) {
     final Template template = this.stack.getTemplate(ctx.templateName.getText());
     this.stack.push(new InvokeContentTemplate(ctx.templateName.getText(),
-        this.expressions.argumentsOf(ctx, template, ctx.argumentList(),
-            Construct.template(ctx.templateName.getText(), template.parameters.size()))));
+        this.expressions.argumentsOf(ctx, template, ctx.argumentList())));
   }
   
   // #endregion Conditional template blocks ---------------------------------
@@ -1319,14 +1332,14 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
   @Override
   public void exitLinkedTextBlock(LinkedTextBlockContext ctx) {
     var url =
-        this.expressions.valueAs(ctx.linkBlock().expression(), StringExpression.class, HYPERLINK);
+        this.expressions.valueOf(ctx.linkBlock().expression(), HYPERLINK).stringAt(0);
     this.stack.push(new HyperlinkContentTemplateFragment(new TextContentTemplateFragment(ctx.textBlock().getText()), url));
   }
 
   @Override
   public void exitLinkedLabelBlock(LinkedLabelBlockContext ctx) {
     var url =
-        this.expressions.valueAs(ctx.linkBlock().expression(), StringExpression.class, HYPERLINK);
+        this.expressions.valueOf(ctx.linkBlock().expression(), HYPERLINK).stringAt(0);
     var label = this.stack.pop(ContentTemplateFragment.class);
     this.stack.push(new HyperlinkContentTemplateFragment(label, url));
   }

@@ -14,84 +14,91 @@
 package eu.europa.ted.efx.model.signatures;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.stream.Collectors;
 
 import eu.europa.ted.efx.exceptions.TranslatorConfigurationException;
-import eu.europa.ted.efx.interfaces.ScriptGenerator;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 
 /**
- * The outcome of resolving a call of a {@link BuiltIn}: the overload that applies, with the
- * arguments converted to its parameters, or the {@link Mismatch} when none applies.
+ * The outcome of checking the arguments of a call against the parameter lists of a
+ * {@link Construct}: the parameter list that takes them, with the arguments converted to its
+ * parameters, or the {@link Mismatch} when none does.
  *
- * <p>An overload applies when its signature {@link Parameters#match matches} the arguments: it
- * takes their number and, once {@code T} is bound, every argument converts to its parameter. At most one overload of a built-in applies to any arguments;
- * the catalogue's unit tests prove it for every built-in, and a resolution that finds more than one
- * raises a {@link TranslatorConfigurationException}.</p>
+ * <p>A parameter list takes the arguments when it {@link Parameters#match matches} them: it takes
+ * their number and, once {@code T} is bound, every argument converts to its parameter. At most one
+ * parameter list of a construct takes any arguments; the catalogue's unit tests prove it for every
+ * built-in, and a resolution that finds more than one raises a
+ * {@link TranslatorConfigurationException}.</p>
+ *
+ * <p>A built-in translates a resolved call with {@link BuiltIn#compose}; any other construct is
+ * translated where it is written, from the converted arguments.</p>
  */
 public final class Resolution {
 
-  private final Overload overload;
+  private final Parameters<?> parameters;
   private final Arguments arguments;
   private final Mismatch mismatch;
 
-  private Resolution(final Overload overload, final Arguments arguments, final Mismatch mismatch) {
-    this.overload = overload;
+  private Resolution(final Parameters<?> parameters, final Arguments arguments,
+      final Mismatch mismatch) {
+    this.parameters = parameters;
     this.arguments = arguments;
     this.mismatch = mismatch;
   }
 
   /**
-   * Resolves a call of a built-in.
+   * Checks the arguments of a call of a construct.
    *
-   * @param builtIn the built-in called
+   * @param construct the construct called
    * @param arguments the translated arguments of the call
    * @return the resolution
-   * @throws TranslatorConfigurationException if more than one overload applies, a defect of the catalogue
+   * @throws TranslatorConfigurationException if more than one parameter list takes the arguments,
+   *         a defect of the catalogue
    */
-  static Resolution of(final BuiltIn builtIn, final List<? extends TypedExpression> arguments) {
-    Map<Overload, Arguments> applicable = new LinkedHashMap<>();
+  static Resolution of(final Construct construct,
+      final List<? extends TypedExpression> arguments) {
+    List<Resolution> applicable = new ArrayList<>();
     List<Mismatch.Rejection> rejections = new ArrayList<>();
-    for (Overload overload : builtIn.getOverloads()) {
-      Match match = overload.getSignature().getParameters().match(arguments);
+    for (Parameters<?> parameters : construct.getParameterLists()) {
+      Match match = parameters.match(arguments);
       if (match.isMatched()) {
-        applicable.put(overload, match.getArguments());
+        applicable.add(new Resolution(parameters, match.getArguments(), null));
       } else if (!match.isCountMismatch()) {
-        rejections.add(new Mismatch.Rejection(overload, match));
+        rejections.add(new Mismatch.Rejection(parameters, match));
       }
     }
     if (applicable.size() > 1) {
-      throw TranslatorConfigurationException.ambiguousOverloads(builtIn.getName(),
-          applicable.keySet().toString(), Mismatch.describe(arguments));
+      throw TranslatorConfigurationException.ambiguousOverloads(construct.describe(),
+          applicable.stream().map(resolution -> resolution.parameters.toString())
+              .collect(Collectors.joining(", ", "[", "]")),
+          Mismatch.describe(arguments));
     }
     if (applicable.isEmpty()) {
-      return new Resolution(null, null, new Mismatch(builtIn, arguments, rejections));
+      return new Resolution(null, null, new Mismatch(construct, arguments, rejections));
     }
-    Map.Entry<Overload, Arguments> resolved = applicable.entrySet().iterator().next();
-    return new Resolution(resolved.getKey(), resolved.getValue(), null);
+    return applicable.get(0);
   }
 
   /**
-   * @return {@code true} if an overload applies
+   * @return {@code true} if a parameter list takes the arguments
    */
   public boolean isResolved() {
     return this.mismatch == null;
   }
 
   /**
-   * @return the overload that applies
-   * @throws IllegalStateException if none applies
+   * @return the parameter list that takes the arguments, as the construct declares it
+   * @throws IllegalStateException if none does
    */
-  public Overload getOverload() {
+  public Parameters<?> getParameters() {
     this.requireResolved();
-    return this.overload;
+    return this.parameters;
   }
 
   /**
-   * @return the arguments, converted to the parameters of the overload that applies
-   * @throws IllegalStateException if none applies
+   * @return the arguments, converted to the parameters of the parameter list that takes them
+   * @throws IllegalStateException if none does
    */
   public Arguments getArguments() {
     this.requireResolved();
@@ -99,25 +106,14 @@ public final class Resolution {
   }
 
   /**
-   * @return why no overload applies
-   * @throws IllegalStateException if one applies
+   * @return why no parameter list takes the arguments
+   * @throws IllegalStateException if one does
    */
   public Mismatch getMismatch() {
     if (this.isResolved()) {
       throw new IllegalStateException("The call is resolved");
     }
     return this.mismatch;
-  }
-
-  /**
-   * Translates the call with the overload that applies.
-   *
-   * @param script the script generator of the target language
-   * @return the translated call
-   * @throws IllegalStateException if no overload applies
-   */
-  public TypedExpression compose(final ScriptGenerator script) {
-    return this.getOverload().compose(script, this.arguments);
   }
 
   private void requireResolved() {

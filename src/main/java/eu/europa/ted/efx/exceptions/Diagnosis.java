@@ -21,8 +21,9 @@ import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.types.EfxTypeTokenLookup;
 
 /**
- * What a type error says: which construct was given operands of which types, which of them does
- * not fit, and what that operand must be instead.
+ * What a type error says: which construct was given arguments of which types, which of them does
+ * not fit, and what that argument must be instead. The construct gives the words for itself and
+ * for the argument, such as "Operator '=='" and "right operand".
  *
  * <p>Every type error starts with the same two sentences, whichever part of the translator finds
  * it: "Operator '==' cannot take 'text' and 'number'. Its right operand must be 'text'." Types are
@@ -32,44 +33,47 @@ import eu.europa.ted.efx.model.types.EfxTypeTokenLookup;
  */
 public final class Diagnosis {
 
-  private final Construct construct;
-  private final List<TypedExpression> operands;
-  private final int position;
+  private final String construct;
+  private final String role;
+  private final List<TypedExpression> arguments;
   private final List<String> requirements;
   private final List<String> suggestions;
 
   /**
-   * @param construct the construct that rejects an operand
-   * @param operands all its operands, in order, as it read them
-   * @param position the position of the operand it rejects
-   * @param requirements what that position takes, each as a message says it: a type in quotes,
-   *        such as 'text', or a phrase, such as "a field reference"
+   * @param construct what the error calls the construct that rejects an argument, such as
+   *        "Operator '=='"
+   * @param role what it calls the argument it rejects, such as "right operand"
+   * @param arguments all its arguments, in order, as it read them
+   * @param requirements what the argument it rejects must be, each as a message says it: a type in
+   *        quotes, such as 'text', or a phrase, such as "a field reference"
    */
-  public Diagnosis(final Construct construct, final List<? extends TypedExpression> operands,
-      final int position, final List<String> requirements) {
-    this(construct, operands, position, requirements, List.of());
+  public Diagnosis(final String construct, final String role,
+      final List<? extends TypedExpression> arguments, final List<String> requirements) {
+    this(construct, role, arguments, requirements, List.of());
   }
 
   /**
-   * @param construct the construct that rejects an operand
-   * @param operands all its operands, in order, as it read them
-   * @param position the position of the operand it rejects
-   * @param requirements what that position takes, each as a message says it: a type in quotes,
-   *        such as 'text', or a phrase, such as "a field reference"
+   * @param construct what the error calls the construct that rejects an argument, such as
+   *        "Operator '=='"
+   * @param role what it calls the argument it rejects, such as "right operand"
+   * @param arguments all its arguments, in order, as it read them
+   * @param requirements what the argument it rejects must be, each as a message says it: a type in
+   *        quotes, such as 'text', or a phrase, such as "a field reference"
    * @param suggestions what to write instead, each a sentence, such as "To select by position,
    *        write [at n]."; none where the mistake suggests nothing
    */
-  public Diagnosis(final Construct construct, final List<? extends TypedExpression> operands,
-      final int position, final List<String> requirements, final List<String> suggestions) {
+  public Diagnosis(final String construct, final String role,
+      final List<? extends TypedExpression> arguments, final List<String> requirements,
+      final List<String> suggestions) {
     this.construct = construct;
-    this.operands = List.copyOf(operands);
-    this.position = position;
+    this.role = role;
+    this.arguments = List.copyOf(arguments);
     this.requirements = List.copyOf(requirements);
     this.suggestions = List.copyOf(suggestions);
   }
 
   /**
-   * @return the two sentences: what the construct was given, and what the operand at fault must
+   * @return the two sentences: what the construct was given, and what the argument at fault must
    *         be; then what to write instead, if the mistake suggests it
    */
   public String describe() {
@@ -77,7 +81,7 @@ public final class Diagnosis {
   }
 
   /**
-   * @param explanation why the operand at fault does not fit, as the reference it is written as
+   * @param explanation why the argument at fault does not fit, as the reference it is written as
    *        tells it, such as "Field 'BT-1' may return multiple values from context 'ND-1'."
    * @return the two sentences, then the explanation, then what to write instead, if the mistake
    *         suggests it
@@ -88,16 +92,16 @@ public final class Diagnosis {
 
   private String sentences(final Stream<String> explanation) {
     final String reason = String.format("%s cannot take %s. Its %s must be %s.",
-        this.construct.getName(),
-        joined(this.operands.stream().map(Diagnosis::typeOf).collect(Collectors.toList()), "and"),
-        this.construct.roleOf(this.position), joined(this.requirements, "or"));
+        this.construct,
+        joined(this.arguments.stream().map(Diagnosis::typeOf).collect(Collectors.toList()), "and"),
+        this.role, joined(this.requirements, "or"));
     return Stream.of(Stream.of(reason), explanation, this.suggestions.stream())
         .flatMap(sentences -> sentences)
         .collect(Collectors.joining(" "));
   }
 
-  private static String typeOf(final TypedExpression operand) {
-    return "'" + EfxTypeTokenLookup.nameOf(operand.getDataType()) + "'";
+  private static String typeOf(final TypedExpression argument) {
+    return "'" + EfxTypeTokenLookup.nameOf(argument.getDataType()) + "'";
   }
 
   /**

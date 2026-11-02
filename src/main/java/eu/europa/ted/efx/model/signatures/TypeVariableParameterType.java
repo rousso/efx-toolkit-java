@@ -14,7 +14,6 @@
 package eu.europa.ted.efx.model.signatures;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import eu.europa.ted.efx.model.expressions.TypedExpression;
@@ -25,7 +24,8 @@ import eu.europa.ted.efx.model.types.EfxDataType;
 import eu.europa.ted.efx.model.types.EfxTypeLattice;
 
 /**
- * The type variable {@code T} of a generic signature, as a single value or as a sequence.
+ * The type variable {@code T} of a generic signature: as a single value, as a sequence, or in
+ * either cardinality, taken as it is.
  *
  * <p>{@code T} ranges over the six value primitives. A multilingual text binds it to text and a
  * dynamic value to indicator, as the typed grammar reads them today; a node never binds it. Until
@@ -34,10 +34,30 @@ import eu.europa.ted.efx.model.types.EfxTypeLattice;
  */
 enum TypeVariableParameterType implements ParameterType {
 
-  SCALAR("T", "a value", ScalarExpression.class, ScalarExpression.fromEfxDataType),
+  SCALAR("T", "a value", ScalarExpression.class) {
+    @Override
+    public ParameterType bind(final Class<? extends EfxDataType.Primitive> primitive) {
+      return new ConcreteParameterType(ScalarExpression.fromEfxDataType.get(primitive));
+    }
+  },
 
-  SEQUENCE("T*", "a sequence of values", SequenceExpression.class,
-      SequenceExpression.fromEfxDataType);
+  SEQUENCE("T*", "a sequence of values", SequenceExpression.class) {
+    @Override
+    public ParameterType bind(final Class<? extends EfxDataType.Primitive> primitive) {
+      return new ConcreteParameterType(SequenceExpression.fromEfxDataType.get(primitive));
+    }
+  },
+
+  /**
+   * A single value or a sequence, as it is: what a construct takes whose own cardinality is that
+   * of what it is given, such as parentheses.
+   */
+  EITHER("T|T*", "a value", TypedExpression.class) {
+    @Override
+    public ParameterType bind(final Class<? extends EfxDataType.Primitive> primitive) {
+      return new EitherCardinalityParameterType(primitive);
+    }
+  };
 
   private static final List<Class<? extends EfxDataType.Primitive>> VALUE_PRIMITIVES = List.of(
       EfxDataType.String.class, EfxDataType.Boolean.class, EfxDataType.Number.class,
@@ -46,18 +66,19 @@ enum TypeVariableParameterType implements ParameterType {
   private final String symbol;
   private final String description;
   private final Class<? extends TypedExpression> expressionType;
-  private final Map<Class<? extends EfxDataType.Primitive>,
-      ? extends Class<? extends TypedExpression>> expressionTypes;
 
   TypeVariableParameterType(final String symbol, final String description,
-      final Class<? extends TypedExpression> expressionType,
-      final Map<Class<? extends EfxDataType.Primitive>,
-          ? extends Class<? extends TypedExpression>> expressionTypes) {
+      final Class<? extends TypedExpression> expressionType) {
     this.symbol = symbol;
     this.description = description;
     this.expressionType = expressionType;
-    this.expressionTypes = expressionTypes;
   }
+
+  /**
+   * Gives the concrete type this type variable stands for once {@code T} is bound.
+   */
+  @Override
+  public abstract ParameterType bind(Class<? extends EfxDataType.Primitive> primitive);
 
   /**
    * Gives the value primitive an argument binds {@code T} to.
@@ -82,11 +103,6 @@ enum TypeVariableParameterType implements ParameterType {
   @Override
   public boolean isTypeVariable() {
     return true;
-  }
-
-  @Override
-  public ParameterType bind(final Class<? extends EfxDataType.Primitive> primitive) {
-    return new ConcreteParameterType(this.expressionTypes.get(primitive));
   }
 
   @Override

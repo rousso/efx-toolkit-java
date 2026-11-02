@@ -26,7 +26,6 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import eu.europa.ted.efx.exceptions.Construct;
 import eu.europa.ted.efx.model.expressions.Expression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.expressions.scalar.DateExpression;
@@ -143,7 +142,7 @@ class MismatchDiagnosisTest {
         "Operator '+' cannot take 'text' and 'number'. "
             + "Its left operand must be 'number', 'duration' or 'date'.",
         ArithmeticOperators.PLUS.resolve(List.of(TEXT, NUMBER_LITERAL)).getMismatch()
-            .diagnose(Construct.operator("+", 2)).describe());
+            .diagnose().describe());
   }
 
   @Test

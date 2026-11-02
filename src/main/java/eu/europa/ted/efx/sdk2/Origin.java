@@ -18,7 +18,7 @@ import java.util.Optional;
 
 import org.antlr.v4.runtime.ParserRuleContext;
 
-import eu.europa.ted.efx.exceptions.Construct;
+import eu.europa.ted.efx.model.signatures.Construct;
 import eu.europa.ted.efx.exceptions.Diagnosis;
 import eu.europa.ted.efx.exceptions.InvalidIdentifierException;
 import eu.europa.ted.efx.exceptions.TypeMismatchException;
@@ -136,7 +136,8 @@ abstract class Origin<E extends TypedExpression> {
   Operand<?> readFromField(final E expression, final ParserRuleContext step,
       final Construct construct, final FieldReader reader) {
     throw TypeMismatchException.cannotConvert(step,
-        new Diagnosis(construct, List.of(expression), 0, List.of(FIELD_REFERENCE)));
+        new Diagnosis(construct.describe(), construct.roleOf(0, 1), List.of(expression),
+            List.of(FIELD_REFERENCE)));
   }
 
   /**

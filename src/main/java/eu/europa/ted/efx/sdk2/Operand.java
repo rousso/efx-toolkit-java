@@ -17,7 +17,7 @@ import java.util.Optional;
 
 import org.antlr.v4.runtime.ParserRuleContext;
 
-import eu.europa.ted.efx.exceptions.Construct;
+import eu.europa.ted.efx.model.signatures.Construct;
 import eu.europa.ted.efx.exceptions.Diagnosis;
 import eu.europa.ted.efx.exceptions.TypeMismatchException;
 import eu.europa.ted.efx.model.Context;

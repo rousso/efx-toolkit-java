@@ -14,18 +14,22 @@
 package eu.europa.ted.efx.model.signatures;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
+import eu.europa.ted.efx.interfaces.ScriptGenerator;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 
 /**
- * An EFX operator or built-in function: its name and its {@link Overload overloads}.
+ * An EFX operator or built-in function: a construct that the catalogue translates itself. It has
+ * a name and {@link Overload overloads}, each a signature with the composer that translates a call
+ * the signature takes.
  *
  * <p>The name is the operator as written, such as {@code +} or {@code is not empty}, or the
  * function token, such as {@code substring}. The standard built-ins are the constants of the enums
  * of this package, gathered by {@link BuiltIns}; a {@link PatternMatch} is made for each use of
  * {@code like}.</p>
  */
-public interface BuiltIn {
+public interface BuiltIn extends Construct {
 
   /**
    * @return the operator as written, or the function token
@@ -57,12 +61,50 @@ public interface BuiltIn {
   }
 
   /**
-   * Resolves a call of this built-in.
-   *
-   * @param arguments the translated arguments of the call
-   * @return the overload that applies with the converted arguments, or the mismatch
+   * @return "Function 'substring'" for a function, "Operator '+'" for an operator
    */
-  default Resolution resolve(final List<? extends TypedExpression> arguments) {
-    return Resolution.of(this, arguments);
+  @Override
+  default String describe() {
+    return this.isFunction() ? Construct.functionName(this.getName())
+        : Construct.operatorName(this.getName());
+  }
+
+  /**
+   * @return the arguments of a function by their position, such as "2nd argument"; the operands of
+   *         an operator, "operand", or "left operand" and "right operand"
+   */
+  @Override
+  default String roleOf(final int position, final int count) {
+    return this.isFunction() ? Construct.argumentRole(position, count)
+        : Construct.operandRole(position, count);
+  }
+
+  /**
+   * @return the parameters of the signature of each overload
+   */
+  @Override
+  default List<Parameters<?>> getParameterLists() {
+    return this.getOverloads().stream()
+        .<Parameters<?>>map(overload -> overload.getSignature().getParameters())
+        .collect(Collectors.toUnmodifiableList());
+  }
+
+  /**
+   * Translates a call of this built-in with the overload whose signature takes its arguments.
+   *
+   * @param resolution the resolution of the call by this built-in
+   * @param script the script generator
+   * @return the translated call
+   * @throws IllegalArgumentException if no overload of this built-in has the parameter list that
+   *         resolved the call
+   */
+  default TypedExpression compose(final Resolution resolution, final ScriptGenerator script) {
+    return this.getOverloads().stream()
+        .filter(overload -> overload.getSignature().getParameters()
+            .equals(resolution.getParameters()))
+        .findFirst()
+        .orElseThrow(() -> new IllegalArgumentException(
+            "No overload of '" + this.getName() + "' takes " + resolution.getParameters()))
+        .compose(script, resolution.getArguments());
   }
 }

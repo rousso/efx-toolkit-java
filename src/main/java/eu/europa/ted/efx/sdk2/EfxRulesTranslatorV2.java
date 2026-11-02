@@ -13,6 +13,9 @@
  */
 package eu.europa.ted.efx.sdk2;
 
+import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
+import static eu.europa.ted.efx.model.signatures.ParameterType.INDICATOR;
+
 import java.util.ArrayList;
 import java.io.IOException;
 import java.io.InputStream;
@@ -38,7 +41,6 @@ import eu.europa.ted.efx.interfaces.ScriptGenerator;
 import eu.europa.ted.efx.interfaces.SymbolResolver;
 import eu.europa.ted.efx.interfaces.TranslatorOptions;
 import eu.europa.ted.efx.interfaces.ValidatorGenerator;
-import eu.europa.ted.efx.exceptions.Construct;
 import eu.europa.ted.efx.exceptions.InvalidIdentifierException;
 import eu.europa.ted.efx.exceptions.InvalidUsageException;
 import eu.europa.ted.efx.model.Context;
@@ -83,11 +85,16 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
   private static final Logger logger = LoggerFactory.getLogger(EfxRulesTranslatorV2.class);
 
   /** The clauses of a rule that take a condition, as a type error names them. */
-  private static final Construct WHEN = Construct.of("'WHEN'", "condition");
-  private static final Construct ASSERT = Construct.of("'ASSERT'", "condition");
-  private static final Construct REPORT = Construct.of("'REPORT'", "condition");
-  private static final Construct OTHERWISE_ASSERT = Construct.of("'OTHERWISE ASSERT'", "condition");
-  private static final Construct OTHERWISE_REPORT = Construct.of("'OTHERWISE REPORT'", "condition");
+  private static final GrammarConstruct WHEN =
+      GrammarConstruct.of("'WHEN'", parameter("condition", INDICATOR));
+  private static final GrammarConstruct ASSERT =
+      GrammarConstruct.of("'ASSERT'", parameter("condition", INDICATOR));
+  private static final GrammarConstruct REPORT =
+      GrammarConstruct.of("'REPORT'", parameter("condition", INDICATOR));
+  private static final GrammarConstruct OTHERWISE_ASSERT =
+      GrammarConstruct.of("'OTHERWISE ASSERT'", parameter("condition", INDICATOR));
+  private static final GrammarConstruct OTHERWISE_REPORT =
+      GrammarConstruct.of("'OTHERWISE REPORT'", parameter("condition", INDICATOR));
 
   /**
    * The ValidatorGenerator is used to generate validation output from the intermediate model.
@@ -461,7 +468,7 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
    */
   @Override
   public void exitWhenClause(WhenClauseContext ctx) {
-    var condition = this.expressions.valueAs(ctx.expression(), BooleanExpression.class, WHEN);
+    var condition = this.expressions.valueOf(ctx.expression(), WHEN).booleanAt(0);
     var rule = this.ruleStack.peek(ValidationRule.class);
     var invertedCondition = this.script.composeLogicalNot(condition);
     rule.setCondition(condition, invertedCondition, this.combineWithOrParenthesized(rule.getExpression(), invertedCondition));
@@ -534,7 +541,7 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
    */
   @Override
   public void exitAssertClause(AssertClauseContext ctx) {
-    var test = this.expressions.valueAs(ctx.expression(), BooleanExpression.class, ASSERT);
+    var test = this.expressions.valueOf(ctx.expression(), ASSERT).booleanAt(0);
     var rule = this.ruleStack.pop(ValidationRule.class);
     var invertedCondition = rule.getInvertedCondition();
     rule.setExpression(test, invertedCondition == null ? test : this.combineWithOrParenthesized(test, invertedCondition));
@@ -543,7 +550,7 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
 
   @Override
   public void exitReportClause(ReportClauseContext ctx) {
-    var test = this.expressions.valueAs(ctx.expression(), BooleanExpression.class, REPORT);
+    var test = this.expressions.valueOf(ctx.expression(), REPORT).booleanAt(0);
     var rule = this.ruleStack.pop(ValidationRule.class);
     var invertedCondition = rule.getInvertedCondition();
     rule.setExpression(test, invertedCondition == null ? test : this.combineWithOrParenthesized(test, invertedCondition));
@@ -557,7 +564,7 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
   @Override
   public void exitOtherwiseAssertClause(OtherwiseAssertClauseContext ctx) {
     var test =
-        this.expressions.valueAs(ctx.expression(), BooleanExpression.class, OTHERWISE_ASSERT);
+        this.expressions.valueOf(ctx.expression(), OTHERWISE_ASSERT).booleanAt(0);
     var rule = this.ruleStack.pop(ValidationRule.class);
     var invertedCondition = rule.getInvertedCondition();
     rule.setExpression(test, invertedCondition == null ? test : this.combineWithOrParenthesized(test, invertedCondition));
@@ -567,7 +574,7 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
   @Override
   public void exitOtherwiseReportClause(OtherwiseReportClauseContext ctx) {
     var test =
-        this.expressions.valueAs(ctx.expression(), BooleanExpression.class, OTHERWISE_REPORT);
+        this.expressions.valueOf(ctx.expression(), OTHERWISE_REPORT).booleanAt(0);
     var rule = this.ruleStack.pop(ValidationRule.class);
     var invertedCondition = rule.getInvertedCondition();
     rule.setExpression(test, invertedCondition == null ? test : this.combineWithOrParenthesized(test, invertedCondition));

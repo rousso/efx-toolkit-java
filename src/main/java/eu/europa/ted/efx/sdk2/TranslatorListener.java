@@ -13,13 +13,15 @@
  */
 package eu.europa.ted.efx.sdk2;
 
+import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
+import static eu.europa.ted.efx.model.signatures.ParameterType.T_OR_T_SEQUENCE;
+
 import org.antlr.v4.runtime.BaseErrorListener;
 import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.ParseTree;
 
-import eu.europa.ted.efx.exceptions.Construct;
 import eu.europa.ted.efx.exceptions.TranslatorConfigurationException;
 import eu.europa.ted.efx.interfaces.ScriptGenerator;
 import eu.europa.ted.efx.interfaces.SymbolResolver;
@@ -50,7 +52,8 @@ import eu.europa.ted.efx.sdk2.EfxParser.StandardExpressionBlockContext;
 abstract class TranslatorListener extends EfxBaseListener {
 
   /** An expression block, as a type error names it. */
-  static final Construct EXPRESSION_BLOCK = Construct.of("Expression block", "expression");
+  static final GrammarConstruct EXPRESSION_BLOCK =
+      GrammarConstruct.of("Expression block", parameter("expression", T_OR_T_SEQUENCE));
 
   /**
    * Symbols are the field identifiers and node identifiers. The symbols map is used to resolve them
@@ -162,7 +165,8 @@ abstract class TranslatorListener extends EfxBaseListener {
    */
   @Override
   public void exitStandardExpressionBlock(final StandardExpressionBlockContext ctx) {
-    this.stack.push(this.expressions.valueOf(ctx.expression(), EXPRESSION_BLOCK));
+    this.stack.push(this.expressions.valueOf(ctx.expression(), EXPRESSION_BLOCK)
+        .at(0, TypedExpression.class));
   }
 
   // #region Parameter Declarations -------------------------------------------

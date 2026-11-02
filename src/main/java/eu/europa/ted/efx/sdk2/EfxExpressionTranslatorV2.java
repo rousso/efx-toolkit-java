@@ -13,6 +13,9 @@
  */
 package eu.europa.ted.efx.sdk2;
 
+import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
+import static eu.europa.ted.efx.model.signatures.ParameterType.T_OR_T_SEQUENCE;
+
 import java.util.Arrays;
 import java.util.Deque;
 import java.util.LinkedList;
@@ -25,7 +28,6 @@ import org.antlr.v4.runtime.tree.TerminalNode;
 
 import eu.europa.ted.eforms.sdk.component.SdkComponent;
 import eu.europa.ted.eforms.sdk.component.SdkComponentType;
-import eu.europa.ted.efx.exceptions.Construct;
 import eu.europa.ted.efx.exceptions.InvalidArgumentException;
 import eu.europa.ted.efx.exceptions.SymbolResolutionException;
 import eu.europa.ted.efx.interfaces.EfxExpressionTranslator;
@@ -33,6 +35,7 @@ import eu.europa.ted.efx.interfaces.ScriptGenerator;
 import eu.europa.ted.efx.interfaces.SymbolResolver;
 import eu.europa.ted.efx.model.expressions.Expression;
 import eu.europa.ted.efx.model.expressions.PathExpression;
+import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.expressions.scalar.StringPath;
 import eu.europa.ted.efx.model.variables.ParsedParameter;
 import eu.europa.ted.efx.sdk2.EfxParser.AttributeReferenceContext;
@@ -66,7 +69,8 @@ public class EfxExpressionTranslatorV2 extends TranslatorListener
   private static final String END_EXPRESSION_BLOCK = "}";
 
   /** The expression after {@code COMPUTE}, as a type error names it. */
-  private static final Construct COMPUTE = Construct.of("'COMPUTE'", "expression");
+  private static final GrammarConstruct COMPUTE =
+      GrammarConstruct.of("'COMPUTE'", parameter("expression", T_OR_T_SEQUENCE));
 
   /**
    * Creates the visitor that translates the expression, for each translation.
@@ -177,7 +181,8 @@ public class EfxExpressionTranslatorV2 extends TranslatorListener
   @Override
   public void exitSingleExpression(SingleExpressionContext ctx) {
     if (ctx.expression() != null) {
-      this.stack.push(this.expressions.valueOf(ctx.expression(), COMPUTE));
+      this.stack.push(
+          this.expressions.valueOf(ctx.expression(), COMPUTE).at(0, TypedExpression.class));
     }
     this.efxContext.pop();
   }

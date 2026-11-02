@@ -28,8 +28,8 @@ import eu.europa.ted.efx.util.EfxRegexValidator;
  *
  * <p>The pattern is a literal of the expression, not an argument: it reaches the script generator
  * as EFX text, which no translated argument can carry. So each use of the operator is a built-in
- * of its own, with the single overload {@code (TEXT) -> INDICATOR}, the way a user-defined function
- * is a built-in made from its declaration.</p>
+ * of its own, with the single overload {@code (TEXT) -> INDICATOR}, the way a function declared in
+ * EFX is a construct made from its declaration.</p>
  */
 public final class PatternMatch implements BuiltIn {
 

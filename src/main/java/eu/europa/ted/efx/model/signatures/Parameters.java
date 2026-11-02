@@ -67,6 +67,28 @@ public class Parameters<P extends Parameter> extends LinkedList<P> {
   }
 
   /**
+   * Gives the parameter list of a construct that the catalogue does not hold, such as the
+   * conditional, from fixed parameters.
+   *
+   * @param parameters the parameters, in order
+   * @return the list of those parameters, with no variadic tail
+   */
+  public static Parameters<BuiltInParameter> fixed(final BuiltInParameter... parameters) {
+    return new Parameters<>(List.of(parameters), null);
+  }
+
+  /**
+   * Gives the parameter list of a construct that the catalogue does not hold and that takes one or
+   * more arguments of the same parameter, such as a list.
+   *
+   * @param tail the parameter of every argument
+   * @return the list with no fixed parameters and that variadic tail
+   */
+  public static Parameters<BuiltInParameter> variadic(final BuiltInParameter tail) {
+    return new Parameters<>(List.of(), tail);
+  }
+
+  /**
    * @return the parameter of the variadic tail, if there is one
    */
   public Optional<P> getVariadic() {
@@ -92,6 +114,50 @@ public class Parameters<P extends Parameter> extends LinkedList<P> {
    */
   public P parameterAt(final int position) {
     return position < this.size() ? this.get(position) : this.variadic;
+  }
+
+  /**
+   * Says what a type error calls the argument at a position: the name of its parameter, numbered
+   * by position among the arguments of a variadic tail that takes more than one.
+   *
+   * @param position the position of an argument the parameter list {@link #takes}
+   * @param count the number of arguments of the call
+   * @return the role, such as "condition", or "item" and "2nd item" for the tail of a list
+   */
+  public String roleOf(final int position, final int count) {
+    final String name = this.parameterAt(position).getName();
+    return position < this.size() ? name
+        : numbered(name, position - this.size(), count - this.size());
+  }
+
+  /**
+   * Names one of several things of a kind by its position, or by the noun alone if it is the only
+   * one.
+   *
+   * @param noun the kind of thing, such as "argument"
+   * @param position its position among them, from 0
+   * @param count the number of them
+   * @return "argument" if there is one, otherwise "1st argument", "2nd argument" and so on
+   */
+  static String numbered(final String noun, final int position, final int count) {
+    return count == 1 ? noun : ordinal(position + 1) + " " + noun;
+  }
+
+  private static String ordinal(final int number) {
+    final int lastTwoDigits = number % 100;
+    if (lastTwoDigits >= 11 && lastTwoDigits <= 13) {
+      return number + "th";
+    }
+    switch (number % 10) {
+      case 1:
+        return number + "st";
+      case 2:
+        return number + "nd";
+      case 3:
+        return number + "rd";
+      default:
+        return number + "th";
+    }
   }
 
   /**
@@ -158,7 +224,7 @@ public class Parameters<P extends Parameter> extends LinkedList<P> {
     for (int position = 0; position < arguments.size(); position++) {
       ParameterType type = this.typeAt(position);
       values.add(type.convert(arguments.get(position)));
-      types.add(type.getExpressionType());
+      types.add(type.expressionTypeOf(arguments.get(position)));
     }
     return Match.of(new Arguments(values, types));
   }

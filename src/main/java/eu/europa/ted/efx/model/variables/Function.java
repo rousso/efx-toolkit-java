@@ -14,6 +14,7 @@
 package eu.europa.ted.efx.model.variables;
 
 import eu.europa.ted.efx.model.expressions.TypedExpression;
+import eu.europa.ted.efx.model.signatures.Construct;
 
 /**
  * A user-defined function declared in EFX source code.
@@ -28,6 +29,14 @@ public class Function extends Parametrised {
     public Function(String name, ParsedParameters parameters, TypedExpression expression) {
         super(name, expression.getDataType(), parameters);
         this.expression = expression;
+    }
+
+    /**
+     * @return the function as a call writes it, with its prefix: "Function '?greeting'"
+     */
+    @Override
+    public String describe() {
+        return Construct.functionName("?" + this.name);
     }
 
     @Override
