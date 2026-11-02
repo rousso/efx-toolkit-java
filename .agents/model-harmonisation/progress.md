@@ -3,14 +3,14 @@
 Single record of the work described in `plan.md` beside this file. Update it with every item: its status, its commit, its design doc, the numbers at that commit, and anything Yannis or the design thread decided.
 
 **Last updated:** 2026-11-02, by the implementing thread.
-**Next item:** H1, one parameter model.
+**Next item:** H2, one way to check every construct.
 
 ## Work items
 
 | Item | Status | Commit | Design doc | Notes |
 |---|---|---|---|---|
 | H0 Branch and baseline | done 2026-11-02 | the commit that adds this file | the plan, section 4 | `feature/efx2-model-harmonisation` off fcaedc8, the step 1 head, in rousso/efx-toolkit-java. The baseline below; `plan.md` is the approved Claude Doc, copied. No code change. |
-| H1 One parameter model | not started | | | |
+| H1 One parameter model | done 2026-11-02 | the commit that adds this row | [H1 One parameter model: design](https://claude.ai/artifact/M76L5whgmyNNYKAPCxW18k), endorsed by the design thread | `Parameter` is an interface in `model.signatures`, a name and a `ParameterType`; `BuiltInParameter` is the added class `Parameter`, renamed, without its `bind`; `Parameters<P extends Parameter> extends LinkedList<P>` is the matching list (variadic tail, `takes`, `match`, `bind`), no longer final, with a protected constructor; `ParsedParameter` implements `Parameter`; `ParsedParameters extends Parameters<ParsedParameter> implements ParsedEntity`, with its constructors, `toSet` and `toMap`. `Parameters.of` and `getFixed()` go; the visitor matches a declaration's arguments against `declaration.parameters` itself. `model.signatures` imports nothing from `model.variables`; sdk1, the template model, `ParsedArguments`, `CallStack` and the translators' push, peek and pop are untouched. 2,709 tests green, none added or changed in expectation; corpus identical to the H0 manifest. |
 | H2 One way to check every construct | not started | | | |
 | H3 One argument model | not started | | | |
 | H4 The answers slimmed | not started | | | |

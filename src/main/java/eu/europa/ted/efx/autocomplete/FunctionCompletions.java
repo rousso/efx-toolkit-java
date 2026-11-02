@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import eu.europa.ted.efx.model.signatures.BuiltIn;
-import eu.europa.ted.efx.model.signatures.Parameter;
+import eu.europa.ted.efx.model.signatures.BuiltInParameter;
 import eu.europa.ted.efx.model.signatures.ParameterType;
 import eu.europa.ted.efx.model.signatures.Signature;
 
@@ -110,8 +110,8 @@ public final class FunctionCompletions {
         return false;
       }
       for (int position = 0; position < this.arity(); position++) {
-        final Parameter own = this.fixed().get(position);
-        final Parameter other = longer.fixed().get(position);
+        final BuiltInParameter own = this.fixed().get(position);
+        final BuiltInParameter other = longer.fixed().get(position);
         if (!own.getName().equals(other.getName()) || !sameType(own.getType(), other.getType())) {
           return false;
         }
@@ -127,7 +127,7 @@ public final class FunctionCompletions {
     CompletionItem itemNamed(final String name, final int required) {
       final List<EfxFunctionParameter> parameters = new ArrayList<>();
       for (int position = 0; position < this.arity(); position++) {
-        final Parameter parameter = this.fixed().get(position);
+        final BuiltInParameter parameter = this.fixed().get(position);
         parameters.add(new EfxFunctionParameter(parameter.getName(),
             dataTypeOf(parameter.getType()), position >= required, false));
       }
@@ -137,18 +137,17 @@ public final class FunctionCompletions {
           dataTypeOf(this.signature.getResult()), List.copyOf(parameters));
     }
 
-    private List<Parameter> fixed() {
-      return this.signature.getParameters().getFixed();
+    private List<BuiltInParameter> fixed() {
+      return this.signature.getParameters();
     }
 
-    private Optional<Parameter> variadic() {
+    private Optional<BuiltInParameter> variadic() {
       return this.signature.getParameters().getVariadic();
     }
 
     private Stream<ParameterType> types() {
-      return Stream.concat(
-          Stream.concat(this.fixed().stream(), this.variadic().stream()).map(Parameter::getType),
-          Stream.of(this.signature.getResult()));
+      return Stream.concat(Stream.concat(this.fixed().stream(), this.variadic().stream())
+          .map(BuiltInParameter::getType), Stream.of(this.signature.getResult()));
     }
 
     private static boolean sameType(final ParameterType one, final ParameterType other) {

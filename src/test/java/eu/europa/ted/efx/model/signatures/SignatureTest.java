@@ -41,7 +41,7 @@ class SignatureTest {
         DateSequenceExpression.class, TimeSequenceExpression.class,
         DurationSequenceExpression.class);
     assertEquals(sequences, forms.stream()
-        .map(form -> form.getParameters().getFixed().get(0).getType().getExpressionType())
+        .map(form -> form.getParameters().get(0).getType().getExpressionType())
         .collect(Collectors.toList()));
     assertEquals(sequences, forms.stream()
         .map(form -> form.getResult().getExpressionType())

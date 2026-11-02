@@ -1,8 +1,8 @@
 package eu.europa.ted.efx.model.variables;
 
-import java.util.LinkedList;
 
 import eu.europa.ted.efx.model.ParsedEntity;
+import eu.europa.ted.efx.model.signatures.Parameters;
 import eu.europa.ted.efx.model.types.EfxDataType;
 
 import java.util.LinkedHashMap;
@@ -16,8 +16,11 @@ import java.util.stream.Collectors;
  *
  * Preserves parameter order (important for positional arguments) and provides conversions
  * to Set and Map representations.
+ *
+ * It carries what the generic {@link Parameters} cannot carry at run time: a class of its own, by
+ * which the call stack and the declarations find it, and the {@link ParsedEntity} role.
  */
-public class ParsedParameters extends LinkedList<ParsedParameter> implements ParsedEntity {
+public class ParsedParameters extends Parameters<ParsedParameter> implements ParsedEntity {
 
     public ParsedParameters() {
         super();

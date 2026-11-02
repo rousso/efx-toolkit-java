@@ -66,8 +66,8 @@ class CatalogueResultTypesTest {
   }
 
   private static int arity(final Signature signature) {
-    Parameters parameters = signature.getParameters();
-    return parameters.getFixed().size() + (parameters.getVariadic().isPresent() ? VARIADIC_TAIL : 0);
+    Parameters<BuiltInParameter> parameters = signature.getParameters();
+    return parameters.size() + (parameters.getVariadic().isPresent() ? VARIADIC_TAIL : 0);
   }
 
   private static TypedExpression placeholder(final ParameterType type) {

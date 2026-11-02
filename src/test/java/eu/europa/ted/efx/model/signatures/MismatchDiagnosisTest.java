@@ -14,7 +14,7 @@
 package eu.europa.ted.efx.model.signatures;
 
 import static eu.europa.ted.efx.model.signatures.Overload.overload;
-import static eu.europa.ted.efx.model.signatures.Parameter.parameter;
+import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
 import static eu.europa.ted.efx.model.signatures.Signature.signature;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

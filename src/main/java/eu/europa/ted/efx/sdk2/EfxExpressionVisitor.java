@@ -73,7 +73,6 @@ import eu.europa.ted.efx.model.signatures.Mismatch;
 import eu.europa.ted.efx.model.signatures.Mismatch.Rejection;
 import eu.europa.ted.efx.model.signatures.NumericFunctions;
 import eu.europa.ted.efx.model.signatures.ParameterType;
-import eu.europa.ted.efx.model.signatures.Parameters;
 import eu.europa.ted.efx.model.signatures.PatternMatch;
 import eu.europa.ted.efx.model.signatures.Resolution;
 import eu.europa.ted.efx.model.signatures.SequenceFunctions;
@@ -1551,7 +1550,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
         arguments.addArgument(operand.value());
       }
     }
-    final Match match = Parameters.of(declaration.parameters).match(arguments.getValues());
+    final Match match = declaration.parameters.match(arguments.getValues());
     if (match.isCountMismatch()) {
       throw InvalidArgumentException.argumentNumberMismatch(declaration,
           declaration.parameters.size(), arguments.getValues().size());

@@ -127,7 +127,7 @@ class CatalogueUnambiguityTest {
 
   private static int longestSignature(final BuiltIn builtIn) {
     return builtIn.getOverloads().stream()
-        .mapToInt(overload -> overload.getSignature().getParameters().getFixed().size())
+        .mapToInt(overload -> overload.getSignature().getParameters().size())
         .max().orElse(0);
   }
 

@@ -3,8 +3,10 @@ package eu.europa.ted.efx.model.variables;
 import java.util.Objects;
 
 import eu.europa.ted.efx.model.expressions.TypedExpression;
+import eu.europa.ted.efx.model.signatures.Parameter;
+import eu.europa.ted.efx.model.signatures.ParameterType;
 
-public class ParsedParameter extends Identifier {
+public class ParsedParameter extends Identifier implements Parameter {
 
   public final TypedExpression referenceExpression;
 
@@ -19,6 +21,19 @@ public class ParsedParameter extends Identifier {
 
   public Class<? extends TypedExpression> getParameterType() {
     return referenceExpression.getClass();
+  }
+
+  @Override
+  public String getName() {
+    return this.name;
+  }
+
+  /**
+   * A parameter declared in EFX takes what converts to the class of the expression that reads it.
+   */
+  @Override
+  public ParameterType getType() {
+    return ParameterType.of(this.getParameterType());
   }
 
   @Override

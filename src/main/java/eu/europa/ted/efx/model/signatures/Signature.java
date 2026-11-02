@@ -29,10 +29,10 @@ import eu.europa.ted.efx.model.types.EfxDataType;
  */
 public final class Signature {
 
-  private final Parameters parameters;
+  private final Parameters<BuiltInParameter> parameters;
   private final ParameterType result;
 
-  private Signature(final Parameters parameters, final ParameterType result) {
+  private Signature(final Parameters<BuiltInParameter> parameters, final ParameterType result) {
     this.parameters = parameters;
     this.result = result;
   }
@@ -43,14 +43,14 @@ public final class Signature {
    * @param parameters the fixed parameters, in order
    * @return a builder for the signature
    */
-  public static Builder signature(final Parameter... parameters) {
+  public static Builder signature(final BuiltInParameter... parameters) {
     return new Builder(List.of(parameters), null);
   }
 
   /**
    * @return the parameters, which arguments are matched against
    */
-  public Parameters getParameters() {
+  public Parameters<BuiltInParameter> getParameters() {
     return this.parameters;
   }
 
@@ -96,10 +96,10 @@ public final class Signature {
    */
   public static final class Builder {
 
-    private final List<Parameter> parameters;
-    private final Parameter variadic;
+    private final List<BuiltInParameter> parameters;
+    private final BuiltInParameter variadic;
 
-    private Builder(final List<Parameter> parameters, final Parameter variadic) {
+    private Builder(final List<BuiltInParameter> parameters, final BuiltInParameter variadic) {
       this.parameters = parameters;
       this.variadic = variadic;
     }
@@ -110,7 +110,7 @@ public final class Signature {
      * @param tail the parameter every argument of the tail matches
      * @return a builder for the signature with that tail
      */
-    public Builder variadic(final Parameter tail) {
+    public Builder variadic(final BuiltInParameter tail) {
       return new Builder(this.parameters, tail);
     }
 
@@ -121,7 +121,7 @@ public final class Signature {
      * @return the signature
      */
     public Signature returning(final ParameterType result) {
-      return new Signature(new Parameters(this.parameters, this.variadic), result);
+      return new Signature(new Parameters<>(this.parameters, this.variadic), result);
     }
   }
 }
