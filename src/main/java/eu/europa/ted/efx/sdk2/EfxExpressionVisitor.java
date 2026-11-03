@@ -37,10 +37,7 @@ import eu.europa.ted.efx.exceptions.SdkInconsistencyException;
 import eu.europa.ted.efx.exceptions.TranslatorConfigurationException;
 import eu.europa.ted.efx.exceptions.TypeMismatchException;
 import eu.europa.ted.efx.interfaces.ScriptGenerator;
-import eu.europa.ted.efx.interfaces.SymbolResolver;
-import eu.europa.ted.efx.model.CallStack;
 import eu.europa.ted.efx.model.Context;
-import eu.europa.ted.efx.model.ContextStack;
 import eu.europa.ted.efx.model.PrivacySetting;
 import eu.europa.ted.efx.model.expressions.Expression;
 import eu.europa.ted.efx.model.expressions.PathExpression;
@@ -127,12 +124,9 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * element is selected. Like every name the translator generates, it starts with a prefix that no
    * declaration may give.
    */
-  private static final String INDEX_VARIABLE = TranslationContext.RESERVED_PREFIX + "index";
+  private static final String INDEX_VARIABLE = Translation.RESERVED_PREFIX + "index";
 
-  private final SymbolResolver symbols;
-  private final ScriptGenerator script;
-  private final CallStack stack;
-  private final ContextStack efxContext;
+  private final Translation translation;
   private final Origin<TypedExpression> none;
   private final IteratorDeclarations iteratorDeclarations = new IteratorDeclarations();
 
@@ -158,24 +152,16 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    */
   private final Reads readsWithoutContext = new Reads();
 
-  EfxExpressionVisitor(final TranslationContext translation) {
-    this.symbols = translation.symbols();
-    this.script = translation.script();
-    this.stack = translation.stack();
-    this.efxContext = translation.efxContext();
+  EfxExpressionVisitor(final Translation translation) {
+    this.translation = translation;
     this.none = new Origin.None(this);
   }
 
-  SymbolResolver symbols() {
-    return this.symbols;
-  }
-
-  ScriptGenerator script() {
-    return this.script;
-  }
-
-  ContextStack efxContext() {
-    return this.efxContext;
+  /**
+   * @return the state of the translation whose expressions the visitor translates
+   */
+  Translation translation() {
+    return this.translation;
   }
 
   /**
@@ -183,11 +169,11 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    */
   @Override
   public Operand<?> visit(final ParseTree tree) {
-    this.stack.pushParserContext((ParserRuleContext) tree);
+    this.translation.stack().pushParserContext((ParserRuleContext) tree);
     try {
       return super.visit(tree);
     } finally {
-      this.stack.popParserContext();
+      this.translation.stack().popParserContext();
     }
   }
 
@@ -290,12 +276,12 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
 
   @Override
   public Operand<?> visitStringLiteral(final StringLiteralContext ctx) {
-    return this.operand(this.script.getStringLiteralEquivalent(ctx.getText()));
+    return this.operand(this.translation.script().getStringLiteralEquivalent(ctx.getText()));
   }
 
   @Override
   public Operand<?> visitNumericLiteral(final NumericLiteralContext ctx) {
-    return this.operand(this.script.getNumericLiteralEquivalent(ctx.getText()));
+    return this.operand(this.translation.script().getNumericLiteralEquivalent(ctx.getText()));
   }
 
   @Override
@@ -305,27 +291,29 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
 
   @Override
   public Operand<?> visitTrueBooleanLiteral(final TrueBooleanLiteralContext ctx) {
-    return this.operand(this.script.getBooleanEquivalent(true));
+    return this.operand(this.translation.script().getBooleanEquivalent(true));
   }
 
   @Override
   public Operand<?> visitFalseBooleanLiteral(final FalseBooleanLiteralContext ctx) {
-    return this.operand(this.script.getBooleanEquivalent(false));
+    return this.operand(this.translation.script().getBooleanEquivalent(false));
   }
 
   @Override
   public Operand<?> visitDateLiteral(final DateLiteralContext ctx) {
-    return this.operand(this.script.getDateLiteralEquivalent(ctx.DateLiteral().getText()));
+    return this.operand(
+        this.translation.script().getDateLiteralEquivalent(ctx.DateLiteral().getText()));
   }
 
   @Override
   public Operand<?> visitTimeLiteral(final TimeLiteralContext ctx) {
-    return this.operand(this.script.getTimeLiteralEquivalent(ctx.TimeLiteral().getText()));
+    return this.operand(
+        this.translation.script().getTimeLiteralEquivalent(ctx.TimeLiteral().getText()));
   }
 
   @Override
   public Operand<?> visitDurationLiteral(final DurationLiteralContext ctx) {
-    return this.operand(this.script.getDurationLiteralEquivalent(ctx.getText()));
+    return this.operand(this.translation.script().getDurationLiteralEquivalent(ctx.getText()));
   }
 
   // Parameter values: the arguments of a single expression
@@ -388,7 +376,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
     for (final ParserRuleContext literal : literals) {
       items.add(itemType.cast(this.visit(literal).value()));
     }
-    return this.operand(this.script.composeList(items, listType));
+    return this.operand(this.translation.script().composeList(items, listType));
   }
 
   // #endregion Literals ------------------------------------------------------
@@ -417,7 +405,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   public Operand<?> visitLinkedFieldReference(final LinkedFieldReferenceContext ctx) {
     final String fieldId = this.fieldIdOf(ctx);
     return new Operand<>(this.relativePathOfField(fieldId),
-        new FieldOrigin(this, ctx, fieldId, this.efxContext.symbol()));
+        new FieldOrigin(this, ctx, fieldId, this.translation.efxContext().symbol()));
   }
 
   /**
@@ -487,11 +475,11 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   @Override
   public Operand<?> visitVariableReference(final VariableReferenceContext ctx) {
     final String name = ctx.variableName.getText();
-    final Optional<TypedExpression> parameter = this.stack.getParameter(name);
+    final Optional<TypedExpression> parameter = this.translation.stack().getParameter(name);
     if (parameter.isPresent()) {
       return new Operand<>(parameter.get(), new VariableOrigin(this, ctx, name));
     }
-    final Optional<Variable> variable = this.stack.getVariable(name);
+    final Optional<Variable> variable = this.translation.stack().getVariable(name);
     if (variable.isPresent()) {
       return this.variableReference(ctx, variable.get());
     }
@@ -522,7 +510,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * @param context the context
    */
   void declareContextVariable(final Variable variable, final Context context) {
-    this.stack.declareIdentifier(variable);
+    this.translation.stack().declareIdentifier(variable);
     this.contextsOfVariables.put(variable, context);
   }
 
@@ -533,9 +521,9 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
 
   @Override
   public Operand<?> visitCodelistReference(final CodelistReferenceContext ctx) {
-    return this.operand(this.script.composeList(
-        this.symbols.expandCodelist(ctx.codelistName.getText()).stream()
-            .map(this.script::getStringLiteralFromUnquotedString)
+    return this.operand(this.translation.script().composeList(
+        this.translation.symbols().expandCodelist(ctx.codelistName.getText()).stream()
+            .map(this.translation.script()::getStringLiteralFromUnquotedString)
             .collect(Collectors.toList()),
         StringSequenceExpression.class));
   }
@@ -569,15 +557,15 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
       final LinkedFieldPropertyContext ctx) {
     this.requireWithholdable(reference, baseFieldId);
     if (ctx.PublicationDate() != null) {
-      return this.symbols.getPrivacySettingOfField(baseFieldId,
+      return this.translation.symbols().getPrivacySettingOfField(baseFieldId,
           PrivacySetting.PUBLICATION_DATE_FIELD);
     }
     if (ctx.JustificationCode() != null) {
-      return this.symbols.getPrivacySettingOfField(baseFieldId,
+      return this.translation.symbols().getPrivacySettingOfField(baseFieldId,
           PrivacySetting.JUSTIFICATION_CODE_FIELD);
     }
     if (ctx.JustificationDescription() != null) {
-      return this.symbols.getPrivacySettingOfField(baseFieldId,
+      return this.translation.symbols().getPrivacySettingOfField(baseFieldId,
           PrivacySetting.JUSTIFICATION_DESCRIPTION_FIELD);
     }
     throw TranslatorConfigurationException.unhandledLinkedFieldProperty(ctx.getText());
@@ -593,15 +581,16 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * @return the value of the field on that path
    */
   PathExpression fieldValueOf(final String fieldId, final PathExpression path) {
-    if (!this.symbols.isAttributeField(fieldId)) {
-      return this.script.composeFieldValueReference(path);
+    if (!this.translation.symbols().isAttributeField(fieldId)) {
+      return this.translation.script().composeFieldValueReference(path);
     }
-    final PathExpression attribute = this.script.composeFieldAttributeReference(
-        this.script.contextualizePath(
-            this.symbols.getAbsolutePathOfFieldWithoutTheAttribute(fieldId),
+    final PathExpression attribute = this.translation.script().composeFieldAttributeReference(
+        this.translation.script().contextualizePath(
+            this.translation.symbols().getAbsolutePathOfFieldWithoutTheAttribute(fieldId),
             this.absolutePathOfCurrentContext()),
-        this.symbols.getAttributeNameFromAttributeField(fieldId),
-        ScalarPath.fromFieldType.get(FieldTypes.fromString(this.symbols.getTypeOfField(fieldId))));
+        this.translation.symbols().getAttributeNameFromAttributeField(fieldId),
+        ScalarPath.fromFieldType.get(
+            FieldTypes.fromString(this.translation.symbols().getTypeOfField(fieldId))));
     return continuing(path, attribute);
   }
 
@@ -630,7 +619,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
     final String attribute = ctx.attributeName.getText();
     return this.visit(ctx.expression()).readFromField(ctx, GrammarConstruct.step("/@" + attribute),
         (field, origin) -> new Operand<>(continuing(field,
-            this.script.composeFieldAttributeReference(field, attribute, StringPath.class)),
+            this.translation.script().composeFieldAttributeReference(field, attribute,
+                StringPath.class)),
             origin.asValue()));
   }
 
@@ -638,8 +628,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   public Operand<?> visitRawValueExpression(final RawValueExpressionContext ctx) {
     return this.visit(ctx.expression()).readFromField(ctx,
         GrammarConstruct.step(":" + ctx.RawValue().getText()),
-        (field, origin) -> new Operand<>(this.script.composeFieldRawValueReference(field),
-            origin.asValue()));
+        (field, origin) -> new Operand<>(
+            this.translation.script().composeFieldRawValueReference(field), origin.asValue()));
   }
 
   @Override
@@ -679,9 +669,10 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   public Operand<?> visitFieldFromContextExpression(final FieldFromContextExpressionContext ctx) {
     final Context context = this.contextBefore(ctx.expression());
     final String fieldId = this.fieldIdOf(ctx.linkedFieldReference());
-    final PathExpression field = this.symbols.getRelativePathOfField(fieldId, context.symbol());
+    final PathExpression field = this.translation.symbols().getRelativePathOfField(fieldId,
+        context.symbol());
     return new Operand<>(this.joinReference(context.relativePath(), field),
-        new FieldOrigin(this, ctx, fieldId, this.efxContext.symbol()));
+        new FieldOrigin(this, ctx, fieldId, this.translation.efxContext().symbol()));
   }
 
   /**
@@ -691,7 +682,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   public Operand<?> visitNodeFromContextExpression(final NodeFromContextExpressionContext ctx) {
     final Context context = this.contextBefore(ctx.expression());
     final String nodeId = ctx.simpleNodeReference().NodeId().getText();
-    final PathExpression node = this.symbols.getRelativePathOfNode(nodeId, context.symbol());
+    final PathExpression node = this.translation.symbols().getRelativePathOfNode(nodeId,
+        context.symbol());
     return new Operand<>(this.joinReference(context.relativePath(), node),
         new NodeOrigin(this, nodeId));
   }
@@ -713,7 +705,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    */
   private PathExpression joinReference(final PathExpression context,
       final PathExpression reference) {
-    return continuing(context, this.script.joinPaths(context, reference));
+    return continuing(context, this.translation.script().joinPaths(context, reference));
   }
 
   // #endregion Steps after a reference ---------------------------------------
@@ -754,7 +746,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
         this.resolved(GrammarConstruct.PREDICATE, List.of(new Operand<>(path, origin), test),
             List.of(path, test.value()), position -> condition,
             TypeMismatchException::cannotConvert).getArguments().booleanAt(1));
-    this.readsInContexts.remove(this.efxContext.pop());
+    this.readsInContexts.remove(this.translation.efxContext().pop());
     return new Operand<>(selected, origin);
   }
 
@@ -770,7 +762,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
       final ExpressionContext condition) {
     final Operand<?> test = this.visit(condition);
     return this.unreadable(GrammarConstruct.PREDICATE, List.of(sequence, test),
-        List.of(sequence.expression(), test.value()), 0, this.stack.peekParserContext());
+        List.of(sequence.expression(), test.value()), 0,
+        this.translation.stack().peekParserContext());
   }
 
   /**
@@ -819,7 +812,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
     final Reads reads = this.readsInCurrentContext();
     final int readsBefore = reads.all();
     final Operand<?> index = this.visit(position);
-    final ParserRuleContext indexed = this.stack.peekParserContext();
+    final ParserRuleContext indexed = this.translation.stack().peekParserContext();
     final NumericExpression number = this.resolved(GrammarConstruct.INDEX_IN_VALUE,
         List.of(sequence, index), List.of(given, index.value()),
         at -> at == 0 ? indexed : position, TypeMismatchException::cannotConvert)
@@ -850,7 +843,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
       final Class<T> type, final boolean readForEachElement) {
     return readForEachElement
         ? this.elementAtBoundPosition(sequence, sequenceType, position, type)
-        : this.script.composeIndexer(sequence, position, type);
+        : this.translation.script().composeIndexer(sequence, position, type);
   }
 
   /**
@@ -869,14 +862,16 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   private <T extends ScalarExpression> T elementAtBoundPosition(final SequenceExpression sequence,
       final Class<? extends SequenceExpression> sequenceType, final NumericExpression position,
       final Class<T> type) {
-    final IteratorListExpression binding =
-        this.script.composeIteratorList(List.of(this.script.composeIteratorExpression(
-            this.script.composeVariableDeclaration(INDEX_VARIABLE, NumericExpression.class),
+    final IteratorListExpression binding = this.translation.script().composeIteratorList(
+        List.of(this.translation.script().composeIteratorExpression(
+            this.translation.script().composeVariableDeclaration(INDEX_VARIABLE,
+                NumericExpression.class),
             TypedExpression.from(position, NumericSequenceExpression.class))));
-    final T element = this.script.composeIndexer(sequence,
-        this.script.composeVariableReference(INDEX_VARIABLE, NumericExpression.class), type);
+    final T element = this.translation.script().composeIndexer(sequence,
+        this.translation.script().composeVariableReference(INDEX_VARIABLE, NumericExpression.class),
+        type);
     return this.inParentheses(
-        this.script.composeForExpression(binding, element, sequenceType), type);
+        this.translation.script().composeForExpression(binding, element, sequenceType), type);
   }
 
   /**
@@ -891,10 +886,10 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    */
   Operand<?> lookUp(final String name, final ParserRuleContext reference,
       final ExpressionContext key) {
-    final Dictionary dictionary = this.stack.getDictionary(name);
+    final Dictionary dictionary = this.translation.stack().getDictionary(name);
     this.readsInCurrentContext().countReadOfRoot();
     return new Operand<>(
-        this.script.composeDictionaryLookup(dictionary.name,
+        this.translation.script().composeDictionaryLookup(dictionary.name,
             this.valueOf(key, GrammarConstruct.of("Dictionary '" + reference.getText() + "'",
                 parameter("key", ParameterType.TEXT))).stringAt(0),
             dictionary.type),
@@ -907,7 +902,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    */
   private PathExpression relativePathOfField(final String fieldId) {
     this.countReadOfCurrentContext();
-    return this.symbols.getRelativePathOfField(fieldId, this.efxContext.symbol());
+    return this.translation.symbols().getRelativePathOfField(fieldId,
+        this.translation.efxContext().symbol());
   }
 
   /**
@@ -916,7 +912,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    */
   private PathExpression relativePathOfNode(final String nodeId) {
     this.countReadOfCurrentContext();
-    return this.symbols.getRelativePathOfNode(nodeId, this.efxContext.symbol());
+    return this.translation.symbols().getRelativePathOfNode(nodeId,
+        this.translation.efxContext().symbol());
   }
 
   /**
@@ -924,7 +921,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    */
   private PathExpression absolutePathOfCurrentContext() {
     this.countReadOfCurrentContext();
-    return this.efxContext.peek().absolutePath();
+    return this.translation.efxContext().peek().absolutePath();
   }
 
   /**
@@ -933,7 +930,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    */
   private PathExpression absolutePathOfField(final String fieldId) {
     this.readsInCurrentContext().countReadOfRoot();
-    return this.symbols.getRelativePathOfField(fieldId, NO_CONTEXT);
+    return this.translation.symbols().getRelativePathOfField(fieldId, NO_CONTEXT);
   }
 
   /**
@@ -942,7 +939,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    */
   private PathExpression absolutePathOfNode(final String nodeId) {
     this.readsInCurrentContext().countReadOfRoot();
-    return this.symbols.getRelativePathOfNode(nodeId, NO_CONTEXT);
+    return this.translation.symbols().getRelativePathOfNode(nodeId, NO_CONTEXT);
   }
 
   /**
@@ -956,14 +953,15 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * @return the reads made in the current context, or where no context is declared
    */
   private Reads readsInCurrentContext() {
-    return this.efxContext.isEmpty() ? this.readsWithoutContext
-        : this.readsInContexts.computeIfAbsent(this.efxContext.peek(), context -> new Reads());
+    return this.translation.efxContext().isEmpty() ? this.readsWithoutContext
+        : this.readsInContexts.computeIfAbsent(this.translation.efxContext().peek(),
+            context -> new Reads());
   }
 
   private <T extends TypedExpression> T inParentheses(final TypedExpression expression,
       final Class<T> type) {
-    return this.script.composeParenthesizedExpression(TypedExpression.from(expression, type),
-        type);
+    return this.translation.script().composeParenthesizedExpression(
+        TypedExpression.from(expression, type), type);
   }
 
   /**
@@ -1129,7 +1127,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   private <T extends TypedExpression> T conditional(final ParsedArguments<?> parts,
       final Class<T> type) {
     final ParameterType join = ParameterType.of(type);
-    return this.script.composeConditionalExpression(parts.booleanAt(0),
+    return this.translation.script().composeConditionalExpression(parts.booleanAt(0),
         type.cast(join.convert(parts.at(1, TypedExpression.class))),
         type.cast(join.convert(parts.at(2, TypedExpression.class))), type);
   }
@@ -1142,22 +1140,22 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
     final List<ExpressionContext> items = ctx.expression();
     final ParsedArguments<?> list = this.checked(GrammarConstruct.LIST, this.operandsOf(ctx),
         position -> position == 0 ? ctx : items.get(position));
-    return this.operand(this.script.composeList(list.getArgumentValues().stream()
+    return this.operand(this.translation.script().composeList(list.getArgumentValues().stream()
         .map(ScalarExpression.class::cast).collect(Collectors.toList()),
         this.sequenceTypeOf(list.scalarAt(0))));
   }
 
   @Override
   public Operand<?> visitQuantifiedExpression(final QuantifiedExpressionContext ctx) {
-    this.stack.pushStackFrame();
+    this.translation.stack().pushStackFrame();
     final IteratorListExpression iterators = this.iteratorsOf(ctx.iteratorList());
     final BooleanExpression condition = this.valueOf(ctx.expression(),
         GrammarConstruct.of("Quantifier '" + (ctx.Every() != null ? ctx.Every() : ctx.Some())
             .getText() + "'", parameter("condition", ParameterType.INDICATOR))).booleanAt(0);
     final BooleanExpression quantified = ctx.Every() != null
-        ? this.script.composeAllSatisfy(iterators, condition)
-        : this.script.composeAnySatisfies(iterators, condition);
-    this.stack.popStackFrame();
+        ? this.translation.script().composeAllSatisfy(iterators, condition)
+        : this.translation.script().composeAnySatisfies(iterators, condition);
+    this.translation.stack().popStackFrame();
     return this.operand(quantified);
   }
 
@@ -1167,22 +1165,26 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    */
   @Override
   public Operand<?> visitSequenceFromIteration(final SequenceFromIterationContext ctx) {
-    this.stack.pushStackFrame();
+    this.translation.stack().pushStackFrame();
     final IteratorListExpression iterators = this.iteratorsOf(ctx.iteratorList());
     final TypedExpression body =
         this.valueOf(ctx.expression(), GrammarConstruct.ITERATION).at(0, TypedExpression.class);
     final SequenceExpression iteration =
         this.iteration(iterators, body, ctx.Distinct() != null, this.sequenceTypeOf(body));
-    this.stack.popStackFrame();
+    this.translation.stack().popStackFrame();
     return this.operand(iteration);
   }
 
   private <T extends SequenceExpression> T iteration(final IteratorListExpression iterators,
       final TypedExpression body, final boolean distinct, final Class<T> sequenceType) {
     final T result = body instanceof ScalarExpression
-        ? this.script.composeForExpression(iterators, (ScalarExpression) body, sequenceType)
-        : this.script.composeForExpression(iterators, (SequenceExpression) body, sequenceType);
-    return distinct ? this.script.composeDistinctValuesFunction(result, sequenceType) : result;
+        ? this.translation.script().composeForExpression(iterators, (ScalarExpression) body,
+            sequenceType)
+        : this.translation.script().composeForExpression(iterators, (SequenceExpression) body,
+            sequenceType);
+    return distinct
+        ? this.translation.script().composeDistinctValuesFunction(result, sequenceType)
+        : result;
   }
 
   /**
@@ -1194,7 +1196,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
     for (final IteratorExpressionContext iterator : ctx.iteratorExpression()) {
       iterators.add(iterator.accept(this.iteratorDeclarations));
     }
-    return this.script.composeIteratorList(iterators);
+    return this.translation.script().composeIteratorList(iterators);
   }
 
   /**
@@ -1219,11 +1221,11 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
 
     private <T extends ScalarExpression> IteratorExpression iterator(final String name,
         final Class<T> variableType, final SequenceExpression source) {
-      final ScriptGenerator script = EfxExpressionVisitor.this.script;
+      final ScriptGenerator script = EfxExpressionVisitor.this.translation.script();
       final Variable variable = new Variable(name,
           script.composeVariableDeclaration(name, variableType), source,
           script.composeVariableReference(name, variableType));
-      EfxExpressionVisitor.this.stack.declareIdentifier(variable);
+      EfxExpressionVisitor.this.translation.stack().declareIdentifier(variable);
       return script.composeIteratorExpression(variable.declarationExpression, source);
     }
 
@@ -1233,7 +1235,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
      */
     @Override
     public IteratorExpression visitContextIterator(final ContextIteratorContext ctx) {
-      final ScriptGenerator script = EfxExpressionVisitor.this.script;
+      final ScriptGenerator script = EfxExpressionVisitor.this.translation.script();
       final Context context = EfxExpressionVisitor.this
           .contextOf(ctx.getRuleContext(ParserRuleContext.class, 0));
       final PathExpression path = context.relativePath();
@@ -1266,7 +1268,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   @Override
   public Operand<?> visitFieldIsWithheldProperty(final FieldIsWithheldPropertyContext ctx) {
     final String fieldId = this.fieldIdOf(ctx.fieldMention());
-    return this.operand(this.script.composeLogicalAnd(
+    return this.operand(this.translation.script().composeLogicalAnd(
         this.composeWasWithheldCondition(fieldId, this.privacyCodeOf(ctx, fieldId)),
         this.composeStillWithheldCondition(fieldId)));
   }
@@ -1274,8 +1276,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   @Override
   public Operand<?> visitFieldIsWithholdableProperty(
       final FieldIsWithholdablePropertyContext ctx) {
-    return this.operand(
-        this.script.getBooleanEquivalent(this.isWithholdable(this.fieldIdOf(ctx.fieldMention()))));
+    return this.operand(this.translation.script().getBooleanEquivalent(
+        this.isWithholdable(this.fieldIdOf(ctx.fieldMention()))));
   }
 
   /**
@@ -1284,11 +1286,12 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   @Override
   public Operand<?> visitFieldIsDisclosedProperty(final FieldIsDisclosedPropertyContext ctx) {
     final String fieldId = this.fieldIdOf(ctx.fieldMention());
-    return this.operand(this.script.composeLogicalAnd(
-        this.script.composeLogicalAnd(
+    return this.operand(this.translation.script().composeLogicalAnd(
+        this.translation.script().composeLogicalAnd(
             this.composeWasWithheldCondition(fieldId, this.privacyCodeOf(ctx, fieldId)),
-            this.script.composeLogicalNot(this.composeStillWithheldCondition(fieldId))),
-        this.script.composeLogicalNot(this.composeIsMaskedCondition(fieldId))));
+            this.translation.script().composeLogicalNot(
+                this.composeStillWithheldCondition(fieldId))),
+        this.translation.script().composeLogicalNot(this.composeIsMaskedCondition(fieldId))));
   }
 
   /**
@@ -1297,7 +1300,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   @Override
   public Operand<?> visitFieldIsMaskedProperty(final FieldIsMaskedPropertyContext ctx) {
     final String fieldId = this.fieldIdOf(ctx.fieldMention());
-    return this.operand(this.script.composeLogicalAnd(
+    return this.operand(this.translation.script().composeLogicalAnd(
         this.composeWasWithheldCondition(fieldId, this.privacyCodeOf(ctx, fieldId)),
         this.composeIsMaskedCondition(fieldId)));
   }
@@ -1305,8 +1308,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   @Override
   public Operand<?> visitFieldPrivacyCodeProperty(final FieldPrivacyCodePropertyContext ctx) {
     final String fieldId = this.fieldIdOf(ctx.fieldMention());
-    return this.operand(
-        this.script.getStringLiteralFromUnquotedString(this.privacyCodeOf(ctx, fieldId)));
+    return this.operand(this.translation.script().getStringLiteralFromUnquotedString(
+        this.privacyCodeOf(ctx, fieldId)));
   }
 
   /**
@@ -1314,7 +1317,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    */
   private String privacyCodeOf(final ParserRuleContext property, final String fieldId) {
     this.requireWithholdable(property, fieldId);
-    return this.symbols.getPrivacyCodeOfField(fieldId);
+    return this.translation.symbols().getPrivacyCodeOfField(fieldId);
   }
 
   /**
@@ -1336,66 +1339,70 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * @return whether the field can be withheld from publication: whether it has a privacy code
    */
   private boolean isWithholdable(final String fieldId) {
-    final String privacyCode = this.symbols.getPrivacyCodeOfField(fieldId);
+    final String privacyCode = this.translation.symbols().getPrivacyCodeOfField(fieldId);
     return privacyCode != null && !privacyCode.isEmpty();
   }
 
   private BooleanExpression composeWasWithheldCondition(final String fieldId,
       final String privacyCode) {
     final String privacyCodeFieldId =
-        this.symbols.getPrivacySettingOfField(fieldId, PrivacySetting.PRIVACY_CODE_FIELD);
+        this.translation.symbols().getPrivacySettingOfField(fieldId,
+            PrivacySetting.PRIVACY_CODE_FIELD);
     if (privacyCodeFieldId == null) {
       throw SdkInconsistencyException.missingPrivacyCodeField(fieldId);
     }
-    return this.script.composeComparisonOperation(
-        new StringExpression(this.script.composeFieldValueReference(
+    return this.translation.script().composeComparisonOperation(
+        new StringExpression(this.translation.script().composeFieldValueReference(
             this.relativePathOfField(privacyCodeFieldId)).getScript()),
-        "==", this.script.getStringLiteralFromUnquotedString(privacyCode));
+        "==", this.translation.script().getStringLiteralFromUnquotedString(privacyCode));
   }
 
   private BooleanExpression composeStillWithheldCondition(final String fieldId) {
     final String publicationDateFieldId =
-        this.symbols.getPrivacySettingOfField(fieldId, PrivacySetting.PUBLICATION_DATE_FIELD);
+        this.translation.symbols().getPrivacySettingOfField(fieldId,
+            PrivacySetting.PUBLICATION_DATE_FIELD);
     if (publicationDateFieldId == null) {
       throw SdkInconsistencyException.missingPublicationDateField(fieldId);
     }
     final PathExpression publicationDate = this.relativePathOfField(publicationDateFieldId);
-    return this.script.composeParenthesizedExpression(
-        this.script.composeLogicalOr(
-            this.script.composeLogicalNot(this.script.composeExistsCondition(publicationDate)),
-            this.script.composeComparisonOperation(
-                new DateExpression(
-                    this.script.composeFieldValueReference(publicationDate).getScript()),
-                ">", this.script.getCurrentDate())),
+    return this.translation.script().composeParenthesizedExpression(
+        this.translation.script().composeLogicalOr(
+            this.translation.script().composeLogicalNot(
+                this.translation.script().composeExistsCondition(publicationDate)),
+            this.translation.script().composeComparisonOperation(
+                new DateExpression(this.translation.script()
+                    .composeFieldValueReference(publicationDate).getScript()),
+                ">", this.translation.script().getCurrentDate())),
         BooleanExpression.class);
   }
 
   private BooleanExpression composeIsMaskedCondition(final String fieldId) {
     final PathExpression fieldValue =
-        this.script.composeFieldValueReference(this.relativePathOfField(fieldId));
-    return this.script.composeComparisonOperation(
+        this.translation.script().composeFieldValueReference(this.relativePathOfField(fieldId));
+    return this.translation.script().composeComparisonOperation(
         TypedExpression.from(fieldValue, ScalarExpression.class), "==",
-        this.literalOf(this.symbols.getPrivacyMask(fieldId), fieldValue.getDataType()));
+        this.literalOf(this.translation.symbols().getPrivacyMask(fieldId),
+            fieldValue.getDataType()));
   }
 
   private ScalarExpression literalOf(final String value,
       final Class<? extends EfxDataType> type) {
     if (EfxDataType.Number.class.isAssignableFrom(type)) {
-      return this.script.getNumericLiteralEquivalent(value);
+      return this.translation.script().getNumericLiteralEquivalent(value);
     }
     if (EfxDataType.Date.class.isAssignableFrom(type)) {
-      return this.script.getDateLiteralEquivalent(value);
+      return this.translation.script().getDateLiteralEquivalent(value);
     }
     if (EfxDataType.Time.class.isAssignableFrom(type)) {
-      return this.script.getTimeLiteralEquivalent(value);
+      return this.translation.script().getTimeLiteralEquivalent(value);
     }
     if (EfxDataType.Duration.class.isAssignableFrom(type)) {
-      return this.script.getDurationLiteralEquivalent(value);
+      return this.translation.script().getDurationLiteralEquivalent(value);
     }
     if (EfxDataType.Boolean.class.isAssignableFrom(type)) {
-      return this.script.getBooleanEquivalent(Boolean.parseBoolean(value));
+      return this.translation.script().getBooleanEquivalent(Boolean.parseBoolean(value));
     }
-    return this.script.getStringLiteralFromUnquotedString(value);
+    return this.translation.script().getStringLiteralFromUnquotedString(value);
   }
 
   // #endregion Field properties ----------------------------------------------
@@ -1409,13 +1416,14 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   @Override
   public Operand<?> visitFunctionInvocation(final FunctionInvocationContext ctx) {
     final String name = ctx.functionName.getText();
-    final eu.europa.ted.efx.model.variables.Function function = this.stack.getFunction(name);
+    final eu.europa.ted.efx.model.variables.Function function = this.translation.stack()
+        .getFunction(name);
     final ParsedArguments<?> arguments = this.invocationOf(ctx, function, ctx.argumentList());
     final ParameterType result = EfxTypeLattice.isSequence(function.dataType)
         ? ParameterType.T_SEQUENCE
         : ParameterType.T;
     return new Operand<>(
-        this.script.composeFunctionInvocation(name, arguments.getArgumentValues(),
+        this.translation.script().composeFunctionInvocation(name, arguments.getArgumentValues(),
             this.bindingOf(result, function.expression).getExpressionType()),
         new IdentifierOrigin<>(this, ctx, name));
   }
@@ -1981,7 +1989,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
       throw InvalidUsageException.templateOnlyFunction(call, builtIn.getName());
     }
     return this.operand(builtIn.compose(
-        this.resolved(builtIn, operands, arguments, position -> call, typeError), this.script));
+        this.resolved(builtIn, operands, arguments, position -> call, typeError),
+        this.translation.script()));
   }
 
   /**

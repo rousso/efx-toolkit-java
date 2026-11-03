@@ -27,7 +27,7 @@ import eu.europa.ted.efx.model.ContextStack;
  * <p>A translator creates one for each translation, so that the declarations and contexts of one
  * translation are not visible in the next.</p>
  */
-final class TranslationContext {
+final class Translation {
 
   /**
    * What the names the translator generates start with, such as the variable an index binds its
@@ -41,7 +41,7 @@ final class TranslationContext {
   private final CallStack stack = new CallStack(TypeChecker.V2, RESERVED_PREFIX);
   private final ContextStack efxContext;
 
-  TranslationContext(final SymbolResolver symbols, final ScriptGenerator script) {
+  Translation(final SymbolResolver symbols, final ScriptGenerator script) {
     this.symbols = symbols;
     this.script = script;
     this.efxContext = new ContextStack(symbols);
@@ -61,5 +61,16 @@ final class TranslationContext {
 
   ContextStack efxContext() {
     return this.efxContext;
+  }
+
+  /**
+   * Gives the translation that follows this one: the same symbols and script generator, with an
+   * empty call stack and no context, so that the declarations and contexts of this translation are
+   * not visible in it.
+   *
+   * @return the next translation
+   */
+  Translation next() {
+    return new Translation(this.symbols, this.script);
   }
 }

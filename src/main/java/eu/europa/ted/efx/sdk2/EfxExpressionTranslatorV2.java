@@ -75,7 +75,7 @@ public class EfxExpressionTranslatorV2 extends TranslatorListener
   /**
    * Creates the visitor that translates the expression, for each translation.
    */
-  private final Function<TranslationContext, EfxExpressionVisitor> visitors;
+  private final Function<Translation, EfxExpressionVisitor> visitors;
 
   /**
    * The values of the declared parameters, in the order of their declarations, for the translation
@@ -100,13 +100,13 @@ public class EfxExpressionTranslatorV2 extends TranslatorListener
    */
   EfxExpressionTranslatorV2(final SymbolResolver symbolResolver,
       final ScriptGenerator scriptGenerator, final BaseErrorListener errorListener,
-      final Function<TranslationContext, EfxExpressionVisitor> visitors) {
+      final Function<Translation, EfxExpressionVisitor> visitors) {
     super(symbolResolver, scriptGenerator, errorListener);
     this.visitors = visitors;
   }
 
   @Override
-  EfxExpressionVisitor visitorOf(final TranslationContext translation) {
+  EfxExpressionVisitor visitorOf(final Translation translation) {
     return this.visitors.apply(translation);
   }
 
@@ -121,12 +121,21 @@ public class EfxExpressionTranslatorV2 extends TranslatorListener
     return this.getTranslatedScript();
   }
 
+  /**
+   * Translates the value passed for a parameter of the expression. The value is translated in a
+   * translation of its own, which {@link Translation#next} gives, so that the declarations and
+   * contexts of the expression are not visible in it.
+   *
+   * @param parameterValue the value passed, as EFX
+   * @param parameterType the expression class of the parameter
+   * @return the translated value
+   */
   private <T extends Expression> T translateArgument(final String parameterValue,
       final Class<T> parameterType) {
     final EfxParser parser = this.parserOf(
         CharStreams.fromString(BEGIN_EXPRESSION_BLOCK + parameterValue + END_EXPRESSION_BLOCK));
     final EfxExpressionVisitor visitor =
-        new EfxExpressionVisitor(new TranslationContext(this.symbols, this.script));
+        new EfxExpressionVisitor(this.translation.next());
     return Expression.instantiate(visitor.visit(parser.parameterValue()).value().getScript(),
         parameterType);
   }
@@ -137,9 +146,9 @@ public class EfxExpressionTranslatorV2 extends TranslatorListener
    * @return The translated code, trimmed
    */
   private String getTranslatedScript() {
-    final StringBuilder sb = new StringBuilder(this.stack.size() * 100);
-    while (!this.stack.empty()) {
-      sb.insert(0, '\n').insert(0, this.stack.pop(Expression.class).getScript());
+    final StringBuilder sb = new StringBuilder(this.translation.stack().size() * 100);
+    while (!this.translation.stack().empty()) {
+      sb.insert(0, '\n').insert(0, this.translation.stack().pop(Expression.class).getScript());
     }
     return sb.toString().trim();
   }
@@ -150,21 +159,21 @@ public class EfxExpressionTranslatorV2 extends TranslatorListener
   public void enterSingleExpression(SingleExpressionContext ctx) {
     final TerminalNode fieldContext = ctx.FieldId();
     if (fieldContext != null) {
-      this.efxContext.pushFieldContext(fieldContext.getText());
+      this.translation.efxContext().pushFieldContext(fieldContext.getText());
     } else {
       final TerminalNode nodeContext = ctx.NodeId();
       if (nodeContext != null) {
-        this.efxContext.pushNodeContext(nodeContext.getText());
+        this.translation.efxContext().pushNodeContext(nodeContext.getText());
       } else {
         final TerminalNode alias = ctx.Identifier();
         if (alias != null) {
-          String fieldId = this.symbols.getFieldIdFromAlias(alias.getText());
+          String fieldId = this.translation.symbols().getFieldIdFromAlias(alias.getText());
           if (fieldId != null) {
-            this.efxContext.pushFieldContext(fieldId);
+            this.translation.efxContext().pushFieldContext(fieldId);
           } else {
-            String nodeId = this.symbols.getNodeIdFromAlias(alias.getText());
+            String nodeId = this.translation.symbols().getNodeIdFromAlias(alias.getText());
             if (nodeId != null) {
-              this.efxContext.pushNodeContext(nodeId);
+              this.translation.efxContext().pushNodeContext(nodeId);
             } else {
               throw SymbolResolutionException.unknownSymbol(alias.getText());
             }
@@ -181,10 +190,10 @@ public class EfxExpressionTranslatorV2 extends TranslatorListener
   @Override
   public void exitSingleExpression(SingleExpressionContext ctx) {
     if (ctx.expression() != null) {
-      this.stack.push(
+      this.translation.stack().push(
           this.expressions.valueOf(ctx.expression(), COMPUTE).at(0, TypedExpression.class));
     }
-    this.efxContext.pop();
+    this.translation.efxContext().pop();
   }
 
   /**
@@ -197,11 +206,11 @@ public class EfxExpressionTranslatorV2 extends TranslatorListener
   public void exitSelection(final SelectionContext ctx) {
     final AttributeReferenceContext attribute = ctx.attributeReference();
     if (attribute != null) {
-      this.stack.push(this.script.composeFieldAttributeReference(
+      this.translation.stack().push(this.translation.script().composeFieldAttributeReference(
           this.pathOf(attribute.fieldContext()), attribute.attributeName.getText(),
           StringPath.class));
     } else {
-      this.stack.push(this.pathOf(ctx.getRuleContext(ParserRuleContext.class, 0)));
+      this.translation.stack().push(this.pathOf(ctx.getRuleContext(ParserRuleContext.class, 0)));
     }
   }
 
@@ -231,7 +240,7 @@ public class EfxExpressionTranslatorV2 extends TranslatorListener
     final ParsedParameter parameter = new ParsedParameter(parameterName,
         this.translateArgument(this.expressionArguments.pop(),
             EfxExpressionVisitor.typeOf(ctx.typeDeclaration())));
-    this.stack.declareIdentifier(parameter);
+    this.translation.stack().declareIdentifier(parameter);
   }
 
   // #endregion Parameter Declarations ----------------------------------------

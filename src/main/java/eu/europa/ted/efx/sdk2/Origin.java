@@ -293,7 +293,7 @@ abstract class Origin<E extends TypedExpression> {
     @Override
     Optional<Context> contextOf(final PathExpression path) {
       return Optional.of(new FieldContext(this.fieldId,
-          this.translator.symbols().getAbsolutePathOfField(this.fieldId), path));
+          this.translator.translation().symbols().getAbsolutePathOfField(this.fieldId), path));
     }
 
     @Override
@@ -304,18 +304,19 @@ abstract class Origin<E extends TypedExpression> {
 
     @Override
     void pushElementContext() {
-      this.translator.efxContext().pushFieldContext(this.fieldId);
+      this.translator.translation().efxContext().pushFieldContext(this.fieldId);
     }
 
     @Override
     PathExpression filter(final PathExpression path, final BooleanExpression predicate) {
-      return this.translator.script().composeFieldReferenceWithPredicate(path, predicate);
+      return this.translator.translation().script().composeFieldReferenceWithPredicate(path,
+          predicate);
     }
 
     @Override
     Optional<TypeMismatchException> sequenceError(final Diagnosis diagnosis) {
       if (FieldTypes.TEXT_MULTILINGUAL.getName()
-          .equals(this.translator.symbols().getTypeOfField(this.fieldId))) {
+          .equals(this.translator.translation().symbols().getTypeOfField(this.fieldId))) {
         return Optional.of(
             TypeMismatchException.fieldIsMultilingual(this.reference, diagnosis, this.fieldId));
       }
@@ -340,17 +341,18 @@ abstract class Origin<E extends TypedExpression> {
     @Override
     Optional<Context> contextOf(final PathExpression path) {
       return Optional.of(new NodeContext(this.nodeId,
-          this.translator.symbols().getAbsolutePathOfNode(this.nodeId), path));
+          this.translator.translation().symbols().getAbsolutePathOfNode(this.nodeId), path));
     }
 
     @Override
     void pushElementContext() {
-      this.translator.efxContext().pushNodeContext(this.nodeId);
+      this.translator.translation().efxContext().pushNodeContext(this.nodeId);
     }
 
     @Override
     PathExpression filter(final PathExpression path, final BooleanExpression predicate) {
-      return this.translator.script().composeNodeReferenceWithPredicate(path, predicate);
+      return this.translator.translation().script().composeNodeReferenceWithPredicate(path,
+          predicate);
     }
   }
 
@@ -424,10 +426,11 @@ abstract class Origin<E extends TypedExpression> {
     @Override
     TypedExpression valueOf(final PathExpression variable) {
       final String symbol = this.context.symbol();
-      if (this.context.isNodeContext() || this.translator.symbols().isAttributeField(symbol)) {
+      if (this.context.isNodeContext()
+          || this.translator.translation().symbols().isAttributeField(symbol)) {
         return variable;
       }
-      return this.translator.script().composeFieldValueReference(variable);
+      return this.translator.translation().script().composeFieldValueReference(variable);
     }
 
     @Override
@@ -447,10 +450,10 @@ abstract class Origin<E extends TypedExpression> {
       final String symbol = this.context.symbol();
       if (this.context.isNodeContext()) {
         return Optional.of(new NodeContext(symbol,
-            this.translator.symbols().getAbsolutePathOfNode(symbol), variable));
+            this.translator.translation().symbols().getAbsolutePathOfNode(symbol), variable));
       }
       return Optional.of(new FieldContext(symbol,
-          this.translator.symbols().getAbsolutePathOfField(symbol), variable));
+          this.translator.translation().symbols().getAbsolutePathOfField(symbol), variable));
     }
   }
 
