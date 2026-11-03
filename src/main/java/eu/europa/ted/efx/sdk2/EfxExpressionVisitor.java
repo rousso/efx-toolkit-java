@@ -71,11 +71,11 @@ import eu.europa.ted.efx.model.signatures.Construct;
 import eu.europa.ted.efx.model.signatures.ConversionFunctions;
 import eu.europa.ted.efx.model.signatures.DateTimeFunctions;
 import eu.europa.ted.efx.model.signatures.LogicalOperators;
+import eu.europa.ted.efx.model.signatures.Match;
 import eu.europa.ted.efx.model.signatures.Mismatch;
-import eu.europa.ted.efx.model.signatures.Mismatch.Rejection;
-import eu.europa.ted.efx.model.signatures.ParsedArguments;
 import eu.europa.ted.efx.model.signatures.NumericFunctions;
 import eu.europa.ted.efx.model.signatures.ParameterType;
+import eu.europa.ted.efx.model.signatures.ParsedArguments;
 import eu.europa.ted.efx.model.signatures.PatternMatch;
 import eu.europa.ted.efx.model.signatures.Resolution;
 import eu.europa.ted.efx.model.signatures.SequenceFunctions;
@@ -1487,7 +1487,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
     }
     final Diagnosis diagnosis = mismatch.diagnose();
     final Optional<TypeMismatchException> noValue =
-        operands.get(mismatch.getRejection().getPosition()).errorOf(Rejection.Kind.PATH, diagnosis);
+        operands.get(mismatch.getRejection().getPosition()).errorOf(Match.Kind.PATH, diagnosis);
     if (noValue.isPresent()) {
       throw noValue.get();
     }
@@ -2041,7 +2041,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   private TypeMismatchException errorOf(final Mismatch mismatch, final List<Operand<?>> operands,
       final IntFunction<ParserRuleContext> where,
       final BiFunction<ParserRuleContext, Diagnosis, TypeMismatchException> typeError) {
-    final Rejection rejection = mismatch.getRejection();
+    final Match rejection = mismatch.getRejection();
     final Diagnosis diagnosis = mismatch.diagnose();
     return operands.get(rejection.getPosition()).errorOf(rejection.getKind(), diagnosis)
         .orElseGet(() -> typeError.apply(where.apply(rejection.getPosition()), diagnosis));

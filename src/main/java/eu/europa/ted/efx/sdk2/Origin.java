@@ -28,7 +28,7 @@ import eu.europa.ted.efx.model.Context.NodeContext;
 import eu.europa.ted.efx.model.expressions.PathExpression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.expressions.scalar.BooleanExpression;
-import eu.europa.ted.efx.model.signatures.Mismatch.Rejection;
+import eu.europa.ted.efx.model.signatures.Match;
 import eu.europa.ted.efx.model.types.FieldTypes;
 import eu.europa.ted.efx.sdk2.EfxParser.ExpressionContext;
 
@@ -156,7 +156,7 @@ abstract class Origin<E extends TypedExpression> {
    * @param diagnosis what the construct was given, and what it requires
    * @return the error of the reference, or nothing if the construct gives its own
    */
-  final Optional<TypeMismatchException> errorOf(final Rejection.Kind kind,
+  final Optional<TypeMismatchException> errorOf(final Match.Kind kind,
       final Diagnosis diagnosis) {
     switch (kind) {
       case CARDINALITY:

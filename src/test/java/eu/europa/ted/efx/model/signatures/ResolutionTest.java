@@ -282,7 +282,7 @@ class ResolutionTest {
   }
 
   private static List<Integer> positions(final Mismatch mismatch) {
-    return mismatch.getRejections().stream().map(Mismatch.Rejection::getPosition)
+    return mismatch.getRejections().stream().map(Match::getPosition)
         .collect(Collectors.toList());
   }
 }

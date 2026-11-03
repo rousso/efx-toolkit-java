@@ -110,7 +110,7 @@ class TypeVariableBindingTest {
     assertFalse(resolution.isResolved());
     assertEquals(List.of(1), resolution.getMismatch().getRejections().stream()
         .filter(rejection -> rejection.getParameters() == overload.getSignature().getParameters())
-        .map(Mismatch.Rejection::getPosition)
+        .map(Match::getPosition)
         .collect(Collectors.toList()));
   }
 

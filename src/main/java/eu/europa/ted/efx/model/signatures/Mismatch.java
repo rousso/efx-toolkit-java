@@ -24,18 +24,19 @@ import eu.europa.ted.efx.model.expressions.TypedExpression;
  * Why no parameter list of a {@link Construct} takes the arguments of a call: either none takes
  * that many arguments, or each one that does rejects one of them.
  *
- * <p>A mismatch keeps the arguments and, for each parameter list of the right arity, the argument
- * it rejected. Its {@link #getRejection rejection} tells the translator which argument to report,
- * and its {@link #diagnose diagnosis} what the error says about it.</p>
+ * <p>A mismatch keeps the arguments and, for each parameter list that takes their number, the
+ * rejected {@link Match}: the parameter list, the argument it rejected and why. Its
+ * {@link #getRejection rejection} tells the translator which argument to report, and its
+ * {@link #diagnose diagnosis} what the error says about it.</p>
  */
 public final class Mismatch {
 
   private final Construct construct;
   private final List<TypedExpression> arguments;
-  private final List<Rejection> rejections;
+  private final List<Match> rejections;
 
   Mismatch(final Construct construct, final List<? extends TypedExpression> arguments,
-      final List<Rejection> rejections) {
+      final List<Match> rejections) {
     this.construct = construct;
     this.arguments = List.copyOf(arguments);
     this.rejections = List.copyOf(rejections);
@@ -54,9 +55,8 @@ public final class Mismatch {
   public static Mismatch unreadable(final Construct construct,
       final List<? extends TypedExpression> arguments, final int position) {
     final Parameters<?> parameters = construct.getParameterLists().get(0);
-    final Match match = Match.rejected(position, parameters.parameterAt(position).getType(),
-        arguments.get(position));
-    return new Mismatch(construct, arguments, List.of(new Rejection(parameters, match)));
+    return new Mismatch(construct, arguments, List.of(Match.rejected(parameters, position,
+        parameters.parameterAt(position).getType(), arguments.get(position))));
   }
 
   /**
@@ -69,9 +69,9 @@ public final class Mismatch {
   }
 
   /**
-   * @return for each parameter list that takes that many arguments, the argument it rejected
+   * @return for each parameter list that takes that many arguments, the rejected match
    */
-  public List<Rejection> getRejections() {
+  public List<Match> getRejections() {
     return this.rejections;
   }
 
@@ -86,12 +86,12 @@ public final class Mismatch {
    * @return the rejection to report
    * @throws IllegalStateException if the mismatch is the number of arguments
    */
-  public Rejection getRejection() {
+  public Match getRejection() {
     return this.rejections.stream()
         .min(Comparator
-            .comparing((Rejection rejection) -> rejection.getKind() != Rejection.Kind.CARDINALITY)
-            .thenComparing(Comparator.comparingInt(Rejection::getPosition).reversed())
-            .thenComparing(Rejection::getKind))
+            .comparing((Match rejection) -> rejection.getKind() != Match.Kind.CARDINALITY)
+            .thenComparing(Comparator.comparingInt(Match::getPosition).reversed())
+            .thenComparing(Match::getKind))
         .orElseThrow(() -> new IllegalStateException(this.toString()));
   }
 
@@ -106,7 +106,7 @@ public final class Mismatch {
    * @throws IllegalStateException if the mismatch is the number of arguments
    */
   public Diagnosis diagnose() {
-    final Rejection reported = this.getRejection();
+    final Match reported = this.getRejection();
     final List<String> requirements = this.rejections.stream()
         .filter(rejection -> rejection.getPosition() == reported.getPosition()
             && rejection.getKind() == reported.getKind())
@@ -133,64 +133,5 @@ public final class Mismatch {
   static String describe(final List<? extends TypedExpression> arguments) {
     return arguments.stream().map(argument -> argument.getClass().getSimpleName())
         .collect(Collectors.joining(", "));
-  }
-
-  /**
-   * The argument a parameter list rejected: the one {@link Parameters#match} reports.
-   */
-  public static final class Rejection {
-
-    private final Parameters<?> parameters;
-    private final Match match;
-
-    Rejection(final Parameters<?> parameters, final Match match) {
-      this.parameters = parameters;
-      this.match = match;
-    }
-
-    /**
-     * @return the parameter list that rejected the argument, as the construct declares it
-     */
-    public Parameters<?> getParameters() {
-      return this.parameters;
-    }
-
-    /**
-     * @return the position of the rejected argument
-     */
-    public int getPosition() {
-      return this.match.getPosition();
-    }
-
-    /**
-     * @return the parameter type the argument had to convert to: the one declared at that
-     *         position, with {@code T} bound by the arguments of the call if they bind it
-     */
-    public ParameterType getRequired() {
-      return this.match.getRequired();
-    }
-
-    /**
-     * @return what is wrong with the argument
-     */
-    public Kind getKind() {
-      return this.match.getKind();
-    }
-
-    /**
-     * What is wrong with a rejected argument, in the order in which a mismatch reports them at
-     * the same position.
-     */
-    public enum Kind {
-
-      /** A sequence where a single value of its primitive is required. */
-      CARDINALITY,
-
-      /** A value of another primitive than the one required. */
-      PRIMITIVE,
-
-      /** A value where a path is required, or a node, which has no value, where a value is. */
-      PATH
-    }
   }
 }

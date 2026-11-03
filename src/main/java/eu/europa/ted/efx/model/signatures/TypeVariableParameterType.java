@@ -19,7 +19,6 @@ import java.util.Optional;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.expressions.scalar.ScalarExpression;
 import eu.europa.ted.efx.model.expressions.sequence.SequenceExpression;
-import eu.europa.ted.efx.model.signatures.Mismatch.Rejection;
 import eu.europa.ted.efx.model.types.EfxDataType;
 import eu.europa.ted.efx.model.types.EfxTypeLattice;
 
@@ -124,8 +123,8 @@ enum TypeVariableParameterType implements ParameterType {
    * An unbound type variable rejects only the argument that cannot bind it, a node.
    */
   @Override
-  public Rejection.Kind rejectionKindOf(final TypedExpression argument) {
-    return Rejection.Kind.PATH;
+  public Match.Kind rejectionKindOf(final TypedExpression argument) {
+    return Match.Kind.PATH;
   }
 
   /**

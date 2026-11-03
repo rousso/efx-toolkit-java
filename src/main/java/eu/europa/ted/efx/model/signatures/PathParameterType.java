@@ -16,7 +16,6 @@ package eu.europa.ted.efx.model.signatures;
 import eu.europa.ted.efx.interfaces.TypeChecker;
 import eu.europa.ted.efx.model.expressions.PathExpression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
-import eu.europa.ted.efx.model.signatures.Mismatch.Rejection;
 
 /**
  * A parameter type that takes a reference as a path rather than as its value: any path, or a path
@@ -49,8 +48,8 @@ final class PathParameterType implements ParameterType {
   }
 
   @Override
-  public Rejection.Kind rejectionKindOf(final TypedExpression argument) {
-    return Rejection.Kind.PATH;
+  public Match.Kind rejectionKindOf(final TypedExpression argument) {
+    return Match.Kind.PATH;
   }
 
   @Override

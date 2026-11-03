@@ -15,7 +15,6 @@ package eu.europa.ted.efx.model.signatures;
 
 import eu.europa.ted.efx.interfaces.TypeChecker;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
-import eu.europa.ted.efx.model.signatures.Mismatch.Rejection;
 import eu.europa.ted.efx.model.types.EfxTypeTokenLookup;
 
 /**
@@ -45,12 +44,12 @@ final class ConcreteParameterType implements ParameterType {
    * with this one: if they convert, only the argument's cardinality is wrong.
    */
   @Override
-  public Rejection.Kind rejectionKindOf(final TypedExpression argument) {
+  public Match.Kind rejectionKindOf(final TypedExpression argument) {
     return T.boundBy(argument)
         .map(value -> TypeChecker.V2.canConvert(value.getExpressionType(), this.expressionType)
-            ? Rejection.Kind.CARDINALITY
-            : Rejection.Kind.PRIMITIVE)
-        .orElse(Rejection.Kind.PATH);
+            ? Match.Kind.CARDINALITY
+            : Match.Kind.PRIMITIVE)
+        .orElse(Match.Kind.PATH);
   }
 
   /**

@@ -177,7 +177,7 @@ public interface ParameterType {
    * @param argument a translated argument this parameter type does not {@link #accepts accept}
    * @return the kind of the rejection
    */
-  Mismatch.Rejection.Kind rejectionKindOf(TypedExpression argument);
+  Match.Kind rejectionKindOf(TypedExpression argument);
 
   /**
    * Says what this parameter type takes, as a type error says it: a type in quotes, as a

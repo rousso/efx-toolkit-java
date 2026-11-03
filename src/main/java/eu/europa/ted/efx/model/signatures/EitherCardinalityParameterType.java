@@ -16,7 +16,6 @@ package eu.europa.ted.efx.model.signatures;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.expressions.scalar.ScalarExpression;
 import eu.europa.ted.efx.model.expressions.sequence.SequenceExpression;
-import eu.europa.ted.efx.model.signatures.Mismatch.Rejection;
 import eu.europa.ted.efx.model.types.EfxDataType;
 
 /**
@@ -58,7 +57,7 @@ final class EitherCardinalityParameterType implements ParameterType {
    * no value.
    */
   @Override
-  public Rejection.Kind rejectionKindOf(final TypedExpression argument) {
+  public Match.Kind rejectionKindOf(final TypedExpression argument) {
     return this.sequence.rejectionKindOf(argument);
   }
 

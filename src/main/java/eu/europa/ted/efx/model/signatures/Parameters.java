@@ -26,7 +26,6 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import eu.europa.ted.efx.model.expressions.TypedExpression;
-import eu.europa.ted.efx.model.signatures.Mismatch.Rejection;
 import eu.europa.ted.efx.model.types.EfxDataType;
 
 /**
@@ -48,7 +47,7 @@ public class Parameters<P extends Parameter> extends LinkedList<P> {
    * then by position.
    */
   private static final Comparator<Match> REPORTING_ORDER =
-      Comparator.comparing((Match rejection) -> rejection.getKind() == Rejection.Kind.CARDINALITY)
+      Comparator.comparing((Match rejection) -> rejection.getKind() == Match.Kind.CARDINALITY)
           .thenComparingInt(Match::getPosition);
 
   private final P variadic;
@@ -161,9 +160,9 @@ public class Parameters<P extends Parameter> extends LinkedList<P> {
   }
 
   /**
-   * Matches the arguments of a call: checks their number, binds {@code T} by the argument at its
-   * first position, checks each argument against its parameter, and converts the arguments to the
-   * expression classes of their parameters.
+   * Matches the arguments of a call that the parameter list {@link #takes}: binds {@code T} by the
+   * argument at its first position, checks each argument against its parameter, and converts the
+   * arguments to the expression classes of their parameters.
    *
    * <p>Every argument is checked before one is reported, and a wrong primitive or path is reported
    * before a wrong cardinality: the first argument of another primitive than its parameter's, or
@@ -171,20 +170,22 @@ public class Parameters<P extends Parameter> extends LinkedList<P> {
    * where a single value is required. A call wrong in both ways is thus reported by its primitive,
    * whichever of its arguments is the sequence.</p>
    *
-   * @param arguments the translated arguments of the call
-   * @return the converted arguments, or the reason they do not match: their number, a {@code T}
-   *         that the argument at its first position cannot bind, or the argument to report
+   * @param arguments the translated arguments of the call, as many as the list takes
+   * @return the converted arguments, or the argument to report: the one at the first position of
+   *         a {@code T} it cannot bind, or the one the reporting order puts first
+   * @throws IllegalArgumentException if the parameter list does not take that many arguments
    */
   public Match match(final List<? extends TypedExpression> arguments) {
     if (!this.takes(arguments.size())) {
-      return Match.countMismatch();
+      throw new IllegalArgumentException(this + " does not take " + arguments.size()
+          + " arguments");
     }
     Optional<Parameters<?>> bound = this.boundTo(arguments);
     if (bound.isEmpty()) {
       int position = this.typeVariablePosition();
-      return Match.rejected(position, this.parameterAt(position).getType(), arguments.get(position));
+      return Match.rejected(this, position, this.typeAt(position), arguments.get(position));
     }
-    return bound.get().matchBound(arguments);
+    return bound.get().matchBound(this, arguments);
   }
 
   /**
@@ -209,23 +210,32 @@ public class Parameters<P extends Parameter> extends LinkedList<P> {
     return this.all().anyMatch(parameter -> parameter.getType().isTypeVariable());
   }
 
-  private Match matchBound(final List<? extends TypedExpression> arguments) {
+  /**
+   * Matches the arguments against these parameters, with {@code T} bound.
+   *
+   * @param declared the parameter list as the construct declares it, which the match reports
+   * @param arguments the translated arguments of the call
+   * @return the converted arguments, or the argument to report
+   */
+  private Match matchBound(final Parameters<?> declared,
+      final List<? extends TypedExpression> arguments) {
     return IntStream.range(0, arguments.size())
         .filter(position -> !this.typeAt(position).accepts(arguments.get(position)))
-        .mapToObj(
-            position -> Match.rejected(position, this.typeAt(position), arguments.get(position)))
+        .mapToObj(position -> Match.rejected(declared, position, this.typeAt(position),
+            arguments.get(position)))
         .min(REPORTING_ORDER)
-        .orElseGet(() -> this.converted(arguments));
+        .orElseGet(() -> this.converted(declared, arguments));
   }
 
-  private Match converted(final List<? extends TypedExpression> arguments) {
+  private Match converted(final Parameters<?> declared,
+      final List<? extends TypedExpression> arguments) {
     List<P> parameters = new ArrayList<>();
     List<TypedExpression> values = new ArrayList<>();
     for (int position = 0; position < arguments.size(); position++) {
       parameters.add(this.parameterAt(position));
       values.add(this.typeAt(position).convert(arguments.get(position)));
     }
-    return Match.of(new ParsedArguments<>(parameters, values));
+    return Match.of(declared, new ParsedArguments<>(parameters, values));
   }
 
   private ParameterType typeAt(final int position) {

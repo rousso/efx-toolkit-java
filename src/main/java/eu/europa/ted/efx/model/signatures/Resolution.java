@@ -33,22 +33,19 @@ import eu.europa.ted.efx.model.expressions.TypedExpression;
  *
  * <p>A built-in translates a resolved call with {@link BuiltIn#compose}; any other construct is
  * translated where it is written, from the converted arguments.</p>
+ *
+ * <p>Each outcome is a class of its own that holds only its own facts: a resolved call the
+ * {@link Match} of the parameter list that takes the arguments, an unresolved one its mismatch.
+ * Each answers every question, and one about a fact of the other outcome with an
+ * {@link IllegalStateException}.</p>
  */
-public final class Resolution {
+public abstract class Resolution {
 
-  private final Parameters<?> parameters;
-  private final ParsedArguments<?> arguments;
-  private final Mismatch mismatch;
-
-  private Resolution(final Parameters<?> parameters, final ParsedArguments<?> arguments,
-      final Mismatch mismatch) {
-    this.parameters = parameters;
-    this.arguments = arguments;
-    this.mismatch = mismatch;
-  }
+  private Resolution() {}
 
   /**
-   * Checks the arguments of a call of a construct.
+   * Checks the arguments of a call of a construct against each of its parameter lists that takes
+   * their number.
    *
    * @param construct the construct called
    * @param arguments the translated arguments of the call
@@ -58,24 +55,26 @@ public final class Resolution {
    */
   static Resolution of(final Construct construct,
       final List<? extends TypedExpression> arguments) {
-    List<Resolution> applicable = new ArrayList<>();
-    List<Mismatch.Rejection> rejections = new ArrayList<>();
+    final List<Resolution> applicable = new ArrayList<>();
+    final List<Match> rejections = new ArrayList<>();
     for (Parameters<?> parameters : construct.getParameterLists()) {
-      Match match = parameters.match(arguments);
-      if (match.isMatched()) {
-        applicable.add(new Resolution(parameters, match.getArguments(), null));
-      } else if (!match.isCountMismatch()) {
-        rejections.add(new Mismatch.Rejection(parameters, match));
+      if (parameters.takes(arguments.size())) {
+        final Match match = parameters.match(arguments);
+        if (match.isMatched()) {
+          applicable.add(new Resolved(match));
+        } else {
+          rejections.add(match);
+        }
       }
     }
     if (applicable.size() > 1) {
       throw TranslatorConfigurationException.ambiguousOverloads(construct.describe(),
-          applicable.stream().map(resolution -> resolution.parameters.toString())
+          applicable.stream().map(resolution -> resolution.getParameters().toString())
               .collect(Collectors.joining(", ", "[", "]")),
           Mismatch.describe(arguments));
     }
     if (applicable.isEmpty()) {
-      return new Resolution(null, null, new Mismatch(construct, arguments, rejections));
+      return new Unresolved(new Mismatch(construct, arguments, rejections));
     }
     return applicable.get(0);
   }
@@ -83,42 +82,81 @@ public final class Resolution {
   /**
    * @return {@code true} if a parameter list takes the arguments
    */
-  public boolean isResolved() {
-    return this.mismatch == null;
-  }
+  public abstract boolean isResolved();
 
   /**
    * @return the parameter list that takes the arguments, as the construct declares it
    * @throws IllegalStateException if none does
    */
-  public Parameters<?> getParameters() {
-    this.requireResolved();
-    return this.parameters;
-  }
+  public abstract Parameters<?> getParameters();
 
   /**
    * @return the arguments, converted to the parameters of the parameter list that takes them
    * @throws IllegalStateException if none does
    */
-  public ParsedArguments<?> getArguments() {
-    this.requireResolved();
-    return this.arguments;
-  }
+  public abstract ParsedArguments<?> getArguments();
 
   /**
    * @return why no parameter list takes the arguments
    * @throws IllegalStateException if one does
    */
-  public Mismatch getMismatch() {
-    if (this.isResolved()) {
+  public abstract Mismatch getMismatch();
+
+  private static final class Resolved extends Resolution {
+
+    private final Match match;
+
+    private Resolved(final Match match) {
+      this.match = match;
+    }
+
+    @Override
+    public boolean isResolved() {
+      return true;
+    }
+
+    @Override
+    public Parameters<?> getParameters() {
+      return this.match.getParameters();
+    }
+
+    @Override
+    public ParsedArguments<?> getArguments() {
+      return this.match.getArguments();
+    }
+
+    @Override
+    public Mismatch getMismatch() {
       throw new IllegalStateException("The call is resolved");
     }
-    return this.mismatch;
   }
 
-  private void requireResolved() {
-    if (!this.isResolved()) {
+  private static final class Unresolved extends Resolution {
+
+    private final Mismatch mismatch;
+
+    private Unresolved(final Mismatch mismatch) {
+      this.mismatch = mismatch;
+    }
+
+    @Override
+    public boolean isResolved() {
+      return false;
+    }
+
+    @Override
+    public Parameters<?> getParameters() {
       throw new IllegalStateException(this.mismatch.toString());
+    }
+
+    @Override
+    public ParsedArguments<?> getArguments() {
+      throw new IllegalStateException(this.mismatch.toString());
+    }
+
+    @Override
+    public Mismatch getMismatch() {
+      return this.mismatch;
     }
   }
 }

@@ -37,7 +37,6 @@ import eu.europa.ted.efx.model.expressions.scalar.StringExpression;
 import eu.europa.ted.efx.model.expressions.scalar.StringLiteral;
 import eu.europa.ted.efx.model.expressions.sequence.DateSequencePath;
 import eu.europa.ted.efx.model.expressions.sequence.StringSequencePath;
-import eu.europa.ted.efx.model.signatures.Mismatch.Rejection;
 
 /**
  * Tests that the rejection a mismatch reports does not depend on the order of the overloads, nor on
@@ -82,9 +81,9 @@ class MismatchDiagnosisTest {
   @Test
   void testFurthestPositionAndCardinalityWin_WhateverTheOrderOfTheOverloads() {
     for (List<Overload> overloads : orders(NUMBER_THEN_TEXT, TEXT_THEN_TEXT, TEXT_THEN_NUMBER)) {
-      Rejection rejection = rejection(overloads, TEXT, REPEATABLE_TEXT_FIELD);
+      Match rejection = rejection(overloads, TEXT, REPEATABLE_TEXT_FIELD);
       assertEquals(1, rejection.getPosition(), overloads::toString);
-      assertEquals(Rejection.Kind.CARDINALITY, rejection.getKind(), overloads::toString);
+      assertEquals(Match.Kind.CARDINALITY, rejection.getKind(), overloads::toString);
       assertEquals(StringExpression.class, rejection.getRequired().getExpressionType(),
           overloads::toString);
     }
@@ -93,8 +92,8 @@ class MismatchDiagnosisTest {
   @Test
   void testPrimitiveWinsOverPath_WhateverTheOrderOfTheOverloads() {
     for (List<Overload> overloads : orders(NUMBER, NODES)) {
-      Rejection rejection = rejection(overloads, TEXT);
-      assertEquals(Rejection.Kind.PRIMITIVE, rejection.getKind(), overloads::toString);
+      Match rejection = rejection(overloads, TEXT);
+      assertEquals(Match.Kind.PRIMITIVE, rejection.getKind(), overloads::toString);
       assertEquals(NumericExpression.class, rejection.getRequired().getExpressionType(),
           overloads::toString);
     }
@@ -102,15 +101,15 @@ class MismatchDiagnosisTest {
 
   @Test
   void testNodeWhereAValueIsRequired_IsAPathFailure() {
-    assertEquals(Rejection.Kind.PATH, rejection(List.of(NUMBER), NODE).getKind());
+    assertEquals(Match.Kind.PATH, rejection(List.of(NUMBER), NODE).getKind());
   }
 
   @Test
   void testSequenceWhereASingleValueOfItsPrimitiveIsRequired_IsACardinalityFailure() {
-    Rejection rejection = ComparisonOperators.EQUAL.resolve(List.of(REPEATABLE_TEXT_FIELD, TEXT))
+    Match rejection = ComparisonOperators.EQUAL.resolve(List.of(REPEATABLE_TEXT_FIELD, TEXT))
         .getMismatch().getRejection();
     assertEquals(0, rejection.getPosition());
-    assertEquals(Rejection.Kind.CARDINALITY, rejection.getKind());
+    assertEquals(Match.Kind.CARDINALITY, rejection.getKind());
   }
 
   @Test
@@ -118,10 +117,10 @@ class MismatchDiagnosisTest {
     for (List<TypedExpression> arguments : List.<List<TypedExpression>>of(
         List.of(REPEATABLE_TEXT_FIELD, NUMBER_LITERAL),
         List.of(NUMBER_LITERAL, REPEATABLE_TEXT_FIELD))) {
-      Rejection rejection =
+      Match rejection =
           ComparisonOperators.EQUAL.resolve(arguments).getMismatch().getRejection();
       assertEquals(1, rejection.getPosition(), arguments::toString);
-      assertEquals(Rejection.Kind.PRIMITIVE, rejection.getKind(), arguments::toString);
+      assertEquals(Match.Kind.PRIMITIVE, rejection.getKind(), arguments::toString);
     }
   }
 
@@ -129,10 +128,10 @@ class MismatchDiagnosisTest {
   void testSequenceOfDatesMinusADate_IsACardinalityFailure() {
     // The date - date overload fits but for the cardinality of the left operand, so that is
     // reported, not that the right operand must be a duration.
-    Rejection rejection = ArithmeticOperators.MINUS.resolve(List.of(REPEATABLE_DATE_FIELD, DATE))
+    Match rejection = ArithmeticOperators.MINUS.resolve(List.of(REPEATABLE_DATE_FIELD, DATE))
         .getMismatch().getRejection();
     assertEquals(0, rejection.getPosition());
-    assertEquals(Rejection.Kind.CARDINALITY, rejection.getKind());
+    assertEquals(Match.Kind.CARDINALITY, rejection.getKind());
     assertEquals(DateExpression.class, rejection.getRequired().getExpressionType());
   }
 
@@ -151,7 +150,7 @@ class MismatchDiagnosisTest {
     assertThrows(IllegalStateException.class, mismatch::getRejection);
   }
 
-  private static Rejection rejection(final List<Overload> overloads,
+  private static Match rejection(final List<Overload> overloads,
       final TypedExpression... arguments) {
     Resolution resolution = new TestBuiltIn(overloads).resolve(List.of(arguments));
     assertFalse(resolution.isResolved());

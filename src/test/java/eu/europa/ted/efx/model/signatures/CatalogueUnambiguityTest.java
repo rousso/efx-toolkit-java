@@ -149,7 +149,12 @@ class CatalogueUnambiguityTest {
   private static List<Overload> applicable(final BuiltIn builtIn,
       final List<TypedExpression> arguments) {
     return builtIn.getOverloads().stream()
-        .filter(overload -> overload.getSignature().getParameters().match(arguments).isMatched())
+        .filter(overload -> applies(overload.getSignature().getParameters(), arguments))
         .collect(Collectors.toList());
+  }
+
+  private static boolean applies(final Parameters<?> parameters,
+      final List<TypedExpression> arguments) {
+    return parameters.takes(arguments.size()) && parameters.match(arguments).isMatched();
   }
 }
