@@ -26,23 +26,23 @@ import eu.europa.ted.efx.model.signatures.Match;
 import eu.europa.ted.efx.sdk2.EfxParser.ExpressionContext;
 
 /**
- * What the translation of an expression gives: the translated expression, and the {@link Origin}
- * of the expression, which is what the expression is written as.
+ * A sub-expression as the visitor translates it: the translated expression, and the
+ * {@link Origin} of the sub-expression, which is what it is written as.
  *
- * <p>The parent of an expression decides how it reads its operand: as a value, which is what an
- * operator, a built-in, a declaration or a clause takes; as a path, which is what {@code is present}
- * takes and what a step such as {@code /@attribute} continues; or as the context that the reference
- * after {@code ::} is read in. The origin answers each reading, so that no reading needs the parse
- * tree of the operand again.</p>
+ * <p>The construct that contains a sub-expression decides how it reads it: as a value, which is
+ * what an operator, a built-in, a declaration or a clause takes; as a path, which is what
+ * {@code is present} takes and what a step such as {@code /@attribute} continues; or as the context
+ * that the reference after {@code ::} is read in. The origin answers each reading, so that no
+ * reading needs the parse tree of the sub-expression again.</p>
  *
  * @param <E> the class of the translated expression: a path for a field or a node
  */
-final class Operand<E extends TypedExpression> {
+final class Subexpression<E extends TypedExpression> {
 
   private final E expression;
   private final Origin<? super E> origin;
 
-  Operand(final E expression, final Origin<? super E> origin) {
+  Subexpression(final E expression, final Origin<? super E> origin) {
     this.expression = expression;
     this.origin = origin;
   }
@@ -59,68 +59,70 @@ final class Operand<E extends TypedExpression> {
   }
 
   /**
-   * @return the value of the operand, where a value is required; for an operand that has no value,
-   *         such as a node, its path, which the construct that requires a value rejects
+   * @return the value of the sub-expression, where a value is required; for a sub-expression that
+   *         has no value, such as a node, its path, which the construct that requires a value
+   *         rejects
    */
   TypedExpression value() {
     return this.origin.valueOf(this.expression);
   }
 
   /**
-   * @return the operand as a path, where a path is required
+   * @return the sub-expression as a path, where a path is required
    */
   TypedExpression path() {
     return this.origin.pathOf(this.expression);
   }
 
   /**
-   * @return the context that the reference after {@code ::} is read in, if the operand names one
+   * @return the context that the reference after {@code ::} is read in, if the sub-expression names
+   *         one
    */
   Optional<Context> context() {
     return this.origin.contextOf(this.expression);
   }
 
   /**
-   * Translates a predicate after the operand, or a lookup after the name of a dictionary, which is
-   * written as one.
+   * Translates a predicate after the sub-expression, or a lookup after the name of a dictionary,
+   * which is written as one.
    *
    * @param condition the condition of the predicate, or the key of the lookup
-   * @return the operand selected by the predicate, or the values the key indexes
+   * @return the sub-expression selected by the predicate, or the values the key indexes
    */
-  Operand<?> filteredBy(final ExpressionContext condition) {
+  Subexpression<?> filteredBy(final ExpressionContext condition) {
     return this.origin.filteredBy(this.expression, condition);
   }
 
   /**
-   * Translates an index after the operand.
+   * Translates an index after the sub-expression.
    *
    * @param position the position the index selects
-   * @return the operand selected by the index
+   * @return the sub-expression selected by the index
    */
-  Operand<?> indexedBy(final ExpressionContext position) {
+  Subexpression<?> indexedBy(final ExpressionContext position) {
     return this.origin.indexedBy(this.expression, position);
   }
 
   /**
    * Translates a step that only a field has, such as an attribute or the raw value, after the
-   * operand.
+   * sub-expression.
    *
    * @param step the step
    * @param construct the step as a type error names it, such as "Operator ':rawValue'"
    * @param reader what the step reads from the field
    * @return what the step gives
    */
-  Operand<?> readFromField(final ParserRuleContext step, final Construct construct,
+  Subexpression<?> readFromField(final ParserRuleContext step, final Construct construct,
       final Origin.FieldReader reader) {
     return this.origin.readFromField(this.expression, step, construct, reader);
   }
 
   /**
-   * Gives the error of the reference the operand is written as, where the reference explains why
-   * a construct rejects the operand: a sequence where a single value is required, or a node, which
-   * has no value, where a value is.
+   * Gives the error of the reference the sub-expression is written as, where the reference explains
+   * why a construct rejects the sub-expression: a sequence where a single value is required, or a
+   * node, which has no value, where a value is.
    *
-   * @param kind what is wrong with the operand
+   * @param kind what is wrong with the sub-expression
    * @param diagnosis what the construct was given, and what it requires
    * @return the error of the reference, or nothing if the construct gives its own
    */
