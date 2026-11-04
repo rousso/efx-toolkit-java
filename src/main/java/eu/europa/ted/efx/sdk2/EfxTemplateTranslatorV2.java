@@ -96,12 +96,12 @@ import eu.europa.ted.efx.model.templates.TemplateInvocation;
 import eu.europa.ted.efx.model.templates.ViewTemplate;
 import eu.europa.ted.efx.model.types.EfxDataType;
 import eu.europa.ted.efx.model.types.FieldTypes;
-import eu.europa.ted.efx.model.variables.Dictionary;
-import eu.europa.ted.efx.model.variables.Function;
-import eu.europa.ted.efx.model.variables.ParsedParameters;
-import eu.europa.ted.efx.model.variables.Template;
-import eu.europa.ted.efx.model.variables.Variable;
-import eu.europa.ted.efx.model.variables.Variables;
+import eu.europa.ted.efx.model.identifiers.Dictionary;
+import eu.europa.ted.efx.model.identifiers.Function;
+import eu.europa.ted.efx.model.identifiers.ParsedParameters;
+import eu.europa.ted.efx.model.identifiers.Template;
+import eu.europa.ted.efx.model.identifiers.Variable;
+import eu.europa.ted.efx.model.identifiers.Variables;
 import eu.europa.ted.efx.sdk2.EfxParser.*;
 
 /**

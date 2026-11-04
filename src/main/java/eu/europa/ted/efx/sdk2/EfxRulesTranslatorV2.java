@@ -60,11 +60,11 @@ import eu.europa.ted.efx.model.rules.RuleSeverity;
 import eu.europa.ted.efx.model.rules.RuleStack;
 import eu.europa.ted.efx.model.rules.ValidationRule;
 import eu.europa.ted.efx.model.rules.ValidationStage;
-import eu.europa.ted.efx.model.variables.DynamicFunction;
-import eu.europa.ted.efx.model.variables.DynamicVariable;
-import eu.europa.ted.efx.model.variables.Function;
-import eu.europa.ted.efx.model.variables.ParsedParameters;
-import eu.europa.ted.efx.model.variables.Variable;
+import eu.europa.ted.efx.model.identifiers.DynamicFunction;
+import eu.europa.ted.efx.model.identifiers.DynamicVariable;
+import eu.europa.ted.efx.model.identifiers.Function;
+import eu.europa.ted.efx.model.identifiers.ParsedParameters;
+import eu.europa.ted.efx.model.identifiers.Variable;
 import eu.europa.ted.efx.sdk2.EfxParser.*;
 
 /**

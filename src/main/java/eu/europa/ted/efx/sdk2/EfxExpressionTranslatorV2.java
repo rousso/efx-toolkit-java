@@ -37,7 +37,7 @@ import eu.europa.ted.efx.model.expressions.Expression;
 import eu.europa.ted.efx.model.expressions.PathExpression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.expressions.scalar.StringPath;
-import eu.europa.ted.efx.model.variables.ParsedParameter;
+import eu.europa.ted.efx.model.identifiers.ParsedParameter;
 import eu.europa.ted.efx.sdk2.EfxParser.AttributeReferenceContext;
 import eu.europa.ted.efx.sdk2.EfxParser.ParameterDeclarationContext;
 import eu.europa.ted.efx.sdk2.EfxParser.SelectionContext;

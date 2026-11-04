@@ -10,7 +10,7 @@ import eu.europa.ted.efx.interfaces.Argument;
 import eu.europa.ted.efx.interfaces.MarkupGenerator;
 import eu.europa.ted.efx.interfaces.TranslatorContext;
 import eu.europa.ted.efx.model.Context;
-import eu.europa.ted.efx.model.variables.Variables;
+import eu.europa.ted.efx.model.identifiers.Variables;
 
 /***
  * Represents a template invocation line.

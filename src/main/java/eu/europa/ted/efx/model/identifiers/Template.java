@@ -1,4 +1,4 @@
-package eu.europa.ted.efx.model.variables;
+package eu.europa.ted.efx.model.identifiers;
 
 import eu.europa.ted.efx.model.types.EfxDataType;
 

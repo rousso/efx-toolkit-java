@@ -15,7 +15,7 @@ package eu.europa.ted.efx.exceptions;
 
 import org.antlr.v4.runtime.ParserRuleContext;
 
-import eu.europa.ted.efx.model.variables.Parametrised;
+import eu.europa.ted.efx.model.identifiers.Parametrised;
 
 /**
  * Exception thrown when invalid arguments are detected in EFX templates.

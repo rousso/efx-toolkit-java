@@ -20,8 +20,8 @@ import java.util.stream.Collectors;
 import eu.europa.ted.efx.interfaces.Argument;
 import eu.europa.ted.efx.interfaces.MarkupGenerator;
 import eu.europa.ted.efx.interfaces.TranslatorContext;
+import eu.europa.ted.efx.model.identifiers.ParsedParameter;
 import eu.europa.ted.efx.model.signatures.ParsedArguments;
-import eu.europa.ted.efx.model.variables.ParsedParameter;
 
 /**
  * A content template that calls a declared template, as described by the invokeTemplate rule of the

@@ -2,7 +2,7 @@ package eu.europa.ted.efx.model.templates;
 
 import java.util.List;
 
-import eu.europa.ted.efx.model.variables.ParsedParameters;
+import eu.europa.ted.efx.model.identifiers.ParsedParameters;
 
 /**
  * Represents a template definition line in the content block stack.

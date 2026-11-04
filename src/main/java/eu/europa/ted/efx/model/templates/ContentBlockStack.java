@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Stack;
 
 import eu.europa.ted.efx.model.Context;
-import eu.europa.ted.efx.model.variables.Variables;
+import eu.europa.ted.efx.model.identifiers.Variables;
 
 public class ContentBlockStack extends Stack<ContentBlock> {
 
