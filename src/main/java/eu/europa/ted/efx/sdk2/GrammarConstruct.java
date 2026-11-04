@@ -18,7 +18,7 @@ import static eu.europa.ted.efx.model.signatures.ParameterType.INDICATOR;
 import static eu.europa.ted.efx.model.signatures.ParameterType.NUMBER;
 import static eu.europa.ted.efx.model.signatures.ParameterType.PATH;
 import static eu.europa.ted.efx.model.signatures.ParameterType.T;
-import static eu.europa.ted.efx.model.signatures.ParameterType.T_OR_T_SEQUENCE;
+import static eu.europa.ted.efx.model.signatures.ParameterType.T_SEQUENCE;
 
 import java.util.List;
 
@@ -32,7 +32,7 @@ import eu.europa.ted.efx.model.types.EfxDataType;
  * A construct that the grammar writes and the catalogue does not hold: a composite such as the
  * conditional, a predicate or an index; the clause of a rule or a template that takes an
  * expression, such as {@code WHEN}; the value of a declaration; or a step that only a field has.
- * It is checked against its one parameter list, and translated where it is written.
+ * It is checked against its parameter lists, and translated where it is written.
  *
  * <p>A type error calls it by its name and its arguments by the names of its parameters, numbered
  * among the items of a list. The fixed ones are constants, here or where they are written; those
@@ -40,32 +40,38 @@ import eu.europa.ted.efx.model.types.EfxDataType;
  */
 class GrammarConstruct implements Construct {
 
-  /** An expression in parentheses: a value of any type, which the parentheses keep. */
-  static final GrammarConstruct PARENTHESES = new GrammarConstruct("Parenthesised expression",
-      Parameters.fixed(parameter("content", T_OR_T_SEQUENCE)));
+  /** An expression in parentheses: a value of any type, which the parentheses keep as it is. */
+  static final GrammarConstruct PARENTHESES =
+      GrammarConstruct.ofValueAsGiven("Parenthesised expression", "content");
 
   /**
-   * {@code if ... then ... else ...}: the branches have one primitive, and the conditional is their
-   * join, a sequence if either branch is one.
+   * {@code if ... then ... else ...}: the branches have one primitive. Two single values take the
+   * first parameter list, the more specific; a sequence on either side takes the second, and the
+   * other branch is promoted to a sequence of one.
    */
-  static final GrammarConstruct CONDITIONAL = new GrammarConstruct("Conditional 'if'",
-      Parameters.fixed(parameter("condition", INDICATOR),
-          parameter("then branch", T_OR_T_SEQUENCE), parameter("else branch", T_OR_T_SEQUENCE)));
+  static final GrammarConstruct CONDITIONAL = new GrammarConstruct("Conditional 'if'", List.of(
+      Parameters.fixed(parameter("condition", INDICATOR), parameter("then branch", T),
+          parameter("else branch", T)),
+      Parameters.fixed(parameter("condition", INDICATOR), parameter("then branch", T_SEQUENCE),
+          parameter("else branch", T_SEQUENCE))));
 
   /** A list in brackets: single values of the primitive of the first. */
   static final GrammarConstruct LIST =
-      new GrammarConstruct("List", Parameters.variadic(parameter("item", T)));
+      new GrammarConstruct("List", List.of(Parameters.variadic(parameter("item", T))));
 
-  /** The body of an iteration, which gives a value for each iteration. */
-  static final GrammarConstruct ITERATION = new GrammarConstruct("Iteration 'for'",
-      Parameters.fixed(parameter("body", T_OR_T_SEQUENCE)));
+  /**
+   * The body of an iteration, which gives values for each iteration: a single value is a sequence
+   * of one, and the iteration joins the sequences.
+   */
+  static final GrammarConstruct ITERATION = GrammarConstruct.of("Iteration 'for'",
+      parameter("body", T_SEQUENCE));
 
   /**
    * A predicate after a field or a node. A number for its condition is a position written as a
    * predicate, so its errors suggest the index.
    */
   static final GrammarConstruct PREDICATE = new GrammarConstruct("Predicate",
-      Parameters.fixed(parameter("sequence", PATH), parameter("condition", INDICATOR))) {
+      List.of(Parameters.fixed(parameter("sequence", PATH), parameter("condition", INDICATOR)))) {
 
     @Override
     public List<String> suggestionsFor(final List<? extends TypedExpression> arguments) {
@@ -76,27 +82,30 @@ class GrammarConstruct implements Construct {
   };
 
   /** An index after a field or a node: the element at a position of the whole sequence. */
-  static final GrammarConstruct INDEX_IN_PATH = new GrammarConstruct("Index",
-      Parameters.fixed(parameter("sequence", PATH), parameter("position", NUMBER)));
+  static final GrammarConstruct INDEX_IN_PATH = GrammarConstruct.of("Index",
+      parameter("sequence", PATH), parameter("position", NUMBER));
 
-  /** An index after a value: the value at a position of the sequence of its values. */
-  static final GrammarConstruct INDEX_IN_VALUE = new GrammarConstruct("Index",
-      Parameters.fixed(parameter("sequence", T_OR_T_SEQUENCE), parameter("position", NUMBER)));
+  /**
+   * An index after a value: the value at a position of the sequence of its values, a single value
+   * being a sequence of one.
+   */
+  static final GrammarConstruct INDEX_IN_VALUE = GrammarConstruct.of("Index",
+      parameter("sequence", T_SEQUENCE), parameter("position", NUMBER));
 
   /**
    * A field or a node read in the context its left side names. The right side is the reference
    * itself, not an argument, so the left side keeps the word of the left operand of an operator.
    */
   static final GrammarConstruct CONTEXT_OVERRIDE =
-      new GrammarConstruct(Construct.operatorName("::"),
-          Parameters.fixed(parameter("left operand", PATH)));
+      GrammarConstruct.of(Construct.operatorName("::"), parameter("left operand", PATH));
 
   private final String name;
-  private final Parameters<BuiltInParameter> parameters;
+  private final List<Parameters<BuiltInParameter>> parameterLists;
 
-  private GrammarConstruct(final String name, final Parameters<BuiltInParameter> parameters) {
+  private GrammarConstruct(final String name,
+      final List<Parameters<BuiltInParameter>> parameterLists) {
     this.name = name;
-    this.parameters = parameters;
+    this.parameterLists = parameterLists;
   }
 
   /**
@@ -106,7 +115,21 @@ class GrammarConstruct implements Construct {
    * @return the construct
    */
   static GrammarConstruct of(final String name, final BuiltInParameter... parameters) {
-    return new GrammarConstruct(name, Parameters.fixed(parameters));
+    return new GrammarConstruct(name, List.of(Parameters.fixed(parameters)));
+  }
+
+  /**
+   * Gives a construct that takes one value of any type as it is: a single value stays one, and a
+   * sequence stays a sequence. It has a parameter list for each, {@code (T)} and {@code (T*)}, and
+   * a single value takes the first, the more specific.
+   *
+   * @param name the construct as a type error names it, such as "Parenthesised expression"
+   * @param parameter the name of its parameter, such as "content"
+   * @return the construct
+   */
+  static GrammarConstruct ofValueAsGiven(final String name, final String parameter) {
+    return new GrammarConstruct(name, List.of(Parameters.fixed(parameter(parameter, T)),
+        Parameters.fixed(parameter(parameter, T_SEQUENCE))));
   }
 
   /**
@@ -128,15 +151,16 @@ class GrammarConstruct implements Construct {
   }
 
   /**
-   * @return the name of the parameter at the position, numbered among the items of a list
+   * @return the name of the parameter at the position, numbered among the items of a list; the
+   *         parameter lists of a construct name their parameters alike
    */
   @Override
   public String roleOf(final int position, final int count) {
-    return this.parameters.roleOf(position, count);
+    return this.parameterLists.get(0).roleOf(position, count);
   }
 
   @Override
   public List<Parameters<?>> getParameterLists() {
-    return List.of(this.parameters);
+    return List.copyOf(this.parameterLists);
   }
 }

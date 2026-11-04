@@ -13,9 +13,6 @@
  */
 package eu.europa.ted.efx.sdk2;
 
-import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
-import static eu.europa.ted.efx.model.signatures.ParameterType.T_OR_T_SEQUENCE;
-
 import java.util.Arrays;
 import java.util.Deque;
 import java.util.LinkedList;
@@ -70,7 +67,7 @@ public class EfxExpressionTranslatorV2 extends TranslatorListener
 
   /** The expression after {@code COMPUTE}, as a type error names it. */
   private static final GrammarConstruct COMPUTE =
-      GrammarConstruct.of("'COMPUTE'", parameter("expression", T_OR_T_SEQUENCE));
+      GrammarConstruct.ofValueAsGiven("'COMPUTE'", "expression");
 
   /**
    * Creates the visitor that translates the expression, for each translation.

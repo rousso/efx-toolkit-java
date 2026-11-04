@@ -13,9 +13,6 @@
  */
 package eu.europa.ted.efx.sdk2;
 
-import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
-import static eu.europa.ted.efx.model.signatures.ParameterType.T_OR_T_SEQUENCE;
-
 import org.antlr.v4.runtime.BaseErrorListener;
 import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CommonTokenStream;
@@ -51,7 +48,7 @@ abstract class TranslatorListener extends EfxBaseListener {
 
   /** An expression block, as a type error names it. */
   static final GrammarConstruct EXPRESSION_BLOCK =
-      GrammarConstruct.of("Expression block", parameter("expression", T_OR_T_SEQUENCE));
+      GrammarConstruct.ofValueAsGiven("Expression block", "expression");
 
   /**
    * Listens to the syntax errors of the lexer and the parser, instead of their own listeners, if it

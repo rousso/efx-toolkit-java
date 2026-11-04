@@ -2975,7 +2975,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
   void testTypeErrorMessage_ExpressionBlock() {
     assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
         "line 1:12 Type mismatch. Expression block cannot take 'node'."
-            + " Its expression must be a value.",
+            + " Its expression must be a value or a sequence of values.",
         "{ND-Root} ${ND-SubNode}");
   }
 

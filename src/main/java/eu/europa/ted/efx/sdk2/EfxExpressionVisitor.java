@@ -1103,38 +1103,21 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
   }
 
   /**
-   * A conditional: the condition is a boolean, and the two branches have one primitive. It gives
-   * the join of its branches: a sequence if either branch is one, the other promoted to a sequence
-   * of one, and a single value if both are.
+   * A conditional: the condition is a boolean, and the two branches have one primitive. Two single
+   * values give a single value; a sequence on either side gives a sequence, the other branch
+   * promoted to a sequence of one by the parameter list that takes them.
    */
   @Override
   public Subexpression<?> visitConditionalExpression(final ConditionalExpressionContext ctx) {
     final ParsedArguments<?> parts = this.checked(GrammarConstruct.CONDITIONAL,
         this.subexpressionsOf(ctx), position -> position == 1 ? ctx : ctx.expression(position));
-    return this.subexpression(this.conditional(parts, this.joinOfBranches(parts)));
-  }
-
-  /**
-   * Gives the class of a conditional, the join of its branches, which have one primitive.
-   *
-   * @param parts the condition and the two branches, checked
-   * @return the sequence class of the primitive if either branch is a sequence, and its scalar
-   *         class otherwise
-   */
-  private Class<? extends TypedExpression> joinOfBranches(final ParsedArguments<?> parts) {
-    final TypedExpression then = parts.at(1, TypedExpression.class);
-    return SequenceExpression.class.isAssignableFrom(parts.typeAt(1))
-        || SequenceExpression.class.isAssignableFrom(parts.typeAt(2))
-            ? this.sequenceTypeOf(then)
-            : this.scalarTypeOf(then);
+    return this.subexpression(this.conditional(parts, parts.typeAt(1)));
   }
 
   private <T extends TypedExpression> T conditional(final ParsedArguments<?> parts,
       final Class<T> type) {
-    final ParameterType join = ParameterType.of(type);
     return this.translation.script().composeConditionalExpression(parts.booleanAt(0),
-        type.cast(join.convert(parts.at(1, TypedExpression.class))),
-        type.cast(join.convert(parts.at(2, TypedExpression.class))), type);
+        parts.at(1, type), parts.at(2, type), type);
   }
 
   /**
@@ -1166,28 +1149,23 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
   }
 
   /**
-   * An iteration: a single value for each iteration gives the sequence of them, and a sequence
-   * for each iteration gives their concatenation.
+   * An iteration: the body gives a sequence for each iteration, a single value being a sequence of
+   * one, and the iteration gives their concatenation.
    */
   @Override
   public Subexpression<?> visitSequenceFromIteration(final SequenceFromIterationContext ctx) {
     this.translation.stack().pushStackFrame();
     final IteratorListExpression iterators = this.iteratorsOf(ctx.iteratorList());
-    final TypedExpression body =
-        this.valueOf(ctx.expression(), GrammarConstruct.ITERATION).at(0, TypedExpression.class);
-    final SequenceExpression iteration =
-        this.iteration(iterators, body, ctx.Distinct() != null, this.sequenceTypeOf(body));
+    final ParsedArguments<?> body = this.valueOf(ctx.expression(), GrammarConstruct.ITERATION);
+    final SequenceExpression iteration = this.iteration(iterators, body.sequenceAt(0),
+        ctx.Distinct() != null, body.sequenceTypeAt(0));
     this.translation.stack().popStackFrame();
     return this.subexpression(iteration);
   }
 
   private <T extends SequenceExpression> T iteration(final IteratorListExpression iterators,
-      final TypedExpression body, final boolean distinct, final Class<T> sequenceType) {
-    final T result = body instanceof ScalarExpression
-        ? this.translation.script().composeForExpression(iterators, (ScalarExpression) body,
-            sequenceType)
-        : this.translation.script().composeForExpression(iterators, (SequenceExpression) body,
-            sequenceType);
+      final SequenceExpression body, final boolean distinct, final Class<T> sequenceType) {
+    final T result = this.translation.script().composeForExpression(iterators, body, sequenceType);
     return distinct
         ? this.translation.script().composeDistinctValuesFunction(result, sequenceType)
         : result;
