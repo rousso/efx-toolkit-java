@@ -16,11 +16,12 @@ package eu.europa.ted.efx.model.signatures;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.types.EfxDataType;
 
 /**
- * The signature of one overload of a built-in: its {@link Parameters}, which may end in a variadic
- * tail, and its result type.
+ * The signature of a construct, or of one of its overloads: its {@link Parameters}, which may end
+ * in a variadic tail, and its result type.
  *
  * <p>A variadic tail takes one or more arguments after the fixed parameters. An optional argument
  * is not part of a signature: the built-in declares a second overload instead. A signature whose
@@ -59,6 +60,23 @@ public final class Signature {
    */
   public ParameterType getResult() {
     return this.result;
+  }
+
+  /**
+   * Gives the result type of a call whose arguments this signature takes: with {@code T} bound by
+   * the argument at its first position, as the parameters are bound before they are matched.
+   *
+   * @param arguments the arguments of the call, which the parameters of this signature take
+   * @return the result type, concrete where it is {@code T} or {@code T*}
+   * @throws IllegalArgumentException if the parameters mention {@code T} and the arguments cannot
+   *         bind it
+   */
+  public ParameterType resultFor(final List<? extends TypedExpression> arguments) {
+    if (!this.parameters.isGeneric()) {
+      return this.result;
+    }
+    return this.parameters.bindingOf(arguments).map(this.result::bind)
+        .orElseThrow(() -> new IllegalArgumentException(this + " does not take " + arguments));
   }
 
   /**

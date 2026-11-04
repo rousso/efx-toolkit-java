@@ -242,12 +242,23 @@ public class Parameters<P extends Parameter> extends LinkedList<P> {
     return this.parameterAt(position).getType();
   }
 
+  /**
+   * Gives the value primitive the arguments of a call bind {@code T} to, for a list that mentions
+   * it: the primitive of the argument at the first position of {@code T}.
+   *
+   * @param arguments the translated arguments of the call, as many as the list takes
+   * @return the value primitive, or nothing if that argument cannot bind {@code T} (a node)
+   */
+  Optional<Class<? extends EfxDataType.Primitive>> bindingOf(
+      final List<? extends TypedExpression> arguments) {
+    return TypeVariableParameterType.bindingOf(arguments.get(this.typeVariablePosition()));
+  }
+
   private Optional<Parameters<?>> boundTo(final List<? extends TypedExpression> arguments) {
     if (!this.isGeneric()) {
       return Optional.of(this);
     }
-    return TypeVariableParameterType.bindingOf(arguments.get(this.typeVariablePosition()))
-        .map(this::bind);
+    return this.bindingOf(arguments).map(this::bind);
   }
 
   private int typeVariablePosition() {

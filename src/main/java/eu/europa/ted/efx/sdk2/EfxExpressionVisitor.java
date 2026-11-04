@@ -14,6 +14,7 @@
 package eu.europa.ted.efx.sdk2;
 
 import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
+import static eu.europa.ted.efx.model.signatures.Signature.signature;
 
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
@@ -194,7 +195,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    *         it explains the mistake, and any other value cannot be converted
    */
   ParsedArguments<?> valueOf(final ExpressionContext expression, final Construct construct) {
-    return this.checked(construct, List.of(this.visit(expression)), position -> expression);
+    return this.checked(construct, List.of(this.visit(expression)), position -> expression)
+        .getArguments();
   }
 
   /**
@@ -209,7 +211,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    */
   ParsedArguments<?> valueOf(final TypedExpression value, final Construct construct,
       final ParserRuleContext where) {
-    return this.checked(construct, List.of(this.subexpression(value)), position -> where);
+    return this.checked(construct, List.of(this.subexpression(value)), position -> where)
+        .getArguments();
   }
 
   /**
@@ -818,15 +821,17 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
     final int readsBefore = reads.all();
     final Subexpression<?> index = this.visit(position);
     final ParserRuleContext indexed = this.translation.stack().peekParserContext();
-    final NumericExpression number = this.resolved(GrammarConstruct.INDEX_IN_VALUE,
+    final Resolution indexing = this.resolved(GrammarConstruct.INDEX_IN_VALUE,
         List.of(sequence, index), List.of(given, index.value()),
-        at -> at == 0 ? indexed : position, TypeMismatchException::cannotConvert)
-        .getArguments().numericAt(1);
-    final Class<? extends SequenceExpression> listType = this.sequenceTypeOf(given);
+        at -> at == 0 ? indexed : position, TypeMismatchException::cannotConvert);
+    final Class<? extends SequenceExpression> listType =
+        indexing.getArguments().sequenceTypeAt(0);
     final SequenceExpression list = given instanceof PathExpression
         ? this.inParentheses(given, listType)
         : TypedExpression.from(given, listType);
-    return this.subexpression(this.elementAt(list, listType, number, this.scalarTypeOf(given),
+    return this.subexpression(this.elementAt(list, listType,
+        indexing.getArguments().numericAt(1),
+        GrammarConstruct.INDEX_IN_VALUE.resultOf(indexing).asSubclass(ScalarExpression.class),
         reads.all() > readsBefore));
   }
 
@@ -896,7 +901,9 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
     return new Subexpression<>(
         this.translation.script().composeDictionaryLookup(dictionary.name,
             this.valueOf(key, GrammarConstruct.of("Dictionary '" + reference.getText() + "'",
-                parameter("key", ParameterType.TEXT))).stringAt(0),
+                signature(parameter("key", ParameterType.TEXT))
+                    .returning(ParameterType.of(dictionary.type))))
+                .stringAt(0),
             dictionary.type),
         new DictionaryOrigin(this, reference, dictionary.name));
   }
@@ -1096,10 +1103,12 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
   @Override
   public Subexpression<?> visitParenthesizedExpression(final ParenthesizedExpressionContext ctx) {
     final Subexpression<?> inner = this.visit(ctx.expression());
-    final ParsedArguments<?> content =
+    final Resolution content =
         this.checked(GrammarConstruct.PARENTHESES, List.of(inner), position -> ctx);
-    return new Subexpression<>(this.inParentheses(content.at(0, TypedExpression.class),
-        content.typeAt(0)), inner.origin().asValue());
+    return new Subexpression<>(
+        this.inParentheses(content.getArguments().at(0, TypedExpression.class),
+            GrammarConstruct.PARENTHESES.resultOf(content)),
+        inner.origin().asValue());
   }
 
   /**
@@ -1109,9 +1118,10 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    */
   @Override
   public Subexpression<?> visitConditionalExpression(final ConditionalExpressionContext ctx) {
-    final ParsedArguments<?> parts = this.checked(GrammarConstruct.CONDITIONAL,
+    final Resolution parts = this.checked(GrammarConstruct.CONDITIONAL,
         this.subexpressionsOf(ctx), position -> position == 1 ? ctx : ctx.expression(position));
-    return this.subexpression(this.conditional(parts, parts.typeAt(1)));
+    return this.subexpression(
+        this.conditional(parts.getArguments(), GrammarConstruct.CONDITIONAL.resultOf(parts)));
   }
 
   private <T extends TypedExpression> T conditional(final ParsedArguments<?> parts,
@@ -1126,21 +1136,20 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
   @Override
   public Subexpression<?> visitList(final ListContext ctx) {
     final List<ExpressionContext> items = ctx.expression();
-    final ParsedArguments<?> list = this.checked(GrammarConstruct.LIST, this.subexpressionsOf(ctx),
+    final Resolution list = this.checked(GrammarConstruct.LIST, this.subexpressionsOf(ctx),
         position -> position == 0 ? ctx : items.get(position));
     return this.subexpression(this.translation.script().composeList(
-        list.getArgumentValues().stream().map(ScalarExpression.class::cast)
+        list.getArguments().getArgumentValues().stream().map(ScalarExpression.class::cast)
             .collect(Collectors.toList()),
-        this.sequenceTypeOf(list.scalarAt(0))));
+        GrammarConstruct.LIST.resultOf(list).asSubclass(SequenceExpression.class)));
   }
 
   @Override
   public Subexpression<?> visitQuantifiedExpression(final QuantifiedExpressionContext ctx) {
     this.translation.stack().pushStackFrame();
     final IteratorListExpression iterators = this.iteratorsOf(ctx.iteratorList());
-    final BooleanExpression condition = this.valueOf(ctx.expression(),
-        GrammarConstruct.of("Quantifier '" + (ctx.Every() != null ? ctx.Every() : ctx.Some())
-            .getText() + "'", parameter("condition", ParameterType.INDICATOR))).booleanAt(0);
+    final BooleanExpression condition = this.valueOf(ctx.expression(), GrammarConstruct
+        .quantifier((ctx.Every() != null ? ctx.Every() : ctx.Some()).getText())).booleanAt(0);
     final BooleanExpression quantified = ctx.Every() != null
         ? this.translation.script().composeAllSatisfy(iterators, condition)
         : this.translation.script().composeAnySatisfies(iterators, condition);
@@ -1156,9 +1165,11 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
   public Subexpression<?> visitSequenceFromIteration(final SequenceFromIterationContext ctx) {
     this.translation.stack().pushStackFrame();
     final IteratorListExpression iterators = this.iteratorsOf(ctx.iteratorList());
-    final ParsedArguments<?> body = this.valueOf(ctx.expression(), GrammarConstruct.ITERATION);
-    final SequenceExpression iteration = this.iteration(iterators, body.sequenceAt(0),
-        ctx.Distinct() != null, body.sequenceTypeAt(0));
+    final Resolution body = this.checked(GrammarConstruct.ITERATION,
+        List.of(this.visit(ctx.expression())), position -> ctx.expression());
+    final SequenceExpression iteration = this.iteration(iterators,
+        body.getArguments().sequenceAt(0), ctx.Distinct() != null,
+        GrammarConstruct.ITERATION.resultOf(body).asSubclass(SequenceExpression.class));
     this.translation.stack().popStackFrame();
     return this.subexpression(iteration);
   }
@@ -2034,14 +2045,15 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    * @param construct the construct
    * @param parts its parts, in order
    * @param where where the error of the part at a position is reported
-   * @return the values of the parts, converted to the parameters of the construct
+   * @return the resolution, with the values of the parts converted to the parameters of the
+   *         construct
    * @throws TypeMismatchException if a part does not fit
    */
-  private ParsedArguments<?> checked(final Construct construct, final List<Subexpression<?>> parts,
+  private Resolution checked(final Construct construct, final List<Subexpression<?>> parts,
       final IntFunction<ParserRuleContext> where) {
     return this.resolved(construct, parts,
         parts.stream().map(Subexpression::value).collect(Collectors.toList()), where,
-        TypeMismatchException::cannotConvert).getArguments();
+        TypeMismatchException::cannotConvert);
   }
 
   /**
@@ -2133,30 +2145,6 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
   private static Class<? extends EfxDataType.Primitive> primitiveOf(
       final PrimitiveTypeContext primitive) {
     return EfxTypeTokenLookup.toJavaType(primitive.getText());
-  }
-
-  /**
-   * Gives the class of the single values of a translated expression: the one {@code T} is bound
-   * to by the expression.
-   *
-   * @param expression the translated expression
-   * @return the scalar class of the expression's primitive
-   */
-  private Class<? extends ScalarExpression> scalarTypeOf(final TypedExpression expression) {
-    return this.bindingOf(ParameterType.T, expression).getExpressionType()
-        .asSubclass(ScalarExpression.class);
-  }
-
-  /**
-   * Gives the class of the sequences of a translated expression: the one {@code T*} is bound to
-   * by the expression.
-   *
-   * @param expression the translated expression
-   * @return the sequence class of the expression's primitive
-   */
-  private Class<? extends SequenceExpression> sequenceTypeOf(final TypedExpression expression) {
-    return this.bindingOf(ParameterType.T_SEQUENCE, expression).getExpressionType()
-        .asSubclass(SequenceExpression.class);
   }
 
   /**
