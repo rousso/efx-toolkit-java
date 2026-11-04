@@ -30,7 +30,7 @@ import eu.europa.ted.efx.model.types.EfxTypeLattice;
  * it is bound, a type variable accepts no argument, and its expression class is that of every
  * value, or every sequence, it stands for.</p>
  */
-enum TypeVariableParameterType implements ParameterType {
+enum GenericParameterType implements ParameterType {
 
   SCALAR("T", "a value", ScalarExpression.class) {
     @Override
@@ -54,7 +54,7 @@ enum TypeVariableParameterType implements ParameterType {
   private final String description;
   private final Class<? extends TypedExpression> expressionType;
 
-  TypeVariableParameterType(final String symbol, final String description,
+  GenericParameterType(final String symbol, final String description,
       final Class<? extends TypedExpression> expressionType) {
     this.symbol = symbol;
     this.description = description;

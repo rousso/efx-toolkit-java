@@ -87,10 +87,10 @@ public interface ParameterType {
   ParameterType DURATION_SEQUENCE = new ConcreteParameterType(DurationSequenceExpression.class);
 
   /** A single value of the value primitive {@code T} stands for. */
-  ParameterType T = TypeVariableParameterType.SCALAR;
+  ParameterType T = GenericParameterType.SCALAR;
 
   /** A sequence of the value primitive {@code T} stands for, or a single value promoted to one. */
-  ParameterType T_SEQUENCE = TypeVariableParameterType.SEQUENCE;
+  ParameterType T_SEQUENCE = GenericParameterType.SEQUENCE;
 
   /** A reference to a field or a node, taken as a path rather than as its value. */
   ParameterType PATH = new PathParameterType(PathExpression.class, "a field or node reference");

@@ -100,9 +100,9 @@ H9 renames the package `model.variables` to `model.identifiers`. Measured with `
 | `model.variables.Variable` | `model.identifiers.Variable` |
 | `model.variables.Variables` | `model.identifiers.Variables` |
 
-## Overloads and generic signatures (H10 to H14)
+## Overloads and generic signatures (H10 to H15)
 
-H10 to H14 apply the rule Yannis agreed for overloads and generic signatures (see `progress.md`). They add or delete no public type: the classes they add or delete (`ConditionOperators.UniqueValueCondition`, `EitherCardinalityParameterType`) are private or package-private, as is `TypeVariableParameterType`, and the test built-in `SingleOrSequenceBuiltIn` is not in the jar. The members below are read with `javap -public` on H14. None of the members below is on develop, so the CHANGELOG lists none of them.
+H10 to H15 apply the rule Yannis agreed for overloads and generic signatures (see `progress.md`). They add or delete no public type: the classes they add or delete (`ConditionOperators.UniqueValueCondition`, `EitherCardinalityParameterType`) are private or package-private, as is `TypeVariableParameterType`, which H15 renames `GenericParameterType`, and the test built-in `SingleOrSequenceBuiltIn` is not in the jar. The members below are read with `javap -public` on H14. None of the members below is on develop, so the CHANGELOG lists none of them.
 
 | Type | Item | Change |
 | --- | --- | --- |
