@@ -15,7 +15,7 @@ package eu.europa.ted.efx.exceptions;
 
 import org.antlr.v4.runtime.ParserRuleContext;
 
-import eu.europa.ted.efx.model.identifiers.Parametrised;
+import eu.europa.ted.efx.model.identifiers.Invocable;
 
 /**
  * Exception thrown when invalid arguments are detected in EFX templates.
@@ -50,13 +50,15 @@ public class InvalidArgumentException extends EfxCompilationException {
         return this.errorCode;
     }
 
-    public static InvalidArgumentException argumentNumberMismatch(Parametrised identifier, int expectedNumber, int actualNumber) {
+    public static InvalidArgumentException argumentNumberMismatch(Invocable identifier,
+            int expectedNumber, int actualNumber) {
         return new InvalidArgumentException(ErrorCode.ARGUMENT_NUMBER_MISMATCH,
                 ARGUMENT_NUMBER_MISMATCH, identifier.getClass().getSimpleName().toLowerCase(),
                 identifier.name, expectedNumber, actualNumber);
     }
 
-    public static InvalidArgumentException argumentNumberMismatch(Parametrised identifier, int expectedNumber) {
+    public static InvalidArgumentException argumentNumberMismatch(Invocable identifier,
+            int expectedNumber) {
         return argumentNumberMismatch(identifier, expectedNumber, expectedNumber + 1);
     }
 

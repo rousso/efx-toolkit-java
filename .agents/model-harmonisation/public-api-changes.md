@@ -111,3 +111,8 @@ H10 to H15 apply the rule Yannis agreed for overloads and generic signatures (se
 | `model.signatures.ParameterType.Concrete` | H16 | added: the former package-private `ConcreteParameterType`, nested; its constructor stays package-private |
 | `model.signatures.ParameterType.Path` | H16 | added: the former package-private `PathParameterType`, nested; its constructor stays package-private |
 | `model.signatures.ParameterType.Generic` | H16 | added: the former package-private `GenericParameterType` (`TypeVariableParameterType` before H15), nested; an enum, `SCALAR` and `SEQUENCE`, which `ParameterType.T` and `T_SEQUENCE` already gave |
+
+## Invocable (H17)
+
+H17 renames `model.identifiers.Parametrised` `model.identifiers.Invocable`: the same public members, its constructor included, under the new name. The class is on develop (as `model.variables.Parametrised`, renamed package in H9), so the CHANGELOG lists the rename under breaking changes. `InvalidArgumentException.argumentNumberMismatch` takes an `Invocable` in its two overloads.
+

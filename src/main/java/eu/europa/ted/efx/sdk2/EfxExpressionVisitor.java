@@ -74,7 +74,7 @@ import eu.europa.ted.efx.model.expressions.sequence.StringSequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.TimeSequenceExpression;
 import eu.europa.ted.efx.model.identifiers.Dictionary;
 import eu.europa.ted.efx.model.identifiers.Function;
-import eu.europa.ted.efx.model.identifiers.Parametrised;
+import eu.europa.ted.efx.model.identifiers.Invocable;
 import eu.europa.ted.efx.model.identifiers.ParsedParameter;
 import eu.europa.ted.efx.model.identifiers.Variable;
 import eu.europa.ted.efx.model.signatures.Construct;
@@ -1432,7 +1432,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    * @throws InvalidArgumentException if the number of arguments or the type of one does not match
    */
   ParsedArguments<?> argumentsOf(final FunctionInvocationContext invocation,
-      final Parametrised function) {
+      final Invocable function) {
     return this.invocationOf(invocation, function, invocation.argumentList());
   }
 
@@ -1448,7 +1448,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    * @throws InvalidArgumentException if the number of arguments or the type of one does not match
    */
   ParsedArguments<ParsedParameter> argumentsOf(final ParserRuleContext invocation,
-      final Parametrised template, final ArgumentListContext list) {
+      final Invocable template, final ArgumentListContext list) {
     return new ParsedArguments<>(template.parameters,
         this.invocationOf(invocation, template, list).getArgumentValues());
   }
@@ -1470,7 +1470,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    * @throws TypeMismatchException if an argument is a context variable that holds a node
    */
   private ParsedArguments<?> invocationOf(final ParserRuleContext call,
-      final Parametrised declaration, final ArgumentListContext list) {
+      final Invocable declaration, final ArgumentListContext list) {
     final List<Subexpression<?>> subexpressions = new ArrayList<>();
     if (list != null) {
       for (final ArgumentContext argument : list.argument()) {

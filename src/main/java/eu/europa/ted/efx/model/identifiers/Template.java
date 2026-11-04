@@ -2,7 +2,7 @@ package eu.europa.ted.efx.model.identifiers;
 
 import eu.europa.ted.efx.model.types.EfxDataType;
 
-public class Template extends Parametrised {
+public class Template extends Invocable {
 
     public Template(String name, ParsedParameters parameters) {
         super(name, EfxDataType.VOID, parameters);

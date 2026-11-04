@@ -7,20 +7,19 @@ import eu.europa.ted.efx.model.signatures.Parameters;
 import eu.europa.ted.efx.model.types.EfxDataType;
 
 /**
- * An identifier that accepts parameters.
+ * An identifier that EFX source declares with parameters and invokes with arguments: a function,
+ * invoked as {@code ?name(...)}, or a template, invoked as {@code invoke name(...)}.
  *
- * Base class for parameterized identifiers like functions and templates. Extends {@link Identifier}
- * to add parsed parameter information.
- *
- * <p>A declaration is a {@link Construct} with one parameter list, its declared parameters, so
- * that a call of it is checked as a call of a built-in is. The caller translates the call from the
- * converted arguments.</p>
+ * <p>An invocable is a {@link Construct} with one parameter list, its declared parameters, so
+ * that an invocation of it is checked as a call of a built-in is. The caller translates the
+ * invocation from the converted arguments.</p>
  */
-public abstract class Parametrised extends Identifier implements Construct {
+public abstract class Invocable extends Identifier implements Construct {
 
     public final ParsedParameters parameters;
 
-    public Parametrised(String name, Class<? extends EfxDataType> returnType, ParsedParameters parameters) {
+    public Invocable(String name, Class<? extends EfxDataType> returnType,
+            ParsedParameters parameters) {
         super(name, returnType);
         this.parameters = parameters;
     }
@@ -50,7 +49,7 @@ public abstract class Parametrised extends Identifier implements Construct {
             return false;
         if (!super.equals(o))
             return false;
-        Parametrised other = (Parametrised) o;
+        Invocable other = (Invocable) o;
         return parameters != null ? parameters.equals(other.parameters) : other.parameters == null;
     }
 

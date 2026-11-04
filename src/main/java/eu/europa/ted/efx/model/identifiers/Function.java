@@ -19,10 +19,10 @@ import eu.europa.ted.efx.model.signatures.Construct;
 /**
  * A user-defined function declared in EFX source code.
  *
- * Extends {@link Parametrised} to add the function body expression, whose type determines
+ * Extends {@link Invocable} to add the function body expression, whose type determines
  * the function's return type.
  */
-public class Function extends Parametrised {
+public class Function extends Invocable {
 
     public final TypedExpression expression;
 
