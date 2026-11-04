@@ -37,6 +37,7 @@ import eu.europa.ted.efx.model.builtins.ConditionOperators;
 import eu.europa.ted.efx.model.builtins.NumericFunctions;
 import eu.europa.ted.efx.model.builtins.PatternMatch;
 import eu.europa.ted.efx.model.builtins.SequenceFunctions;
+import eu.europa.ted.efx.model.builtins.SingleOrSequenceBuiltIn;
 import eu.europa.ted.efx.model.builtins.StringFunctions;
 import eu.europa.ted.efx.model.expressions.Expression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
@@ -261,6 +262,18 @@ class ResolutionTest {
     TranslatorConfigurationException exception = assertThrows(TranslatorConfigurationException.class,
         () -> AmbiguousBuiltIn.INSTANCE.resolve(List.of(TEXT)));
     assertEquals(TranslatorConfigurationException.ErrorCode.AMBIGUOUS_OVERLOADS, exception.getErrorCode());
+  }
+
+  @Test
+  void testMoreSpecificOverload_IsChosenForASingleValue() {
+    assertEquals(SingleOrSequenceBuiltIn.INSTANCE.getOverloads().get(0).getSignature()
+        .getParameters(), SingleOrSequenceBuiltIn.INSTANCE.resolve(List.of(TEXT)).getParameters());
+  }
+
+  @Test
+  void testSequenceOverload_IsChosenForASequence() {
+    assertEquals(SingleOrSequenceBuiltIn.INSTANCE.getOverloads().get(1).getSignature()
+        .getParameters(), SingleOrSequenceBuiltIn.INSTANCE.resolve(List.of(TEXTS)).getParameters());
   }
 
   @Test

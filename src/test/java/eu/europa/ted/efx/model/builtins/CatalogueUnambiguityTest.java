@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import eu.europa.ted.efx.exceptions.TranslatorConfigurationException;
 import eu.europa.ted.efx.model.expressions.Expression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.expressions.scalar.BooleanExpression;
@@ -62,13 +63,14 @@ import eu.europa.ted.efx.model.signatures.Parameters;
 
 /**
  * Proves that the catalogue is unambiguous: for every built-in, every number of arguments it takes
- * (a variadic tail up to three arguments) and every combination of argument types, at most one
- * overload applies.
+ * (a variadic tail up to three arguments) and every combination of argument types resolve to one
+ * overload, the only one that applies or the most specific of those that do.
  *
  * <p>The argument types are every expression class a translated argument can have: each value
  * primitive (with multilingual text and dynamic) as a single value and as a sequence, each as a
  * value and as a path, and the node paths. A deliberately ambiguous built-in shows that the check
- * finds what it looks for.</p>
+ * finds what it looks for, and a built-in with a pair {@code (T)} and {@code (T*)} that the check
+ * allows what the resolution allows.</p>
  */
 class CatalogueUnambiguityTest {
 
@@ -110,13 +112,30 @@ class CatalogueUnambiguityTest {
             .collect(Collectors.toList()));
   }
 
+  @Test
+  void testSingleOrSequenceBuiltIn_IsUnambiguous() {
+    assertEquals(List.of(), ambiguities(SingleOrSequenceBuiltIn.INSTANCE)
+        .map(CatalogueUnambiguityTest::describe).collect(Collectors.toList()));
+  }
+
   /**
-   * Lists every combination of arguments to which more than one overload of a built-in applies.
+   * Lists every combination of arguments that a built-in cannot resolve to one overload: more
+   * than one applies and none of them is more specific than the others.
    */
   private static Stream<List<TypedExpression>> ambiguities(final BuiltIn builtIn) {
     return arities(builtIn)
         .flatMap(CatalogueUnambiguityTest::combinations)
-        .filter(arguments -> applicable(builtIn, arguments).size() > 1);
+        .filter(arguments -> isAmbiguous(builtIn, arguments));
+  }
+
+  private static boolean isAmbiguous(final BuiltIn builtIn, final List<TypedExpression> arguments) {
+    try {
+      builtIn.resolve(arguments);
+      return false;
+    } catch (TranslatorConfigurationException e) {
+      assertEquals(TranslatorConfigurationException.ErrorCode.AMBIGUOUS_OVERLOADS, e.getErrorCode());
+      return true;
+    }
   }
 
   private static Stream<Integer> arities(final BuiltIn builtIn) {
