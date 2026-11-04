@@ -92,12 +92,6 @@ public interface ParameterType {
   /** A sequence of the value primitive {@code T} stands for, or a single value promoted to one. */
   ParameterType T_SEQUENCE = TypeVariableParameterType.SEQUENCE;
 
-  /**
-   * A single value or a sequence of the value primitive {@code T} stands for, taken as it is: a
-   * single value stays one, so a construct that takes it keeps the cardinality it is given.
-   */
-  ParameterType T_OR_T_SEQUENCE = TypeVariableParameterType.EITHER;
-
   /** A reference to a field or a node, taken as a path rather than as its value. */
   ParameterType PATH = new PathParameterType(PathExpression.class, "a field or node reference");
 
@@ -120,7 +114,8 @@ public interface ParameterType {
   }
 
   /**
-   * Tells whether this parameter type is the type variable {@code T}, in either cardinality.
+   * Tells whether this parameter type is the type variable {@code T}, as a single value or as a
+   * sequence.
    *
    * @return {@code true} for {@link #T} and {@link #T_SEQUENCE}
    */
@@ -189,25 +184,14 @@ public interface ParameterType {
   String describe();
 
   /**
-   * Gives the expression class an accepted argument is converted to.
-   *
-   * @param argument an argument this parameter type accepts
-   * @return {@link #getExpressionType()}; for {@link #T_OR_T_SEQUENCE} once bound, the class of the
-   *         argument's cardinality
-   */
-  default Class<? extends TypedExpression> expressionTypeOf(TypedExpression argument) {
-    return this.getExpressionType();
-  }
-
-  /**
-   * Converts an accepted argument to {@link #expressionTypeOf its class}, as
+   * Converts an accepted argument to {@link #getExpressionType() its class}, as
    * {@link eu.europa.ted.efx.model.CallStack#pop(Class)} does on the call stack.
    *
    * @param argument an argument this parameter type accepts
    * @return the argument itself if it already has that class, otherwise its conversion
    */
   default TypedExpression convert(TypedExpression argument) {
-    Class<? extends TypedExpression> type = this.expressionTypeOf(argument);
+    Class<? extends TypedExpression> type = this.getExpressionType();
     return type.isInstance(argument) ? argument : TypedExpression.from(argument, type);
   }
 }

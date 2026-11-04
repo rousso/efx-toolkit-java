@@ -82,8 +82,7 @@ public class ParsedArguments<P extends Parameter> extends LinkedList<ParsedArgum
      * @return the expression class of the parameter at that position
      */
     public Class<? extends TypedExpression> typeAt(final int position) {
-        final ParsedArgument<P> argument = this.get(position);
-        return argument.parameter.getType().expressionTypeOf(argument.value);
+        return this.get(position).parameter.getType().getExpressionType();
     }
 
     /**

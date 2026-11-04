@@ -23,8 +23,7 @@ import eu.europa.ted.efx.model.types.EfxDataType;
 import eu.europa.ted.efx.model.types.EfxTypeLattice;
 
 /**
- * The type variable {@code T} of a generic signature: as a single value, as a sequence, or in
- * either cardinality, taken as it is.
+ * The type variable {@code T} of a generic signature: as a single value, or as a sequence.
  *
  * <p>{@code T} ranges over the six value primitives. A multilingual text binds it to text and a
  * dynamic value to indicator, as the typed grammar reads them today; a node never binds it. Until
@@ -44,17 +43,6 @@ enum TypeVariableParameterType implements ParameterType {
     @Override
     public ParameterType bind(final Class<? extends EfxDataType.Primitive> primitive) {
       return new ConcreteParameterType(SequenceExpression.fromEfxDataType.get(primitive));
-    }
-  },
-
-  /**
-   * A single value or a sequence, as it is: what a construct takes whose own cardinality is that
-   * of what it is given, such as parentheses.
-   */
-  EITHER("T|T*", "a value", TypedExpression.class) {
-    @Override
-    public ParameterType bind(final Class<? extends EfxDataType.Primitive> primitive) {
-      return new EitherCardinalityParameterType(primitive);
     }
   };
 

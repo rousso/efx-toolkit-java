@@ -99,3 +99,12 @@ H9 renames the package `model.variables` to `model.identifiers`. Measured with `
 | `model.variables.Template` | `model.identifiers.Template` |
 | `model.variables.Variable` | `model.identifiers.Variable` |
 | `model.variables.Variables` | `model.identifiers.Variables` |
+
+## Overloads and generic signatures (H10 to H14)
+
+H10 to H14 apply the rule Yannis agreed for overloads and generic signatures (see `progress.md`). They add or delete no public type: the classes they add or delete (`ConditionOperators.UniqueValueCondition`, `EitherCardinalityParameterType`) are private or package-private, as is `TypeVariableParameterType`, and the test built-in `SingleOrSequenceBuiltIn` is not in the jar. The members below are read with `javap -public` on H14. None of the members below is on develop, so the CHANGELOG lists none of them.
+
+| Type | Item | Change |
+| --- | --- | --- |
+| `model.signatures.ParameterType` | H14 | `T_OR_T_SEQUENCE` and `expressionTypeOf` removed: no construct takes a single value or a sequence as it is any more, so every parameter type converts an argument to its one expression class |
+| `model.signatures.Signature` | H13 | `resultFor(List<? extends TypedExpression>)` added: the result type of a call whose arguments the signature takes, with `T` bound by them |
