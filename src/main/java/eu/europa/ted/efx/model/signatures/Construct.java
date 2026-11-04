@@ -21,7 +21,7 @@ import eu.europa.ted.efx.model.expressions.TypedExpression;
  * A construct as a type check sees it: the parameter lists its arguments are checked against, and
  * the words a type error uses for it and for each of its arguments.
  *
- * <p>Every construct is checked this way. A {@link BuiltIn} of the catalogue also translates
+ * <p>Every construct is checked this way. A built-in of the catalogue also translates
  * itself; a function or a template declared in EFX has one parameter list, its declared
  * parameters; and the constructs the grammar writes, such as the conditional, a predicate or the
  * condition of a rule, are checked as constructs and translated where they are written.</p>

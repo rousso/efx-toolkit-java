@@ -11,7 +11,7 @@
  * or implied. See the Licence for the specific language governing permissions and limitations under
  * the Licence.
  */
-package eu.europa.ted.efx.model.signatures;
+package eu.europa.ted.efx.model.builtins;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -29,6 +29,10 @@ import eu.europa.ted.efx.model.expressions.Expression;
 import eu.europa.ted.efx.model.expressions.PathExpression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.expressions.scalar.StringPath;
+import eu.europa.ted.efx.model.signatures.BuiltInParameter;
+import eu.europa.ted.efx.model.signatures.ParameterType;
+import eu.europa.ted.efx.model.signatures.Parameters;
+import eu.europa.ted.efx.model.signatures.Signature;
 import eu.europa.ted.efx.xpath.XPathScriptGenerator;
 
 /**

@@ -11,7 +11,7 @@
  * or implied. See the Licence for the specific language governing permissions and limitations under
  * the Licence.
  */
-package eu.europa.ted.efx.model.signatures;
+package eu.europa.ted.efx.model.builtins;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -58,6 +58,7 @@ import eu.europa.ted.efx.model.expressions.sequence.StringSequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.StringSequencePath;
 import eu.europa.ted.efx.model.expressions.sequence.TimeSequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.TimeSequencePath;
+import eu.europa.ted.efx.model.signatures.Parameters;
 
 /**
  * Proves that the catalogue is unambiguous: for every built-in, every number of arguments it takes
@@ -143,7 +144,8 @@ class CatalogueUnambiguityTest {
   }
 
   private static String describe(final List<TypedExpression> arguments) {
-    return "(" + Mismatch.describe(arguments) + ")";
+    return arguments.stream().map(argument -> argument.getClass().getSimpleName())
+        .collect(Collectors.joining(", ", "(", ")"));
   }
 
   private static List<Overload> applicable(final BuiltIn builtIn,

@@ -19,7 +19,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import eu.europa.ted.efx.model.signatures.BuiltIn;
+import eu.europa.ted.efx.model.builtins.BuiltIn;
 import eu.europa.ted.efx.model.signatures.BuiltInParameter;
 import eu.europa.ted.efx.model.signatures.ParameterType;
 import eu.europa.ted.efx.model.signatures.Signature;

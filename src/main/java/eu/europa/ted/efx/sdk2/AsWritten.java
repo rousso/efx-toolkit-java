@@ -15,10 +15,10 @@ package eu.europa.ted.efx.sdk2;
 
 import java.util.List;
 
+import eu.europa.ted.efx.model.builtins.BuiltIn;
+import eu.europa.ted.efx.model.builtins.Overload;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
-import eu.europa.ted.efx.model.signatures.BuiltIn;
 import eu.europa.ted.efx.model.signatures.Construct;
-import eu.europa.ted.efx.model.signatures.Overload;
 
 /**
  * A built-in as a call writes it: under another of its names, as {@code string} for {@code text},

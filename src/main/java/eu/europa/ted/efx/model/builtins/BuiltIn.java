@@ -11,13 +11,16 @@
  * or implied. See the Licence for the specific language governing permissions and limitations under
  * the Licence.
  */
-package eu.europa.ted.efx.model.signatures;
+package eu.europa.ted.efx.model.builtins;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
 import eu.europa.ted.efx.interfaces.ScriptGenerator;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
+import eu.europa.ted.efx.model.signatures.Construct;
+import eu.europa.ted.efx.model.signatures.Parameters;
+import eu.europa.ted.efx.model.signatures.Resolution;
 
 /**
  * An EFX operator or built-in function: a construct that the catalogue translates itself. It has

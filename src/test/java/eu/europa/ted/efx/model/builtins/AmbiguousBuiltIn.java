@@ -11,9 +11,9 @@
  * or implied. See the Licence for the specific language governing permissions and limitations under
  * the Licence.
  */
-package eu.europa.ted.efx.model.signatures;
+package eu.europa.ted.efx.model.builtins;
 
-import static eu.europa.ted.efx.model.signatures.Overload.overload;
+import static eu.europa.ted.efx.model.builtins.Overload.overload;
 import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
 import static eu.europa.ted.efx.model.signatures.ParameterType.T;
 import static eu.europa.ted.efx.model.signatures.ParameterType.TEXT;
@@ -25,9 +25,9 @@ import java.util.List;
  * A built-in whose two overloads both apply to a text: the defect the catalogue must never have,
  * kept to prove that the catalogue's tests and the resolution detect it.
  */
-final class AmbiguousBuiltIn implements BuiltIn {
+public final class AmbiguousBuiltIn implements BuiltIn {
 
-  static final AmbiguousBuiltIn INSTANCE = new AmbiguousBuiltIn();
+  public static final AmbiguousBuiltIn INSTANCE = new AmbiguousBuiltIn();
 
   private final List<Overload> overloads = List.of(
       overload(signature(parameter("text", TEXT)).returning(TEXT),

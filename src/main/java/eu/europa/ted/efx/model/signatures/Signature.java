@@ -19,8 +19,8 @@ import java.util.stream.Collectors;
 import eu.europa.ted.efx.model.types.EfxDataType;
 
 /**
- * The signature of an {@link Overload}: its {@link Parameters}, which may end in a variadic tail,
- * and its result type.
+ * The signature of one overload of a built-in: its {@link Parameters}, which may end in a variadic
+ * tail, and its result type.
  *
  * <p>A variadic tail takes one or more arguments after the fixed parameters. An optional argument
  * is not part of a signature: the built-in declares a second overload instead. A signature whose

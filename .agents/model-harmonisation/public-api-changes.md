@@ -52,3 +52,29 @@ The public types of `src/main/java` that H1 to H6 removed, added or reshaped, me
 | `model.variables.Variables` | yes | H3 | `toArguments()` added |
 
 `TranslatorConfigurationException.ambiguousOverloads`, which the plan names, keeps its signature, so it is not in the tables: step 1 added it, and the CHANGELOG already lists its error code. H2 renamed its first parameter from `builtInName` to `construct` and dropped the quotes around that name in the `AMBIGUOUS_OVERLOADS` message, since the construct's own name now brings them ("Function '...'"). No test raises this message.
+
+## After H7: the built-ins package (H8)
+
+H8 moves the built-in catalogue out of `model.signatures` into the new package `model.builtins`. Measured with `javap` on 77b941d and on H8: the same 279 public types, of which 19 change package and nothing else, their members included. None is on develop, so none needs a breaking-change entry; the CHANGELOG's type-checking entry names both packages.
+
+| Was | Is |
+| --- | --- |
+| `model.signatures.ArithmeticOperators` | `model.builtins.ArithmeticOperators` |
+| `model.signatures.BuiltIn` | `model.builtins.BuiltIn` |
+| `model.signatures.BuiltIns` | `model.builtins.BuiltIns` |
+| `model.signatures.ComparisonOperators` | `model.builtins.ComparisonOperators` |
+| `model.signatures.Composer` | `model.builtins.Composer` |
+| `model.signatures.Composer.SequenceFunction` | `model.builtins.Composer.SequenceFunction` |
+| `model.signatures.Composer.SequencePairFunction` | `model.builtins.Composer.SequencePairFunction` |
+| `model.signatures.Composer.SubsequenceFunction` | `model.builtins.Composer.SubsequenceFunction` |
+| `model.signatures.Composer.SubsequenceWithLengthFunction` | `model.builtins.Composer.SubsequenceWithLengthFunction` |
+| `model.signatures.ConditionOperators` | `model.builtins.ConditionOperators` |
+| `model.signatures.ConversionFunctions` | `model.builtins.ConversionFunctions` |
+| `model.signatures.DateTimeFunctions` | `model.builtins.DateTimeFunctions` |
+| `model.signatures.LogicalOperators` | `model.builtins.LogicalOperators` |
+| `model.signatures.NumericFunctions` | `model.builtins.NumericFunctions` |
+| `model.signatures.Overload` | `model.builtins.Overload` |
+| `model.signatures.PatternMatch` | `model.builtins.PatternMatch` |
+| `model.signatures.SequenceFunctions` | `model.builtins.SequenceFunctions` |
+| `model.signatures.StringFunctions` | `model.builtins.StringFunctions` |
+| `model.signatures.TemplateFunctions` | `model.builtins.TemplateFunctions` |

@@ -11,38 +11,41 @@
  * or implied. See the Licence for the specific language governing permissions and limitations under
  * the Licence.
  */
-package eu.europa.ted.efx.model.signatures;
+package eu.europa.ted.efx.model.builtins;
 
-import static eu.europa.ted.efx.model.signatures.Overload.overload;
+import static eu.europa.ted.efx.model.builtins.Overload.overload;
 import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
 import static eu.europa.ted.efx.model.signatures.ParameterType.INDICATOR;
+import static eu.europa.ted.efx.model.signatures.ParameterType.T;
 import static eu.europa.ted.efx.model.signatures.Signature.signature;
 
 import java.util.List;
 
 /**
- * The logical operators {@code and} and {@code or}, and the function {@code not}.
+ * The comparison operators. Each compares two single values of the same value primitive.
  */
-public enum LogicalOperators implements BuiltIn {
+public enum ComparisonOperators implements BuiltIn {
 
-  AND("and",
-      overload(signature(parameter("left", INDICATOR), parameter("right", INDICATOR)).returning(INDICATOR),
-          (script, args) -> script.composeLogicalAnd(args.booleanAt(0), args.booleanAt(1)))),
+  EQUAL("=="),
 
-  OR("or",
-      overload(signature(parameter("left", INDICATOR), parameter("right", INDICATOR)).returning(INDICATOR),
-          (script, args) -> script.composeLogicalOr(args.booleanAt(0), args.booleanAt(1)))),
+  NOT_EQUAL("!="),
 
-  NOT("not",
-      overload(signature(parameter("value", INDICATOR)).returning(INDICATOR),
-          (script, args) -> script.composeLogicalNot(args.booleanAt(0))));
+  LESS("<"),
+
+  LESS_OR_EQUAL("<="),
+
+  GREATER(">"),
+
+  GREATER_OR_EQUAL(">=");
 
   private final String name;
   private final List<Overload> overloads;
 
-  LogicalOperators(final String name, final Overload... overloads) {
-    this.name = name;
-    this.overloads = List.of(overloads);
+  ComparisonOperators(final String symbol) {
+    this.name = symbol;
+    this.overloads = List.of(
+        overload(signature(parameter("left", T), parameter("right", T)).returning(INDICATOR),
+            (script, args) -> script.composeComparisonOperation(args.scalarAt(0), symbol, args.scalarAt(1))));
   }
 
   @Override
@@ -53,13 +56,5 @@ public enum LogicalOperators implements BuiltIn {
   @Override
   public List<Overload> getOverloads() {
     return this.overloads;
-  }
-
-  /**
-   * @return {@code true} for {@code not}, which is called as a function
-   */
-  @Override
-  public boolean isFunction() {
-    return this == NOT;
   }
 }

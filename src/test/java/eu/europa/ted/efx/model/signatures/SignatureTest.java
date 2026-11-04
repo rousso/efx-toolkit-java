@@ -20,6 +20,8 @@ import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
 
+import eu.europa.ted.efx.model.builtins.SequenceFunctions;
+import eu.europa.ted.efx.model.builtins.StringFunctions;
 import eu.europa.ted.efx.model.expressions.sequence.BooleanSequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.DateSequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.DurationSequenceExpression;

@@ -11,9 +11,9 @@
  * or implied. See the Licence for the specific language governing permissions and limitations under
  * the Licence.
  */
-package eu.europa.ted.efx.model.signatures;
+package eu.europa.ted.efx.model.builtins;
 
-import static eu.europa.ted.efx.model.signatures.Overload.overload;
+import static eu.europa.ted.efx.model.builtins.Overload.overload;
 import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
 import static eu.europa.ted.efx.model.signatures.ParameterType.INDICATOR;
 import static eu.europa.ted.efx.model.signatures.ParameterType.TEXT;

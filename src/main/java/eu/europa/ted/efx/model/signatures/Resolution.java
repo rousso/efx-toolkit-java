@@ -31,8 +31,8 @@ import eu.europa.ted.efx.model.expressions.TypedExpression;
  * built-in, and a resolution that finds more than one raises a
  * {@link TranslatorConfigurationException}.</p>
  *
- * <p>A built-in translates a resolved call with {@link BuiltIn#compose}; any other construct is
- * translated where it is written, from the converted arguments.</p>
+ * <p>A built-in translates a resolved call itself; any other construct is translated where it is
+ * written, from the converted arguments.</p>
  *
  * <p>Each outcome is a class of its own that holds only its own facts: a resolved call the
  * {@link Match} of the parameter list that takes the arguments, an unresolved one its mismatch.
