@@ -13,6 +13,9 @@
  */
 package eu.europa.ted.efx.sdk2;
 
+import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
+import static eu.europa.ted.efx.model.signatures.ParameterType.INDICATOR;
+
 import java.util.ArrayList;
 import java.io.IOException;
 import java.io.InputStream;
@@ -38,7 +41,6 @@ import eu.europa.ted.efx.interfaces.ScriptGenerator;
 import eu.europa.ted.efx.interfaces.SymbolResolver;
 import eu.europa.ted.efx.interfaces.TranslatorOptions;
 import eu.europa.ted.efx.interfaces.ValidatorGenerator;
-import eu.europa.ted.efx.exceptions.Construct;
 import eu.europa.ted.efx.exceptions.InvalidIdentifierException;
 import eu.europa.ted.efx.exceptions.InvalidUsageException;
 import eu.europa.ted.efx.model.Context;
@@ -58,11 +60,11 @@ import eu.europa.ted.efx.model.rules.RuleSeverity;
 import eu.europa.ted.efx.model.rules.RuleStack;
 import eu.europa.ted.efx.model.rules.ValidationRule;
 import eu.europa.ted.efx.model.rules.ValidationStage;
-import eu.europa.ted.efx.model.variables.DynamicFunction;
-import eu.europa.ted.efx.model.variables.DynamicVariable;
-import eu.europa.ted.efx.model.variables.Function;
-import eu.europa.ted.efx.model.variables.ParsedParameters;
-import eu.europa.ted.efx.model.variables.Variable;
+import eu.europa.ted.efx.model.identifiers.DynamicFunction;
+import eu.europa.ted.efx.model.identifiers.DynamicVariable;
+import eu.europa.ted.efx.model.identifiers.Function;
+import eu.europa.ted.efx.model.identifiers.ParsedParameters;
+import eu.europa.ted.efx.model.identifiers.Variable;
 import eu.europa.ted.efx.sdk2.EfxParser.*;
 
 /**
@@ -83,11 +85,16 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
   private static final Logger logger = LoggerFactory.getLogger(EfxRulesTranslatorV2.class);
 
   /** The clauses of a rule that take a condition, as a type error names them. */
-  private static final Construct WHEN = Construct.of("'WHEN'", "condition");
-  private static final Construct ASSERT = Construct.of("'ASSERT'", "condition");
-  private static final Construct REPORT = Construct.of("'REPORT'", "condition");
-  private static final Construct OTHERWISE_ASSERT = Construct.of("'OTHERWISE ASSERT'", "condition");
-  private static final Construct OTHERWISE_REPORT = Construct.of("'OTHERWISE REPORT'", "condition");
+  private static final GrammarConstruct WHEN =
+      GrammarConstruct.of("'WHEN'", parameter("condition", INDICATOR));
+  private static final GrammarConstruct ASSERT =
+      GrammarConstruct.of("'ASSERT'", parameter("condition", INDICATOR));
+  private static final GrammarConstruct REPORT =
+      GrammarConstruct.of("'REPORT'", parameter("condition", INDICATOR));
+  private static final GrammarConstruct OTHERWISE_ASSERT =
+      GrammarConstruct.of("'OTHERWISE ASSERT'", parameter("condition", INDICATOR));
+  private static final GrammarConstruct OTHERWISE_REPORT =
+      GrammarConstruct.of("'OTHERWISE REPORT'", parameter("condition", INDICATOR));
 
   /**
    * The ValidatorGenerator is used to generate validation output from the intermediate model.
@@ -126,7 +133,7 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
   }
 
   @Override
-  EfxExpressionVisitor visitorOf(final TranslationContext translation) {
+  EfxExpressionVisitor visitorOf(final Translation translation) {
     return new RulesExpressionVisitor(translation);
   }
 
@@ -135,7 +142,8 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
    */
   @Override
   public String translateExpression(final String expression, final String... arguments) {
-    return new EfxExpressionTranslatorV2(this.symbols, this.script, this.errorListener)
+    return new EfxExpressionTranslatorV2(this.translation.symbols(), this.translation.script(),
+        this.errorListener)
         .translateExpression(expression, arguments);
   }
 
@@ -219,7 +227,7 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
    */
   private void trackDynamicDependenciesOf(final String variableName) {
     if (this.currentDynamicDependencies != null) {
-      this.stack.getVariable(variableName).ifPresent(var -> {
+      this.translation.stack().getVariable(variableName).ifPresent(var -> {
         if (var instanceof DynamicVariable) {
           this.currentDynamicDependencies.add((DynamicVariable) var);
         } else if (var.hasDynamicDependencies()) {
@@ -254,9 +262,9 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
     try {
       var expression = this.expressions.initialValueOf(ctx);
       var variable = new Variable(variableName,
-          this.script.composeVariableDeclaration(variableName, expression.getClass()),
+          this.translation.script().composeVariableDeclaration(variableName, expression.getClass()),
           expression,
-          this.script.composeVariableReference(variableName, expression.getClass()));
+          this.translation.script().composeVariableReference(variableName, expression.getClass()));
       this.attachDynamicDependencies(variable);
       this.exitVariableInitializer(ctx, variable);
     } finally {
@@ -268,27 +276,31 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
   public void exitDynamicFunctionInvocation(DynamicFunctionInvocationContext ctx) {
     FunctionInvocationContext invocation = ctx.functionInvocation();
     String funcName = invocation.functionName.getText();
-    var func = this.stack.getFunction(funcName);
+    var func = this.translation.stack().getFunction(funcName);
     List<? extends TypedExpression> args =
         this.expressions.argumentsOf(invocation, func).getArgumentValues();
     if (!(func instanceof DynamicFunction)) {
       throw InvalidUsageException.notADynamicFunction(ctx, funcName);
     }
     DynamicFunction apiFunc = (DynamicFunction) func;
-    var rawCall = this.script.composeDynamicFunction(apiFunc.endpointName, funcName, args);
-    this.stack.push(new DynamicExpression(rawCall.getScript()));
-    this.stack.push(apiFunc);
+    var rawCall = this.translation.script().composeDynamicFunction(apiFunc.endpointName, funcName,
+        args);
+    this.translation.stack().push(new DynamicExpression(rawCall.getScript()));
+    this.translation.stack().push(apiFunc);
   }
 
   @Override
   public void exitDynamicVariableInitializer(DynamicVariableInitializerContext ctx) {
     String variableName = ctx.variableName.getText();
-    var apiFunc = this.stack.pop(DynamicFunction.class);
-    var rawCall = this.stack.pop(DynamicExpression.class);
-    var declaration = this.script.composeVariableDeclaration(variableName, DynamicExpression.class);
-    var varRef = this.script.composeVariableReference(variableName, NumericExpression.class);
-    var one = this.script.getNumericLiteralEquivalent("1");
-    var referenceExpression = this.script.composeComparisonOperation(varRef, "==", one);
+    var apiFunc = this.translation.stack().pop(DynamicFunction.class);
+    var rawCall = this.translation.stack().pop(DynamicExpression.class);
+    var declaration = this.translation.script().composeVariableDeclaration(variableName,
+        DynamicExpression.class);
+    var varRef = this.translation.script().composeVariableReference(variableName,
+        NumericExpression.class);
+    var one = this.translation.script().getNumericLiteralEquivalent("1");
+    var referenceExpression = this.translation.script().composeComparisonOperation(varRef, "==",
+        one);
     var variable = new DynamicVariable(variableName, declaration, rawCall, referenceExpression,
         apiFunc.endpointName, apiFunc.errorSeverity, apiFunc.errorLabel);
     this.exitVariableInitializer(ctx, variable);
@@ -301,10 +313,10 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
    */
   private void exitVariableInitializer(VariableInitializerContext initializer, Variable variable) {
     if (initializer.getParent() instanceof VariableListContext) {
-      this.stack.declareIdentifier(variable);
+      this.translation.stack().declareIdentifier(variable);
       this.ruleStack.peek(RuleSet.class).addVariable(variable);
     } else {
-      this.stack.push(variable);
+      this.translation.stack().push(variable);
     }
   }
 
@@ -323,12 +335,12 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
 
     // The variable initializer exit methods above should have created a Variable
     // object and pushed it onto the stack. Pop it and declare it as global.
-    if (!this.stack.empty()) {
-      Variable variable = this.stack.pop(Variable.class);
+    if (!this.translation.stack().empty()) {
+      Variable variable = this.translation.stack().pop(Variable.class);
 
       // Declare the variable in the stack so it can be referenced later
       // and retrieved via stack.getGlobals() for the validator generator
-      this.stack.declareGlobalIdentifier(variable);
+      this.translation.stack().declareGlobalIdentifier(variable);
       this.validationPlan.addVariable(variable);
       logger.debug("Declared global variable: {}", variable.name);
     }
@@ -342,7 +354,7 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
   @Override
   public void enterValidationStage(ValidationStageContext ctx) {
 
-    this.stack.pushStackFrame();
+    this.translation.stack().pushStackFrame();
     this.ruleStack.push(new ValidationStage(ctx.StageIdentifier().getText(), this.validationPlan));
   }
 
@@ -356,7 +368,7 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
 
     var stage = this.ruleStack.pop(ValidationStage.class);
     this.validationPlan.addStage(stage);
-    this.stack.popStackFrame();
+    this.translation.stack().popStackFrame();
   }
 
   /**
@@ -369,11 +381,11 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
     logger.debug("Processing pattern-level variable declaration");
 
     // The variable initializer should have created a Variable object
-    if (!this.stack.empty()) {
-      Variable variable = this.stack.pop(Variable.class);
+    if (!this.translation.stack().empty()) {
+      Variable variable = this.translation.stack().pop(Variable.class);
 
       // Declare the variable in the stack so it can be referenced within this stage
-      this.stack.declareIdentifier(variable);
+      this.translation.stack().declareIdentifier(variable);
 
       this.ruleStack.peek(ValidationStage.class).addVariable(variable);
     }
@@ -386,7 +398,7 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
    */
   @Override
   public void enterRuleSet(RuleSetContext ctx) {
-    this.stack.pushStackFrame();
+    this.translation.stack().pushStackFrame();
     this.ruleStack.push(new RuleSet(this.ruleStack.peek(ValidationStage.class)));
   }
 
@@ -400,11 +412,11 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
     logger.debug("Exiting rule block");
 
     var ruleSet = this.ruleStack.pop(RuleSet.class);
-    this.stack.popStackFrame();
+    this.translation.stack().popStackFrame();
     var stage = this.ruleStack.peek(ValidationStage.class);
     stage.addRuleSet(ruleSet);
-    assert !this.efxContext.isEmpty() : "Expected context to be set in rule block (WITH clause should have pushed it)";
-    this.efxContext.pop();
+    assert !this.translation.efxContext().isEmpty() : "Expected context to be set in rule block (WITH clause should have pushed it)";
+    this.translation.efxContext().pop();
   }
 
 
@@ -461,9 +473,9 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
    */
   @Override
   public void exitWhenClause(WhenClauseContext ctx) {
-    var condition = this.expressions.valueAs(ctx.expression(), BooleanExpression.class, WHEN);
+    var condition = this.expressions.valueOf(ctx.expression(), WHEN).booleanAt(0);
     var rule = this.ruleStack.peek(ValidationRule.class);
-    var invertedCondition = this.script.composeLogicalNot(condition);
+    var invertedCondition = this.translation.script().composeLogicalNot(condition);
     rule.setCondition(condition, invertedCondition, this.combineWithOrParenthesized(rule.getExpression(), invertedCondition));
   }
 
@@ -484,10 +496,10 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
 
     if (ctx.simpleFieldReference() != null) {
       var fieldId = ctx.simpleFieldReference().FieldId().getText();
-      this.ruleStack.peek(ValidationRule.class).setSubject(new FieldContext(fieldId, this.symbols.getAbsolutePathOfField(fieldId)));
+      this.ruleStack.peek(ValidationRule.class).setSubject(new FieldContext(fieldId, this.translation.symbols().getAbsolutePathOfField(fieldId)));
     } else if (ctx.simpleNodeReference() != null) {
       var nodeId = ctx.simpleNodeReference().NodeId().getText();
-      this.ruleStack.peek(ValidationRule.class).setSubject(new NodeContext(nodeId, this.symbols.getAbsolutePathOfNode(nodeId)));
+      this.ruleStack.peek(ValidationRule.class).setSubject(new NodeContext(nodeId, this.translation.symbols().getAbsolutePathOfNode(nodeId)));
     } else {
       assert false : "The grammar should prevent reaching this point without a field or node reference";
     }
@@ -503,7 +515,7 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
 
     String compressedList = ctx.noticeTypeList() instanceof AnyNoticeTypesContext ? "*" : ctx.noticeTypeList().getText();
     if (this.cachedSortedNoticeSubtypeIds == null) {
-      this.cachedSortedNoticeSubtypeIds = this.symbols.getAllNoticeSubtypes().stream()
+      this.cachedSortedNoticeSubtypeIds = this.translation.symbols().getAllNoticeSubtypes().stream()
           .sorted()
           .map(SdkNoticeSubtype::getId)
           .collect(Collectors.toUnmodifiableList());
@@ -534,7 +546,7 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
    */
   @Override
   public void exitAssertClause(AssertClauseContext ctx) {
-    var test = this.expressions.valueAs(ctx.expression(), BooleanExpression.class, ASSERT);
+    var test = this.expressions.valueOf(ctx.expression(), ASSERT).booleanAt(0);
     var rule = this.ruleStack.pop(ValidationRule.class);
     var invertedCondition = rule.getInvertedCondition();
     rule.setExpression(test, invertedCondition == null ? test : this.combineWithOrParenthesized(test, invertedCondition));
@@ -543,7 +555,7 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
 
   @Override
   public void exitReportClause(ReportClauseContext ctx) {
-    var test = this.expressions.valueAs(ctx.expression(), BooleanExpression.class, REPORT);
+    var test = this.expressions.valueOf(ctx.expression(), REPORT).booleanAt(0);
     var rule = this.ruleStack.pop(ValidationRule.class);
     var invertedCondition = rule.getInvertedCondition();
     rule.setExpression(test, invertedCondition == null ? test : this.combineWithOrParenthesized(test, invertedCondition));
@@ -557,7 +569,7 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
   @Override
   public void exitOtherwiseAssertClause(OtherwiseAssertClauseContext ctx) {
     var test =
-        this.expressions.valueAs(ctx.expression(), BooleanExpression.class, OTHERWISE_ASSERT);
+        this.expressions.valueOf(ctx.expression(), OTHERWISE_ASSERT).booleanAt(0);
     var rule = this.ruleStack.pop(ValidationRule.class);
     var invertedCondition = rule.getInvertedCondition();
     rule.setExpression(test, invertedCondition == null ? test : this.combineWithOrParenthesized(test, invertedCondition));
@@ -567,7 +579,7 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
   @Override
   public void exitOtherwiseReportClause(OtherwiseReportClauseContext ctx) {
     var test =
-        this.expressions.valueAs(ctx.expression(), BooleanExpression.class, OTHERWISE_REPORT);
+        this.expressions.valueOf(ctx.expression(), OTHERWISE_REPORT).booleanAt(0);
     var rule = this.ruleStack.pop(ValidationRule.class);
     var invertedCondition = rule.getInvertedCondition();
     rule.setExpression(test, invertedCondition == null ? test : this.combineWithOrParenthesized(test, invertedCondition));
@@ -582,9 +594,9 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
     if (right == null) {
       return left;
     }
-    return this.script.composeLogicalOr(
-        this.script.composeParenthesizedExpression(left, BooleanExpression.class),
-        this.script.composeParenthesizedExpression(right, BooleanExpression.class));
+    return this.translation.script().composeLogicalOr(
+        this.translation.script().composeParenthesizedExpression(left, BooleanExpression.class),
+        this.translation.script().composeParenthesizedExpression(right, BooleanExpression.class));
   }
 
   @Override
@@ -622,9 +634,9 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
     BooleanExpression combined = null;
     for (ValidationRule rule : ruleSet) {
       assert rule != null &&  rule.getCondition() != null : "The EFX grammar should have prevented this. All rules in a RuleSet should have conditions if a fallback is defined.";
-      combined = (combined == null) ? rule.getInvertedCondition() : this.script.composeLogicalAnd(combined, rule.getInvertedCondition());
+      combined = (combined == null) ? rule.getInvertedCondition() : this.translation.script().composeLogicalAnd(combined, rule.getInvertedCondition());
     }
-    var invertedCombined = this.script.composeLogicalNot(combined);
+    var invertedCombined = this.translation.script().composeLogicalNot(combined);
 
     fallbackRule.setCondition(combined, invertedCombined, this.combineWithOrParenthesized(fallbackRule.getExpression(), invertedCombined));
 
@@ -648,14 +660,14 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
 
   @Override
   public void enterDynamicFunctionDeclaration(DynamicFunctionDeclarationContext ctx) {
-    this.stack.pushStackFrame();
-    this.stack.push(new ParsedParameters());
+    this.translation.stack().pushStackFrame();
+    this.translation.stack().push(new ParsedParameters());
   }
 
   @Override
   public void exitDynamicFunctionDeclaration(DynamicFunctionDeclarationContext ctx) {
-    ParsedParameters params = this.stack.pop(ParsedParameters.class);
-    this.stack.popStackFrame();
+    ParsedParameters params = this.translation.stack().pop(ParsedParameters.class);
+    this.translation.stack().popStackFrame();
     String apiName = ctx.functionName.getText();
     String endpointName = ctx.endpointName != null ? unquote(ctx.endpointName.getText()) : "default";
     if (!this.validationPlan.getEndpoints().containsKey(endpointName)) {
@@ -665,7 +677,7 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
         ? RuleSeverity.WARNING : RuleSeverity.ERROR;
     String errorLabel = ctx.onErrorClause() != null && ctx.onErrorClause().errorLabel != null
         ? unquote(ctx.onErrorClause().errorLabel.getText()) : null;
-    this.stack.declareFunction(new DynamicFunction(apiName, params, endpointName, errorSeverity, errorLabel));
+    this.translation.stack().declareFunction(new DynamicFunction(apiName, params, endpointName, errorSeverity, errorLabel));
   }
 
   private int apiCallCounter = 0;
@@ -685,15 +697,19 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
     if (!this.ruleStack.contains(ValidationRule.class)) {
       throw InvalidUsageException.dynamicFunctionOutsideRule(ctx, funcName);
     }
-    var rawCall = this.script.composeDynamicFunction(apiFunc.endpointName, funcName, args);
+    var rawCall = this.translation.script().composeDynamicFunction(apiFunc.endpointName, funcName,
+        args);
 
     // Compose the variable's expressions: declaration, initialization, and success check ($var == 1).
-    String varName = TranslationContext.RESERVED_PREFIX + "apiResult" + (++this.apiCallCounter);
-    var declaration = this.script.composeVariableDeclaration(varName, DynamicExpression.class);
+    String varName = Translation.RESERVED_PREFIX + "apiResult" + (++this.apiCallCounter);
+    var declaration = this.translation.script().composeVariableDeclaration(varName,
+        DynamicExpression.class);
     var initExpression = new DynamicExpression(rawCall.getScript());
-    var varRef = this.script.composeVariableReference(varName, NumericExpression.class);
-    var one = this.script.getNumericLiteralEquivalent("1");
-    var referenceExpression = this.script.composeComparisonOperation(varRef, "==", one);
+    var varRef = this.translation.script().composeVariableReference(varName,
+        NumericExpression.class);
+    var one = this.translation.script().getNumericLiteralEquivalent("1");
+    var referenceExpression = this.translation.script().composeComparisonOperation(varRef, "==",
+        one);
 
     // Create the auto-generated variable and register it on the current rule.
     var rule = this.ruleStack.peek(ValidationRule.class);
@@ -728,23 +744,23 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
    */
   private final class RulesExpressionVisitor extends EfxExpressionVisitor {
 
-    RulesExpressionVisitor(final TranslationContext translation) {
+    RulesExpressionVisitor(final Translation translation) {
       super(translation);
     }
 
     @Override
-    public Operand<?> visitFunctionInvocation(final FunctionInvocationContext ctx) {
+    public Subexpression<?> visitFunctionInvocation(final FunctionInvocationContext ctx) {
       final Function function =
-          EfxRulesTranslatorV2.this.stack.getFunction(ctx.functionName.getText());
+          EfxRulesTranslatorV2.this.translation.stack().getFunction(ctx.functionName.getText());
       if (function instanceof DynamicFunction) {
-        return this.operand(EfxRulesTranslatorV2.this.composeAutoGeneratedDynamicVariable(ctx,
+        return this.subexpression(EfxRulesTranslatorV2.this.composeAutoGeneratedDynamicVariable(ctx,
             (DynamicFunction) function));
       }
       return super.visitFunctionInvocation(ctx);
     }
 
     @Override
-    public Operand<?> visitVariableReference(final VariableReferenceContext ctx) {
+    public Subexpression<?> visitVariableReference(final VariableReferenceContext ctx) {
       EfxRulesTranslatorV2.this.trackDynamicDependenciesOf(ctx.variableName.getText());
       return super.visitVariableReference(ctx);
     }

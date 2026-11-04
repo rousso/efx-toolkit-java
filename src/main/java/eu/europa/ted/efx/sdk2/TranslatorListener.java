@@ -19,20 +19,17 @@ import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.ParseTree;
 
-import eu.europa.ted.efx.exceptions.Construct;
 import eu.europa.ted.efx.exceptions.TranslatorConfigurationException;
 import eu.europa.ted.efx.interfaces.ScriptGenerator;
 import eu.europa.ted.efx.interfaces.SymbolResolver;
-import eu.europa.ted.efx.model.CallStack;
 import eu.europa.ted.efx.model.Context;
-import eu.europa.ted.efx.model.ContextStack;
 import eu.europa.ted.efx.model.Context.FieldContext;
 import eu.europa.ted.efx.model.Context.NodeContext;
 import eu.europa.ted.efx.model.expressions.PathExpression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
-import eu.europa.ted.efx.model.variables.ParsedParameter;
-import eu.europa.ted.efx.model.variables.ParsedParameters;
-import eu.europa.ted.efx.model.variables.Variable;
+import eu.europa.ted.efx.model.identifiers.ParsedParameter;
+import eu.europa.ted.efx.model.identifiers.ParsedParameters;
+import eu.europa.ted.efx.model.identifiers.Variable;
 import eu.europa.ted.efx.sdk2.EfxParser.ContextVariableInitializerContext;
 import eu.europa.ted.efx.sdk2.EfxParser.IncludeDirectiveContext;
 import eu.europa.ted.efx.sdk2.EfxParser.ParameterDeclarationContext;
@@ -43,25 +40,15 @@ import eu.europa.ted.efx.sdk2.EfxParser.StandardExpressionBlockContext;
  * expressions, and asks an {@link EfxExpressionVisitor} for each expression, field context and
  * node context they hold.
  *
- * <p>Each translation walks its parse tree with a new {@link TranslationContext} and a new
+ * <p>Each translation walks its parse tree with a new {@link Translation} and a new
  * visitor, so that the declarations and contexts of one translation are not visible in the
  * next.</p>
  */
 abstract class TranslatorListener extends EfxBaseListener {
 
   /** An expression block, as a type error names it. */
-  static final Construct EXPRESSION_BLOCK = Construct.of("Expression block", "expression");
-
-  /**
-   * Symbols are the field identifiers and node identifiers. The symbols map is used to resolve them
-   * to their location in the data source (typically their XPath).
-   */
-  final SymbolResolver symbols;
-
-  /**
-   * The ScriptGenerator is called to determine the target language syntax whenever needed.
-   */
-  final ScriptGenerator script;
+  static final GrammarConstruct EXPRESSION_BLOCK =
+      GrammarConstruct.ofValueAsGiven("Expression block", "expression");
 
   /**
    * Listens to the syntax errors of the lexer and the parser, instead of their own listeners, if it
@@ -69,18 +56,11 @@ abstract class TranslatorListener extends EfxBaseListener {
    */
   final BaseErrorListener errorListener;
 
-  // The state of the translation in progress, created for each translation.
-
   /**
-   * The stack is used by the methods of this listener to pass data to each other as the parse tree
-   * is being walked, and holds the identifiers declared.
+   * The state of the translation in progress: the symbols, the script generator, the call stack
+   * and the contexts. Each translation starts with the {@link Translation#next next} one.
    */
-  CallStack stack;
-
-  /**
-   * The contexts that the declarations of the file switch to.
-   */
-  ContextStack efxContext;
+  Translation translation;
 
   /**
    * Translates the expressions, field contexts and node contexts of the file.
@@ -89,16 +69,15 @@ abstract class TranslatorListener extends EfxBaseListener {
 
   TranslatorListener(final SymbolResolver symbols, final ScriptGenerator script,
       final BaseErrorListener errorListener) {
-    this.symbols = symbols;
-    this.script = script;
     this.errorListener = errorListener;
+    this.translation = new Translation(symbols, script);
   }
 
   /**
    * @param translation the state of a translation
    * @return the visitor that translates the expressions of the translation
    */
-  abstract EfxExpressionVisitor visitorOf(TranslationContext translation);
+  abstract EfxExpressionVisitor visitorOf(Translation translation);
 
   /**
    * @param input the text to parse
@@ -126,22 +105,20 @@ abstract class TranslatorListener extends EfxBaseListener {
    * @param tree the parse tree of the file
    */
   void translate(final ParseTree tree) {
-    final TranslationContext translation = new TranslationContext(this.symbols, this.script);
-    this.stack = translation.stack();
-    this.efxContext = translation.efxContext();
-    this.expressions = this.visitorOf(translation);
+    this.translation = this.translation.next();
+    this.expressions = this.visitorOf(this.translation);
 
     new ExpressionSkippingWalker().walk(this, tree);
   }
 
   @Override
   public void enterEveryRule(final ParserRuleContext ctx) {
-    this.stack.pushParserContext(ctx);
+    this.translation.stack().pushParserContext(ctx);
   }
 
   @Override
   public void exitEveryRule(final ParserRuleContext ctx) {
-    this.stack.popParserContext();
+    this.translation.stack().popParserContext();
   }
 
   /**
@@ -162,7 +139,8 @@ abstract class TranslatorListener extends EfxBaseListener {
    */
   @Override
   public void exitStandardExpressionBlock(final StandardExpressionBlockContext ctx) {
-    this.stack.push(this.expressions.valueOf(ctx.expression(), EXPRESSION_BLOCK));
+    this.translation.stack().push(this.expressions.valueOf(ctx.expression(), EXPRESSION_BLOCK)
+        .at(0, TypedExpression.class));
   }
 
   // #region Parameter Declarations -------------------------------------------
@@ -175,10 +153,10 @@ abstract class TranslatorListener extends EfxBaseListener {
   public void exitParameterDeclaration(final ParameterDeclarationContext ctx) {
     final String parameterName = ctx.parameterName.getText();
     final ParsedParameter parameter = new ParsedParameter(parameterName,
-        this.script.composeParameterReference(parameterName,
+        this.translation.script().composeParameterReference(parameterName,
             EfxExpressionVisitor.typeOf(ctx.typeDeclaration())));
-    this.stack.declareIdentifier(parameter);
-    this.stack.peek(ParsedParameters.class).add(parameter);
+    this.translation.stack().declareIdentifier(parameter);
+    this.translation.stack().peek(ParsedParameters.class).add(parameter);
   }
 
   // #endregion Parameter Declarations ----------------------------------------
@@ -200,7 +178,8 @@ abstract class TranslatorListener extends EfxBaseListener {
   }
 
   void exitRootContextDeclaration() {
-    this.exitNodeContextDeclaration(this.symbols.getRootNodeId(), this.symbols.getRootPath(), null);
+    this.exitNodeContextDeclaration(this.translation.symbols().getRootNodeId(),
+        this.translation.symbols().getRootPath(), null);
   }
 
   void exitFieldContextDeclaration(final String fieldId, final PathExpression contextPath,
@@ -220,7 +199,7 @@ abstract class TranslatorListener extends EfxBaseListener {
    * @param contextVariable the variable the context is assigned to, or {@code null}
    */
   void declareContext(final Context context, final Variable contextVariable) {
-    this.efxContext.push(context);
+    this.translation.efxContext().push(context);
     if (contextVariable != null) {
       this.expressions.declareContextVariable(contextVariable, context);
     }
@@ -242,9 +221,9 @@ abstract class TranslatorListener extends EfxBaseListener {
     final Class<? extends TypedExpression> variableType = contextPath.asScalar().getClass();
 
     return new Variable(variableName,
-        this.script.composeVariableDeclaration(variableName, variableType),
-        this.script.contextualizePath(contextPath, contextPath),
-        this.script.composeVariableReference(variableName, variableType));
+        this.translation.script().composeVariableDeclaration(variableName, variableType),
+        this.translation.script().contextualizePath(contextPath, contextPath),
+        this.translation.script().composeVariableReference(variableName, variableType));
   }
 
   // #endregion Context Declarations ------------------------------------------

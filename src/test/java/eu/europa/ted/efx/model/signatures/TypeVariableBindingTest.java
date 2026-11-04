@@ -26,6 +26,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import eu.europa.ted.efx.model.builtins.BuiltIn;
+import eu.europa.ted.efx.model.builtins.BuiltIns;
+import eu.europa.ted.efx.model.builtins.Overload;
 import eu.europa.ted.efx.model.expressions.Expression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.expressions.scalar.BooleanExpression;
@@ -74,8 +77,9 @@ class TypeVariableBindingTest {
   @Test
   void testCatalogue_HasBuiltInsOfTwoTypeVariables() {
     assertEquals(
-        List.of("==", "!=", "<", "<=", ">", ">=", "in", "not in", "value-union", "value-intersect",
-            "value-except", "sequence-equal", "index-of"),
+        List.of("==", "!=", "<", "<=", ">", ">=", "in", "not in", "is unique in",
+            "is not unique in", "value-union", "value-intersect", "value-except", "sequence-equal",
+            "index-of"),
         overloadsOfTwoTypeVariables().map(arguments -> arguments.get()[0])
             .collect(Collectors.toList()));
   }
@@ -98,8 +102,10 @@ class TypeVariableBindingTest {
 
   private static void assertResolvesInEitherOrder(final BuiltIn builtIn, final Overload overload,
       final String first, final String second) {
-    assertSame(overload, resolve(builtIn, overload, first, second).getOverload());
-    assertSame(overload, resolve(builtIn, overload, second, first).getOverload());
+    assertSame(overload.getSignature().getParameters(),
+        resolve(builtIn, overload, first, second).getParameters());
+    assertSame(overload.getSignature().getParameters(),
+        resolve(builtIn, overload, second, first).getParameters());
   }
 
   private static void assertRejectedAtTheSecond(final BuiltIn builtIn, final Overload overload,
@@ -107,8 +113,8 @@ class TypeVariableBindingTest {
     Resolution resolution = resolve(builtIn, overload, first, second);
     assertFalse(resolution.isResolved());
     assertEquals(List.of(1), resolution.getMismatch().getRejections().stream()
-        .filter(rejection -> rejection.getOverload() == overload)
-        .map(Mismatch.Rejection::getPosition)
+        .filter(rejection -> rejection.getParameters() == overload.getSignature().getParameters())
+        .map(Match::getPosition)
         .collect(Collectors.toList()));
   }
 
@@ -118,14 +124,14 @@ class TypeVariableBindingTest {
    */
   private static Resolution resolve(final BuiltIn builtIn, final Overload overload, final String first,
       final String second) {
-    List<Parameter> parameters = overload.getSignature().getParameters().getFixed();
+    List<BuiltInParameter> parameters = overload.getSignature().getParameters();
     return builtIn.resolve(List.of(
         VALUES.get(parameters.get(0).getType()).get(first),
         VALUES.get(parameters.get(1).getType()).get(second)));
   }
 
   private static boolean takesTwoTypeVariables(final Overload overload) {
-    List<Parameter> parameters = overload.getSignature().getParameters().getFixed();
+    List<BuiltInParameter> parameters = overload.getSignature().getParameters();
     return parameters.size() == 2
         && parameters.stream().allMatch(parameter -> parameter.getType().isTypeVariable());
   }

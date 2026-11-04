@@ -5324,7 +5324,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   void testTypeErrorMessage_Parentheses() {
     assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
         "line 1:12 Type mismatch. Parenthesised expression cannot take 'node'."
-            + " Its content must be a value.",
+            + " Its content must be a value or a sequence of values.",
         "(ND-SubNode)");
   }
 

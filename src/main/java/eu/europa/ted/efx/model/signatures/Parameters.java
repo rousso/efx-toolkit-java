@@ -13,31 +13,33 @@
  */
 package eu.europa.ted.efx.model.signatures;
 
-import static eu.europa.ted.efx.model.signatures.Parameter.parameter;
+import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import eu.europa.ted.efx.model.expressions.TypedExpression;
-import eu.europa.ted.efx.model.signatures.Mismatch.Rejection;
 import eu.europa.ted.efx.model.types.EfxDataType;
-import eu.europa.ted.efx.model.variables.ParsedParameters;
 
 /**
- * A parameter list: fixed parameters, in order, and an optional variadic tail. It is the part of a
- * {@link Signature} that arguments are matched against, and the whole of what a function or
- * template declared in an EFX file declares about its arguments.
+ * A parameter list: fixed parameters, in order, and an optional variadic tail. Arguments are
+ * matched against it: those of a built-in against the list of a {@link Signature}, those of a
+ * function or template declared in EFX against the list of its declaration.
  *
  * <p>A variadic tail takes one or more arguments after the fixed parameters. Parameters that
  * mention {@code T} are generic: they are bound to the value primitive of the argument at the
  * first position of {@code T} before the arguments are checked against them.</p>
+ *
+ * @param <P> the kind of parameter: declared in the catalogue, or parsed with a declaration
  */
-public final class Parameters {
+public class Parameters<P extends Parameter> extends LinkedList<P> {
 
   /**
    * The order in which the rejected arguments of a call are reported: any argument of the wrong
@@ -45,47 +47,50 @@ public final class Parameters {
    * then by position.
    */
   private static final Comparator<Match> REPORTING_ORDER =
-      Comparator.comparing((Match rejection) -> rejection.getKind() == Rejection.Kind.CARDINALITY)
+      Comparator.comparing((Match rejection) -> rejection.getKind() == Match.Kind.CARDINALITY)
           .thenComparingInt(Match::getPosition);
 
-  private final List<Parameter> fixed;
-  private final Parameter variadic;
-  private final boolean generic;
-  private final int typeVariablePosition;
+  private final P variadic;
 
-  Parameters(final List<Parameter> fixed, final Parameter variadic) {
-    this.fixed = List.copyOf(fixed);
+  /**
+   * Creates an empty list with no variadic tail, to which a declaration adds its parameters as
+   * they are translated.
+   */
+  protected Parameters() {
+    this.variadic = null;
+  }
+
+  Parameters(final List<P> fixed, final P variadic) {
+    super(fixed);
     this.variadic = variadic;
-    this.generic = this.all().anyMatch(parameter -> parameter.getType().isTypeVariable());
-    this.typeVariablePosition = IntStream.range(0, this.fixed.size())
-        .filter(position -> this.fixed.get(position).getType().isTypeVariable())
-        .findFirst()
-        .orElse(this.fixed.size());
   }
 
   /**
-   * Gives the parameters a function or template declares.
+   * Gives the parameter list of a construct that the catalogue does not hold, such as the
+   * conditional, from fixed parameters.
    *
-   * @param declared the parameters of the declaration, as they were translated
-   * @return the parameter list, with no variadic tail
+   * @param parameters the parameters, in order
+   * @return the list of those parameters, with no variadic tail
    */
-  public static Parameters of(final ParsedParameters declared) {
-    return new Parameters(declared.stream()
-        .map(parameter -> parameter(parameter.name, ParameterType.of(parameter.getParameterType())))
-        .collect(Collectors.toList()), null);
+  public static Parameters<BuiltInParameter> fixed(final BuiltInParameter... parameters) {
+    return new Parameters<>(List.of(parameters), null);
   }
 
   /**
-   * @return the fixed parameters, in order
+   * Gives the parameter list of a construct that the catalogue does not hold and that takes one or
+   * more arguments of the same parameter, such as a list.
+   *
+   * @param tail the parameter of every argument
+   * @return the list with no fixed parameters and that variadic tail
    */
-  public List<Parameter> getFixed() {
-    return this.fixed;
+  public static Parameters<BuiltInParameter> variadic(final BuiltInParameter tail) {
+    return new Parameters<>(List.of(), tail);
   }
 
   /**
    * @return the parameter of the variadic tail, if there is one
    */
-  public Optional<Parameter> getVariadic() {
+  public Optional<P> getVariadic() {
     return Optional.ofNullable(this.variadic);
   }
 
@@ -97,7 +102,7 @@ public final class Parameters {
    *         greater than it
    */
   public boolean takes(final int count) {
-    return this.variadic == null ? count == this.fixed.size() : count > this.fixed.size();
+    return this.variadic == null ? count == this.size() : count > this.size();
   }
 
   /**
@@ -106,14 +111,58 @@ public final class Parameters {
    * @param position the position of an argument the parameter list {@link #takes}
    * @return the parameter at that position
    */
-  public Parameter parameterAt(final int position) {
-    return position < this.fixed.size() ? this.fixed.get(position) : this.variadic;
+  public P parameterAt(final int position) {
+    return position < this.size() ? this.get(position) : this.variadic;
   }
 
   /**
-   * Matches the arguments of a call: checks their number, binds {@code T} by the argument at its
-   * first position, checks each argument against its parameter, and converts the arguments to the
-   * expression classes of their parameters.
+   * Says what a type error calls the argument at a position: the name of its parameter, numbered
+   * by position among the arguments of a variadic tail that takes more than one.
+   *
+   * @param position the position of an argument the parameter list {@link #takes}
+   * @param count the number of arguments of the call
+   * @return the role, such as "condition", or "item" and "2nd item" for the tail of a list
+   */
+  public String roleOf(final int position, final int count) {
+    final String name = this.parameterAt(position).getName();
+    return position < this.size() ? name
+        : numbered(name, position - this.size(), count - this.size());
+  }
+
+  /**
+   * Names one of several things of a kind by its position, or by the noun alone if it is the only
+   * one.
+   *
+   * @param noun the kind of thing, such as "argument"
+   * @param position its position among them, from 0
+   * @param count the number of them
+   * @return "argument" if there is one, otherwise "1st argument", "2nd argument" and so on
+   */
+  static String numbered(final String noun, final int position, final int count) {
+    return count == 1 ? noun : ordinal(position + 1) + " " + noun;
+  }
+
+  private static String ordinal(final int number) {
+    final int lastTwoDigits = number % 100;
+    if (lastTwoDigits >= 11 && lastTwoDigits <= 13) {
+      return number + "th";
+    }
+    switch (number % 10) {
+      case 1:
+        return number + "st";
+      case 2:
+        return number + "nd";
+      case 3:
+        return number + "rd";
+      default:
+        return number + "th";
+    }
+  }
+
+  /**
+   * Matches the arguments of a call that the parameter list {@link #takes}: binds {@code T} by the
+   * argument at its first position, checks each argument against its parameter, and converts the
+   * arguments to the expression classes of their parameters.
    *
    * <p>Every argument is checked before one is reported, and a wrong primitive or path is reported
    * before a wrong cardinality: the first argument of another primitive than its parameter's, or
@@ -121,32 +170,35 @@ public final class Parameters {
    * where a single value is required. A call wrong in both ways is thus reported by its primitive,
    * whichever of its arguments is the sequence.</p>
    *
-   * @param arguments the translated arguments of the call
-   * @return the converted arguments, or the reason they do not match: their number, a {@code T}
-   *         that the argument at its first position cannot bind, or the argument to report
+   * @param arguments the translated arguments of the call, as many as the list takes
+   * @return the converted arguments, or the argument to report: the one at the first position of
+   *         a {@code T} it cannot bind, or the one the reporting order puts first
+   * @throws IllegalArgumentException if the parameter list does not take that many arguments
    */
   public Match match(final List<? extends TypedExpression> arguments) {
     if (!this.takes(arguments.size())) {
-      return Match.countMismatch();
+      throw new IllegalArgumentException(this + " does not take " + arguments.size()
+          + " arguments");
     }
-    Optional<Parameters> bound = this.boundTo(arguments);
+    Optional<Parameters<?>> bound = this.boundTo(arguments);
     if (bound.isEmpty()) {
-      int position = this.typeVariablePosition;
-      return Match.rejected(position, this.parameterAt(position).getType(), arguments.get(position));
+      int position = this.typeVariablePosition();
+      return Match.rejected(this, position, this.typeAt(position), arguments.get(position));
     }
-    return bound.get().matchBound(arguments);
+    return bound.get().matchBound(this, arguments);
   }
 
   /**
-   * Gives these parameters with {@code T} bound.
+   * Gives these parameters with {@code T} bound. The bound list holds catalogue parameters; it is
+   * only reached for a list that mentions {@code T}, which the list of a declaration never does.
    *
    * @param primitive the value primitive {@code T} is bound to
    * @return the parameter list with every parameter type bound
    */
-  Parameters bind(final Class<? extends EfxDataType.Primitive> primitive) {
-    return new Parameters(
-        this.fixed.stream().map(parameter -> parameter.bind(primitive)).collect(Collectors.toList()),
-        this.variadic == null ? null : this.variadic.bind(primitive));
+  Parameters<BuiltInParameter> bind(final Class<? extends EfxDataType.Primitive> primitive) {
+    return new Parameters<>(
+        this.stream().map(parameter -> bound(parameter, primitive)).collect(Collectors.toList()),
+        this.variadic == null ? null : bound(this.variadic, primitive));
   }
 
   /**
@@ -155,43 +207,88 @@ public final class Parameters {
    * @return {@code true} if a fixed parameter or the variadic tail is a type variable
    */
   boolean isGeneric() {
-    return this.generic;
+    return this.all().anyMatch(parameter -> parameter.getType().isTypeVariable());
   }
 
-  private Match matchBound(final List<? extends TypedExpression> arguments) {
+  /**
+   * Matches the arguments against these parameters, with {@code T} bound.
+   *
+   * @param declared the parameter list as the construct declares it, which the match reports
+   * @param arguments the translated arguments of the call
+   * @return the converted arguments, or the argument to report
+   */
+  private Match matchBound(final Parameters<?> declared,
+      final List<? extends TypedExpression> arguments) {
     return IntStream.range(0, arguments.size())
         .filter(position -> !this.typeAt(position).accepts(arguments.get(position)))
-        .mapToObj(
-            position -> Match.rejected(position, this.typeAt(position), arguments.get(position)))
+        .mapToObj(position -> Match.rejected(declared, position, this.typeAt(position),
+            arguments.get(position)))
         .min(REPORTING_ORDER)
-        .orElseGet(() -> this.converted(arguments));
+        .orElseGet(() -> this.converted(declared, arguments));
   }
 
-  private Match converted(final List<? extends TypedExpression> arguments) {
+  private Match converted(final Parameters<?> declared,
+      final List<? extends TypedExpression> arguments) {
+    List<P> parameters = new ArrayList<>();
     List<TypedExpression> values = new ArrayList<>();
-    List<Class<? extends TypedExpression>> types = new ArrayList<>();
     for (int position = 0; position < arguments.size(); position++) {
-      ParameterType type = this.typeAt(position);
-      values.add(type.convert(arguments.get(position)));
-      types.add(type.getExpressionType());
+      parameters.add(this.parameterAt(position));
+      values.add(this.typeAt(position).convert(arguments.get(position)));
     }
-    return Match.of(new Arguments(values, types));
+    return Match.of(declared, new ParsedArguments<>(parameters, values));
   }
 
   private ParameterType typeAt(final int position) {
     return this.parameterAt(position).getType();
   }
 
-  private Optional<Parameters> boundTo(final List<? extends TypedExpression> arguments) {
-    if (!this.generic) {
-      return Optional.of(this);
-    }
-    return TypeVariableParameterType.bindingOf(arguments.get(this.typeVariablePosition))
-        .map(this::bind);
+  /**
+   * Gives the value primitive the arguments of a call bind {@code T} to, for a list that mentions
+   * it: the primitive of the argument at the first position of {@code T}.
+   *
+   * @param arguments the translated arguments of the call, as many as the list takes
+   * @return the value primitive, or nothing if that argument cannot bind {@code T} (a node)
+   */
+  Optional<Class<? extends EfxDataType.Primitive>> bindingOf(
+      final List<? extends TypedExpression> arguments) {
+    return ParameterType.Generic.bindingOf(arguments.get(this.typeVariablePosition()));
   }
 
-  private Stream<Parameter> all() {
-    return Stream.concat(this.fixed.stream(), this.getVariadic().stream());
+  private Optional<Parameters<?>> boundTo(final List<? extends TypedExpression> arguments) {
+    if (!this.isGeneric()) {
+      return Optional.of(this);
+    }
+    return this.bindingOf(arguments).map(this::bind);
+  }
+
+  private int typeVariablePosition() {
+    return IntStream.range(0, this.size())
+        .filter(position -> this.get(position).getType().isTypeVariable())
+        .findFirst()
+        .orElse(this.size());
+  }
+
+  private Stream<P> all() {
+    return Stream.concat(this.stream(), this.getVariadic().stream());
+  }
+
+  private static BuiltInParameter bound(final Parameter parameter,
+      final Class<? extends EfxDataType.Primitive> primitive) {
+    return parameter(parameter.getName(), parameter.getType().bind(primitive));
+  }
+
+  /**
+   * Two parameter lists are equal when their fixed parameters and their variadic tails are.
+   */
+  @Override
+  public boolean equals(final Object other) {
+    return other instanceof Parameters && super.equals(other)
+        && Objects.equals(this.variadic, ((Parameters<?>) other).variadic);
+  }
+
+  @Override
+  public int hashCode() {
+    return 31 * super.hashCode() + Objects.hashCode(this.variadic);
   }
 
   @Override

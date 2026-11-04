@@ -13,20 +13,22 @@
  */
 package eu.europa.ted.efx.sdk2;
 
+import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
+import static eu.europa.ted.efx.model.signatures.Signature.signature;
+
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiFunction;
-import java.util.function.Function;
+import java.util.function.IntFunction;
 import java.util.stream.Collectors;
 
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.tree.ParseTree;
 
-import eu.europa.ted.efx.exceptions.Construct;
 import eu.europa.ted.efx.exceptions.Diagnosis;
 import eu.europa.ted.efx.exceptions.InvalidArgumentException;
 import eu.europa.ted.efx.exceptions.InvalidIdentifierException;
@@ -35,11 +37,19 @@ import eu.europa.ted.efx.exceptions.SdkInconsistencyException;
 import eu.europa.ted.efx.exceptions.TranslatorConfigurationException;
 import eu.europa.ted.efx.exceptions.TypeMismatchException;
 import eu.europa.ted.efx.interfaces.ScriptGenerator;
-import eu.europa.ted.efx.interfaces.SymbolResolver;
-import eu.europa.ted.efx.model.CallStack;
 import eu.europa.ted.efx.model.Context;
-import eu.europa.ted.efx.model.ContextStack;
 import eu.europa.ted.efx.model.PrivacySetting;
+import eu.europa.ted.efx.model.builtins.BuiltIn;
+import eu.europa.ted.efx.model.builtins.BuiltIns;
+import eu.europa.ted.efx.model.builtins.ConditionOperators;
+import eu.europa.ted.efx.model.builtins.ConversionFunctions;
+import eu.europa.ted.efx.model.builtins.DateTimeFunctions;
+import eu.europa.ted.efx.model.builtins.LogicalOperators;
+import eu.europa.ted.efx.model.builtins.NumericFunctions;
+import eu.europa.ted.efx.model.builtins.PatternMatch;
+import eu.europa.ted.efx.model.builtins.SequenceFunctions;
+import eu.europa.ted.efx.model.builtins.StringFunctions;
+import eu.europa.ted.efx.model.builtins.TemplateFunctions;
 import eu.europa.ted.efx.model.expressions.Expression;
 import eu.europa.ted.efx.model.expressions.PathExpression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
@@ -62,32 +72,21 @@ import eu.europa.ted.efx.model.expressions.sequence.SequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.SequencePath;
 import eu.europa.ted.efx.model.expressions.sequence.StringSequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.TimeSequenceExpression;
-import eu.europa.ted.efx.model.signatures.BuiltIn;
-import eu.europa.ted.efx.model.signatures.BuiltIns;
-import eu.europa.ted.efx.model.signatures.ConditionOperators;
-import eu.europa.ted.efx.model.signatures.ConversionFunctions;
-import eu.europa.ted.efx.model.signatures.DateTimeFunctions;
-import eu.europa.ted.efx.model.signatures.LogicalOperators;
+import eu.europa.ted.efx.model.identifiers.Dictionary;
+import eu.europa.ted.efx.model.identifiers.Function;
+import eu.europa.ted.efx.model.identifiers.Invocable;
+import eu.europa.ted.efx.model.identifiers.ParsedParameter;
+import eu.europa.ted.efx.model.identifiers.Variable;
+import eu.europa.ted.efx.model.signatures.Construct;
 import eu.europa.ted.efx.model.signatures.Match;
 import eu.europa.ted.efx.model.signatures.Mismatch;
-import eu.europa.ted.efx.model.signatures.Mismatch.Rejection;
-import eu.europa.ted.efx.model.signatures.NumericFunctions;
 import eu.europa.ted.efx.model.signatures.ParameterType;
-import eu.europa.ted.efx.model.signatures.Parameters;
-import eu.europa.ted.efx.model.signatures.PatternMatch;
+import eu.europa.ted.efx.model.signatures.ParsedArguments;
 import eu.europa.ted.efx.model.signatures.Resolution;
-import eu.europa.ted.efx.model.signatures.SequenceFunctions;
-import eu.europa.ted.efx.model.signatures.StringFunctions;
-import eu.europa.ted.efx.model.signatures.TemplateFunctions;
 import eu.europa.ted.efx.model.types.EfxDataType;
 import eu.europa.ted.efx.model.types.EfxTypeLattice;
 import eu.europa.ted.efx.model.types.EfxTypeTokenLookup;
 import eu.europa.ted.efx.model.types.FieldTypes;
-import eu.europa.ted.efx.model.variables.Dictionary;
-import eu.europa.ted.efx.model.variables.Parametrised;
-import eu.europa.ted.efx.model.variables.ParsedArguments;
-import eu.europa.ted.efx.model.variables.StrictArguments;
-import eu.europa.ted.efx.model.variables.Variable;
 import eu.europa.ted.efx.sdk2.EfxParser.*;
 import eu.europa.ted.efx.sdk2.Origin.ContextVariableOrigin;
 import eu.europa.ted.efx.sdk2.Origin.DictionaryNameOrigin;
@@ -103,59 +102,32 @@ import eu.europa.ted.efx.util.EfxRegexValidator;
  * Translates the expressions of EFX-2 to the target language of a {@link ScriptGenerator}.
  *
  * <p>The grammar does not type expressions: each visit translates its subtree and returns an
- * {@link Operand}, the translated expression with what it is written as. The parent reads each
- * operand as a value, as a path or as a context, and the catalogue of built-ins decides what each
- * operator and built-in accepts and gives. The composites (lists, conditionals, iterations,
- * predicates and indexes) check their own parts.</p>
+ * {@link Subexpression}, the translated expression with what it is written as. The parent reads
+ * each sub-expression as a value, as a path or as a context. Every construct is checked the same
+ * way, against the parameter lists of its {@link Construct}: the catalogue's built-ins then
+ * translate themselves, and the constructs the catalogue does not hold, such as lists,
+ * conditionals, iterations, predicates and indexes, are translated here.</p>
  *
  * <p>The template and rules translators hold a visitor for the expressions their files contain.
  * Their behaviour in expressions is given by subclasses: the template's allows the built-ins that
  * only templates may call, and the rules' translates calls of API functions and records the
  * dynamic dependencies of variables.</p>
  */
-class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
+class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
 
   /**
    * The context an absolute reference is resolved from: none, so that its path starts at the root.
    */
   private static final String NO_CONTEXT = null;
 
-  /** Parentheses, as a type error names them. */
-  private static final Construct PARENTHESES = Construct.of("Parenthesised expression", "content");
-
-  /** A conditional, as a type error names it. */
-  private static final Construct CONDITIONAL =
-      Construct.of("Conditional 'if'", "condition", "then branch", "else branch");
-
-  /** An iteration, as a type error names it. */
-  private static final Construct ITERATION = Construct.of("Iteration 'for'", "body");
-
-  /** A predicate after a field or a node, as a type error names it. */
-  private static final Construct PREDICATE = Construct.of("Predicate", "sequence", "condition");
-
-  /** An index after a sequence, as a type error names it. */
-  private static final Construct INDEX = Construct.of("Index", "sequence", "position");
-
-  /**
-   * What the error of a predicate whose condition is a number suggests: the index it may mean.
-   */
-  private static final List<String> SELECT_BY_POSITION =
-      List.of("To select by position, write [at n].");
-
   /**
    * The variable that an index binds its position to, where the position is read once before the
    * element is selected. Like every name the translator generates, it starts with a prefix that no
    * declaration may give.
    */
-  private static final String INDEX_VARIABLE = TranslationContext.RESERVED_PREFIX + "index";
+  private static final String INDEX_VARIABLE = Translation.RESERVED_PREFIX + "index";
 
-  /** A context override, as a type error names it. */
-  private static final Construct CONTEXT_OVERRIDE = Construct.operator("::", 2);
-
-  private final SymbolResolver symbols;
-  private final ScriptGenerator script;
-  private final CallStack stack;
-  private final ContextStack efxContext;
+  private final Translation translation;
   private final Origin<TypedExpression> none;
   private final IteratorDeclarations iteratorDeclarations = new IteratorDeclarations();
 
@@ -181,73 +153,66 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    */
   private final Reads readsWithoutContext = new Reads();
 
-  EfxExpressionVisitor(final TranslationContext translation) {
-    this.symbols = translation.symbols();
-    this.script = translation.script();
-    this.stack = translation.stack();
-    this.efxContext = translation.efxContext();
+  EfxExpressionVisitor(final Translation translation) {
+    this.translation = translation;
     this.none = new Origin.None(this);
   }
 
-  SymbolResolver symbols() {
-    return this.symbols;
-  }
-
-  ScriptGenerator script() {
-    return this.script;
-  }
-
-  ContextStack efxContext() {
-    return this.efxContext;
+  /**
+   * @return the state of the translation whose expressions the visitor translates
+   */
+  Translation translation() {
+    return this.translation;
   }
 
   /**
    * Keeps the node being translated on the call stack, which names it in the errors it gives.
    */
   @Override
-  public Operand<?> visit(final ParseTree tree) {
-    this.stack.pushParserContext((ParserRuleContext) tree);
+  public Subexpression<?> visit(final ParseTree tree) {
+    this.translation.stack().pushParserContext((ParserRuleContext) tree);
     try {
       return super.visit(tree);
     } finally {
-      this.stack.popParserContext();
+      this.translation.stack().popParserContext();
     }
   }
 
   // #region Readings of an expression ----------------------------------------
 
   /**
-   * Translates an expression where a value of any type is taken, and nothing after checks its
-   * type: what a translation gives, such as the expression of a template block, and the body of an
-   * iteration. A node has no value, so it is rejected, as the operators and the built-ins that
-   * take a value reject it.
+   * Translates the expression that a construct takes as its one argument: the condition of a rule
+   * or of a template block, the value of a declaration, the expression of a template block. A
+   * single value where a sequence is required is promoted to one; a construct that takes a value
+   * of any type rejects only a node, which has no value.
    *
-   * @param expression an expression
-   * @param construct what takes the expression as its one operand, as a type error names it
-   * @return its value
-   * @throws TypeMismatchException if the expression is a node
-   */
-  TypedExpression valueOf(final ExpressionContext expression, final Construct construct) {
-    return this.onlyOperandOf(construct, expression).valueAt(0, expression);
-  }
-
-  /**
-   * Translates an expression where a value of one class is required: the condition of a clause,
-   * the value of a declaration, a part of a composite. A single value where a sequence is required
-   * is promoted to one.
-   *
-   * @param <T> the class of the value required
    * @param expression the expression
-   * @param type the class of the value required
-   * @param construct what takes the expression as its one operand, as a type error names it
-   * @return the value, converted to that class
+   * @param construct the construct, which has one parameter
+   * @return the value as the construct's argument, converted to its parameter, to be read with
+   *         the accessor of that parameter's type, such as {@link ParsedArguments#booleanAt}
    * @throws TypeMismatchException if the value does not fit: a sequence where a single value is
    *         required, or a node, is reported by the reference the expression is written as where
    *         it explains the mistake, and any other value cannot be converted
    */
-  <T extends TypedExpression> T valueAs(final ExpressionContext expression, final Class<T> type,
-      final Construct construct) {
-    return this.onlyOperandOf(construct, expression).converted(0, type, expression);
+  ParsedArguments<?> valueOf(final ExpressionContext expression, final Construct construct) {
+    return this.checked(construct, List.of(this.visit(expression)), position -> expression)
+        .getArguments();
+  }
+
+  /**
+   * Checks a value that a construct is given as it is, written as nothing the construct could
+   * name in its error, such as a part of a label block.
+   *
+   * @param value the value
+   * @param construct the construct, which has one parameter
+   * @param where where the error is reported
+   * @return the value as the construct's argument, converted to its parameter
+   * @throws TypeMismatchException if the value does not convert to what the construct takes
+   */
+  ParsedArguments<?> valueOf(final TypedExpression value, final Construct construct,
+      final ParserRuleContext where) {
+    return this.checked(construct, List.of(this.subexpression(value)), position -> where)
+        .getArguments();
   }
 
   /**
@@ -258,27 +223,11 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * @throws TypeMismatchException if the value does not fit the declared type
    */
   TypedExpression initialValueOf(final TypedVariableInitializerContext initializer) {
-    return this.valueAs(initializer.expression(), typeOf(initializer.typeDeclaration()),
-        Construct.of("Variable '" + initializer.typeDeclaration().getText() + ":$"
-            + initializer.variableName.getText() + "'", "value"));
-  }
-
-  /**
-   * Gives the operands of a construct that are values given to it as they are, written as nothing
-   * the construct could name in its error, such as the parts of a label block.
-   *
-   * @param construct the construct, as a type error names it
-   * @param values the values of its operands, in order
-   * @return the operands, which convert each value to what its position takes
-   */
-  Operands operandsOf(final Construct construct, final List<? extends TypedExpression> values) {
-    return new Operands(construct,
-        values.stream().map(this::operand).collect(Collectors.toList()));
-  }
-
-  private Operands onlyOperandOf(final Construct construct, final ExpressionContext expression) {
-    final Operand<?> operand = this.visit(expression);
-    return new Operands(construct, List.of(operand));
+    return this.valueOf(initializer.expression(),
+        GrammarConstruct.of("Variable '" + initializer.typeDeclaration().getText() + ":$"
+            + initializer.variableName.getText() + "'",
+            parameter("value", ParameterType.of(typeOf(initializer.typeDeclaration())))))
+        .at(0, TypedExpression.class);
   }
 
   /**
@@ -304,13 +253,13 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
 
   /**
    * @param expression a translated expression
-   * @return the operand of an expression written as anything but a reference
+   * @return the sub-expression of a translated expression written as anything but a reference
    */
-  Operand<TypedExpression> operand(final TypedExpression expression) {
-    return new Operand<>(expression, this.none);
+  Subexpression<TypedExpression> subexpression(final TypedExpression expression) {
+    return new Subexpression<>(expression, this.none);
   }
 
-  private Operand<?> visitOnlyChild(final ParserRuleContext wrapper) {
+  private Subexpression<?> visitOnlyChild(final ParserRuleContext wrapper) {
     return this.visit(wrapper.getRuleContext(ParserRuleContext.class, 0));
   }
 
@@ -319,116 +268,119 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   // #region Literals ---------------------------------------------------------
 
   @Override
-  public Operand<?> visitLiteralExpression(final LiteralExpressionContext ctx) {
+  public Subexpression<?> visitLiteralExpression(final LiteralExpressionContext ctx) {
     return this.visit(ctx.literal());
   }
 
   @Override
-  public Operand<?> visitLiteral(final LiteralContext ctx) {
+  public Subexpression<?> visitLiteral(final LiteralContext ctx) {
     return this.visitOnlyChild(ctx);
   }
 
   @Override
-  public Operand<?> visitStringLiteral(final StringLiteralContext ctx) {
-    return this.operand(this.script.getStringLiteralEquivalent(ctx.getText()));
+  public Subexpression<?> visitStringLiteral(final StringLiteralContext ctx) {
+    return this.subexpression(this.translation.script().getStringLiteralEquivalent(ctx.getText()));
   }
 
   @Override
-  public Operand<?> visitNumericLiteral(final NumericLiteralContext ctx) {
-    return this.operand(this.script.getNumericLiteralEquivalent(ctx.getText()));
+  public Subexpression<?> visitNumericLiteral(final NumericLiteralContext ctx) {
+    return this.subexpression(this.translation.script().getNumericLiteralEquivalent(ctx.getText()));
   }
 
   @Override
-  public Operand<?> visitBooleanLiteral(final BooleanLiteralContext ctx) {
+  public Subexpression<?> visitBooleanLiteral(final BooleanLiteralContext ctx) {
     return this.visitOnlyChild(ctx);
   }
 
   @Override
-  public Operand<?> visitTrueBooleanLiteral(final TrueBooleanLiteralContext ctx) {
-    return this.operand(this.script.getBooleanEquivalent(true));
+  public Subexpression<?> visitTrueBooleanLiteral(final TrueBooleanLiteralContext ctx) {
+    return this.subexpression(this.translation.script().getBooleanEquivalent(true));
   }
 
   @Override
-  public Operand<?> visitFalseBooleanLiteral(final FalseBooleanLiteralContext ctx) {
-    return this.operand(this.script.getBooleanEquivalent(false));
+  public Subexpression<?> visitFalseBooleanLiteral(final FalseBooleanLiteralContext ctx) {
+    return this.subexpression(this.translation.script().getBooleanEquivalent(false));
   }
 
   @Override
-  public Operand<?> visitDateLiteral(final DateLiteralContext ctx) {
-    return this.operand(this.script.getDateLiteralEquivalent(ctx.DateLiteral().getText()));
+  public Subexpression<?> visitDateLiteral(final DateLiteralContext ctx) {
+    return this.subexpression(
+        this.translation.script().getDateLiteralEquivalent(ctx.DateLiteral().getText()));
   }
 
   @Override
-  public Operand<?> visitTimeLiteral(final TimeLiteralContext ctx) {
-    return this.operand(this.script.getTimeLiteralEquivalent(ctx.TimeLiteral().getText()));
+  public Subexpression<?> visitTimeLiteral(final TimeLiteralContext ctx) {
+    return this.subexpression(
+        this.translation.script().getTimeLiteralEquivalent(ctx.TimeLiteral().getText()));
   }
 
   @Override
-  public Operand<?> visitDurationLiteral(final DurationLiteralContext ctx) {
-    return this.operand(this.script.getDurationLiteralEquivalent(ctx.getText()));
+  public Subexpression<?> visitDurationLiteral(final DurationLiteralContext ctx) {
+    return this.subexpression(
+        this.translation.script().getDurationLiteralEquivalent(ctx.getText()));
   }
 
   // Parameter values: the arguments of a single expression
 
   @Override
-  public Operand<?> visitParameterValue(final ParameterValueContext ctx) {
+  public Subexpression<?> visitParameterValue(final ParameterValueContext ctx) {
     return this.visitOnlyChild(ctx);
   }
 
   @Override
-  public Operand<?> visitScalarParameterValue(final ScalarParameterValueContext ctx) {
+  public Subexpression<?> visitScalarParameterValue(final ScalarParameterValueContext ctx) {
     return this.visitOnlyChild(ctx);
   }
 
   @Override
-  public Operand<?> visitSequenceParameterValue(final SequenceParameterValueContext ctx) {
+  public Subexpression<?> visitSequenceParameterValue(final SequenceParameterValueContext ctx) {
     return this.visitOnlyChild(ctx);
   }
 
   @Override
-  public Operand<?> visitStringSequenceLiteral(final StringSequenceLiteralContext ctx) {
+  public Subexpression<?> visitStringSequenceLiteral(final StringSequenceLiteralContext ctx) {
     return this.literalList(ctx.stringLiteral(), StringExpression.class,
         StringSequenceExpression.class);
   }
 
   @Override
-  public Operand<?> visitBooleanSequenceLiteral(final BooleanSequenceLiteralContext ctx) {
+  public Subexpression<?> visitBooleanSequenceLiteral(final BooleanSequenceLiteralContext ctx) {
     return this.literalList(ctx.booleanLiteral(), BooleanExpression.class,
         BooleanSequenceExpression.class);
   }
 
   @Override
-  public Operand<?> visitNumericSequenceLiteral(final NumericSequenceLiteralContext ctx) {
+  public Subexpression<?> visitNumericSequenceLiteral(final NumericSequenceLiteralContext ctx) {
     return this.literalList(ctx.numericLiteral(), NumericExpression.class,
         NumericSequenceExpression.class);
   }
 
   @Override
-  public Operand<?> visitDateSequenceLiteral(final DateSequenceLiteralContext ctx) {
+  public Subexpression<?> visitDateSequenceLiteral(final DateSequenceLiteralContext ctx) {
     return this.literalList(ctx.dateLiteral(), DateExpression.class,
         DateSequenceExpression.class);
   }
 
   @Override
-  public Operand<?> visitTimeSequenceLiteral(final TimeSequenceLiteralContext ctx) {
+  public Subexpression<?> visitTimeSequenceLiteral(final TimeSequenceLiteralContext ctx) {
     return this.literalList(ctx.timeLiteral(), TimeExpression.class,
         TimeSequenceExpression.class);
   }
 
   @Override
-  public Operand<?> visitDurationSequenceLiteral(final DurationSequenceLiteralContext ctx) {
+  public Subexpression<?> visitDurationSequenceLiteral(final DurationSequenceLiteralContext ctx) {
     return this.literalList(ctx.durationLiteral(), DurationExpression.class,
         DurationSequenceExpression.class);
   }
 
-  private <T extends ScalarExpression> Operand<?> literalList(
+  private <T extends ScalarExpression> Subexpression<?> literalList(
       final List<? extends ParserRuleContext> literals, final Class<T> itemType,
       final Class<? extends SequenceExpression> listType) {
     final List<T> items = new ArrayList<>(literals.size());
     for (final ParserRuleContext literal : literals) {
       items.add(itemType.cast(this.visit(literal).value()));
     }
-    return this.operand(this.script.composeList(items, listType));
+    return this.subexpression(this.translation.script().composeList(items, listType));
   }
 
   // #endregion Literals ------------------------------------------------------
@@ -436,17 +388,17 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   // #region References -------------------------------------------------------
 
   @Override
-  public Operand<?> visitReferenceExpression(final ReferenceExpressionContext ctx) {
+  public Subexpression<?> visitReferenceExpression(final ReferenceExpressionContext ctx) {
     return this.visit(ctx.reference());
   }
 
   @Override
-  public Operand<?> visitReference(final ReferenceContext ctx) {
+  public Subexpression<?> visitReference(final ReferenceContext ctx) {
     return this.visitOnlyChild(ctx);
   }
 
   @Override
-  public Operand<?> visitFieldReference(final FieldReferenceContext ctx) {
+  public Subexpression<?> visitFieldReference(final FieldReferenceContext ctx) {
     return this.visitOnlyChild(ctx);
   }
 
@@ -454,37 +406,37 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * A field, by its path from the current context.
    */
   @Override
-  public Operand<?> visitLinkedFieldReference(final LinkedFieldReferenceContext ctx) {
+  public Subexpression<?> visitLinkedFieldReference(final LinkedFieldReferenceContext ctx) {
     final String fieldId = this.fieldIdOf(ctx);
-    return new Operand<>(this.relativePathOfField(fieldId),
-        new FieldOrigin(this, ctx, fieldId, this.efxContext.symbol()));
+    return new Subexpression<>(this.relativePathOfField(fieldId),
+        new FieldOrigin(this, ctx, fieldId, this.translation.efxContext().symbol()));
   }
 
   /**
    * A field, by its path from the root, which its error names as the context it is read from.
    */
   @Override
-  public Operand<?> visitAbsoluteFieldReference(final AbsoluteFieldReferenceContext ctx) {
+  public Subexpression<?> visitAbsoluteFieldReference(final AbsoluteFieldReferenceContext ctx) {
     final String fieldId = this.fieldIdOf(ctx.linkedFieldReference());
-    return new Operand<>(this.absolutePathOfField(fieldId),
+    return new Subexpression<>(this.absolutePathOfField(fieldId),
         new FieldOrigin(this, ctx, fieldId, NO_CONTEXT));
   }
 
   @Override
-  public Operand<?> visitNodeReference(final NodeReferenceContext ctx) {
+  public Subexpression<?> visitNodeReference(final NodeReferenceContext ctx) {
     return this.visitOnlyChild(ctx);
   }
 
   @Override
-  public Operand<?> visitSimpleNodeReference(final SimpleNodeReferenceContext ctx) {
+  public Subexpression<?> visitSimpleNodeReference(final SimpleNodeReferenceContext ctx) {
     final String nodeId = ctx.NodeId().getText();
-    return new Operand<>(this.relativePathOfNode(nodeId), new NodeOrigin(this, nodeId));
+    return new Subexpression<>(this.relativePathOfNode(nodeId), new NodeOrigin(this, nodeId));
   }
 
   @Override
-  public Operand<?> visitAbsoluteNodeReference(final AbsoluteNodeReferenceContext ctx) {
+  public Subexpression<?> visitAbsoluteNodeReference(final AbsoluteNodeReferenceContext ctx) {
     final String nodeId = ctx.simpleNodeReference().NodeId().getText();
-    return new Operand<>(this.absolutePathOfNode(nodeId), new NodeOrigin(this, nodeId));
+    return new Subexpression<>(this.absolutePathOfNode(nodeId), new NodeOrigin(this, nodeId));
   }
 
   /**
@@ -492,7 +444,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * it is.
    */
   @Override
-  public Operand<?> visitFieldContext(final FieldContextContext ctx) {
+  public Subexpression<?> visitFieldContext(final FieldContextContext ctx) {
     return this.withBrackets(this.visitOnlyChild(ctx), ctx.contextBracket());
   }
 
@@ -500,7 +452,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * A node with its predicates and indexes, where a context is declared.
    */
   @Override
-  public Operand<?> visitNodeContext(final NodeContextContext ctx) {
+  public Subexpression<?> visitNodeContext(final NodeContextContext ctx) {
     return this.withBrackets(this.visitOnlyChild(ctx), ctx.contextBracket());
   }
 
@@ -508,9 +460,9 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * Applies the predicates and the indexes after the reference of a context, in the order they
    * are written.
    */
-  private Operand<?> withBrackets(final Operand<?> reference,
+  private Subexpression<?> withBrackets(final Subexpression<?> reference,
       final List<ContextBracketContext> brackets) {
-    Operand<?> selected = reference;
+    Subexpression<?> selected = reference;
     for (final ContextBracketContext bracket : brackets) {
       selected = bracket.predicate() != null
           ? selected.filteredBy(bracket.predicate().expression())
@@ -522,20 +474,20 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   /**
    * A variable, a parameter, a context variable, or a name that none of them has. Such a name has
    * no value: it may only name a dictionary, which a key in brackets after it looks up, and its
-   * operand holds an empty expression, which no reading takes.
+   * sub-expression holds an empty expression, which no reading takes.
    */
   @Override
-  public Operand<?> visitVariableReference(final VariableReferenceContext ctx) {
+  public Subexpression<?> visitVariableReference(final VariableReferenceContext ctx) {
     final String name = ctx.variableName.getText();
-    final Optional<TypedExpression> parameter = this.stack.getParameter(name);
+    final Optional<TypedExpression> parameter = this.translation.stack().getParameter(name);
     if (parameter.isPresent()) {
-      return new Operand<>(parameter.get(), new VariableOrigin(this, ctx, name));
+      return new Subexpression<>(parameter.get(), new VariableOrigin(this, ctx, name));
     }
-    final Optional<Variable> variable = this.stack.getVariable(name);
+    final Optional<Variable> variable = this.translation.stack().getVariable(name);
     if (variable.isPresent()) {
       return this.variableReference(ctx, variable.get());
     }
-    return new Operand<>(Expression.empty(StringExpression.class),
+    return new Subexpression<>(Expression.empty(StringExpression.class),
         new DictionaryNameOrigin(this, ctx, name));
   }
 
@@ -543,14 +495,14 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * A variable, or a context variable, whose reference is a path to the one element of its context
    * that it holds.
    */
-  private Operand<?> variableReference(final VariableReferenceContext ctx,
+  private Subexpression<?> variableReference(final VariableReferenceContext ctx,
       final Variable variable) {
     final Context context = this.contextsOfVariables.get(variable);
     if (context == null) {
-      return new Operand<>(variable.referenceExpression,
+      return new Subexpression<>(variable.referenceExpression,
           new VariableOrigin(this, ctx, variable.name));
     }
-    return new Operand<>((PathExpression) variable.referenceExpression,
+    return new Subexpression<>((PathExpression) variable.referenceExpression,
         new ContextVariableOrigin(this, ctx, variable.name, context));
   }
 
@@ -562,20 +514,20 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * @param context the context
    */
   void declareContextVariable(final Variable variable, final Context context) {
-    this.stack.declareIdentifier(variable);
+    this.translation.stack().declareIdentifier(variable);
     this.contextsOfVariables.put(variable, context);
   }
 
   @Override
-  public Operand<?> visitCodelistExpression(final CodelistExpressionContext ctx) {
+  public Subexpression<?> visitCodelistExpression(final CodelistExpressionContext ctx) {
     return this.visit(ctx.codelistReference());
   }
 
   @Override
-  public Operand<?> visitCodelistReference(final CodelistReferenceContext ctx) {
-    return this.operand(this.script.composeList(
-        this.symbols.expandCodelist(ctx.codelistName.getText()).stream()
-            .map(this.script::getStringLiteralFromUnquotedString)
+  public Subexpression<?> visitCodelistReference(final CodelistReferenceContext ctx) {
+    return this.subexpression(this.translation.script().composeList(
+        this.translation.symbols().expandCodelist(ctx.codelistName.getText()).stream()
+            .map(this.translation.script()::getStringLiteralFromUnquotedString)
             .collect(Collectors.toList()),
         StringSequenceExpression.class));
   }
@@ -609,15 +561,15 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
       final LinkedFieldPropertyContext ctx) {
     this.requireWithholdable(reference, baseFieldId);
     if (ctx.PublicationDate() != null) {
-      return this.symbols.getPrivacySettingOfField(baseFieldId,
+      return this.translation.symbols().getPrivacySettingOfField(baseFieldId,
           PrivacySetting.PUBLICATION_DATE_FIELD);
     }
     if (ctx.JustificationCode() != null) {
-      return this.symbols.getPrivacySettingOfField(baseFieldId,
+      return this.translation.symbols().getPrivacySettingOfField(baseFieldId,
           PrivacySetting.JUSTIFICATION_CODE_FIELD);
     }
     if (ctx.JustificationDescription() != null) {
-      return this.symbols.getPrivacySettingOfField(baseFieldId,
+      return this.translation.symbols().getPrivacySettingOfField(baseFieldId,
           PrivacySetting.JUSTIFICATION_DESCRIPTION_FIELD);
     }
     throw TranslatorConfigurationException.unhandledLinkedFieldProperty(ctx.getText());
@@ -633,15 +585,16 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * @return the value of the field on that path
    */
   PathExpression fieldValueOf(final String fieldId, final PathExpression path) {
-    if (!this.symbols.isAttributeField(fieldId)) {
-      return this.script.composeFieldValueReference(path);
+    if (!this.translation.symbols().isAttributeField(fieldId)) {
+      return this.translation.script().composeFieldValueReference(path);
     }
-    final PathExpression attribute = this.script.composeFieldAttributeReference(
-        this.script.contextualizePath(
-            this.symbols.getAbsolutePathOfFieldWithoutTheAttribute(fieldId),
+    final PathExpression attribute = this.translation.script().composeFieldAttributeReference(
+        this.translation.script().contextualizePath(
+            this.translation.symbols().getAbsolutePathOfFieldWithoutTheAttribute(fieldId),
             this.absolutePathOfCurrentContext()),
-        this.symbols.getAttributeNameFromAttributeField(fieldId),
-        ScalarPath.fromFieldType.get(FieldTypes.fromString(this.symbols.getTypeOfField(fieldId))));
+        this.translation.symbols().getAttributeNameFromAttributeField(fieldId),
+        ScalarPath.fromFieldType.get(
+            FieldTypes.fromString(this.translation.symbols().getTypeOfField(fieldId))));
     return continuing(path, attribute);
   }
 
@@ -666,51 +619,51 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * The attribute of a field, on each element the field's path selects.
    */
   @Override
-  public Operand<?> visitAttributeExpression(final AttributeExpressionContext ctx) {
+  public Subexpression<?> visitAttributeExpression(final AttributeExpressionContext ctx) {
     final String attribute = ctx.attributeName.getText();
-    return this.visit(ctx.expression()).readFromField(ctx, Construct.operator("/@" + attribute, 1),
-        (field, origin) -> new Operand<>(continuing(field,
-            this.script.composeFieldAttributeReference(field, attribute, StringPath.class)),
+    return this.visit(ctx.expression()).readFromField(ctx, GrammarConstruct.step("/@" + attribute),
+        (field, origin) -> new Subexpression<>(continuing(field,
+            this.translation.script().composeFieldAttributeReference(field, attribute,
+                StringPath.class)),
             origin.asValue()));
   }
 
   @Override
-  public Operand<?> visitRawValueExpression(final RawValueExpressionContext ctx) {
+  public Subexpression<?> visitRawValueExpression(final RawValueExpressionContext ctx) {
     return this.visit(ctx.expression()).readFromField(ctx,
-        Construct.operator(":" + ctx.RawValue().getText(), 1),
-        (field, origin) -> new Operand<>(this.script.composeFieldRawValueReference(field),
-            origin.asValue()));
+        GrammarConstruct.step(":" + ctx.RawValue().getText()),
+        (field, origin) -> new Subexpression<>(
+            this.translation.script().composeFieldRawValueReference(field), origin.asValue()));
   }
 
   @Override
-  public Operand<?> visitPreferredLanguageExpression(final PreferredLanguageExpressionContext ctx) {
-    return this.preferredLanguage(ctx, ctx.expression(), TemplateFunctions.PREFERRED_LANGUAGE,
-        Construct.operator(":" + ctx.PreferredLanguage().getText(), 1));
+  public Subexpression<?> visitPreferredLanguageExpression(
+      final PreferredLanguageExpressionContext ctx) {
+    return this.preferredLanguage(ctx, ctx.expression(), AsWritten.operator(
+        ":" + ctx.PreferredLanguage().getText(), TemplateFunctions.PREFERRED_LANGUAGE));
   }
 
   @Override
-  public Operand<?> visitPreferredLanguageTextExpression(
+  public Subexpression<?> visitPreferredLanguageTextExpression(
       final PreferredLanguageTextExpressionContext ctx) {
-    return this.preferredLanguage(ctx, ctx.expression(), TemplateFunctions.PREFERRED_LANGUAGE_TEXT,
-        Construct.operator(":" + ctx.PreferredLanguageText().getText(), 1));
+    return this.preferredLanguage(ctx, ctx.expression(), AsWritten.operator(
+        ":" + ctx.PreferredLanguageText().getText(), TemplateFunctions.PREFERRED_LANGUAGE_TEXT));
   }
 
   /**
-   * Translates the preferred language of a multilingual field, or its text in that language, as
-   * the postfix form and the function form both write it: the operand must be a field, and the
+   * Translates the preferred language of a multilingual field, or its text in that language, as the
+   * postfix form and the function form both write it: the sub-expression must be a field, and the
    * built-in takes it as a path.
    *
    * @param call the postfix form or the call of the function
-   * @param field the operand
-   * @param builtIn the built-in
-   * @param construct the form, as a type error names it
+   * @param field the sub-expression, which must be a field
+   * @param builtIn the built-in, as the form writes it
    * @return the result of the built-in
    */
-  private Operand<?> preferredLanguage(final ParserRuleContext call, final ExpressionContext field,
-      final BuiltIn builtIn, final Construct construct) {
-    return this.visit(field).readFromField(call, construct,
-        (path, origin) -> this.pathCall(call, builtIn, construct,
-            List.of(new Operand<>(path, origin))));
+  private Subexpression<?> preferredLanguage(final ParserRuleContext call,
+      final ExpressionContext field, final BuiltIn builtIn) {
+    return this.visit(field).readFromField(call, builtIn,
+        (path, origin) -> this.pathCall(call, builtIn, List.of(new Subexpression<>(path, origin))));
   }
 
   /**
@@ -718,31 +671,34 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * {@code $context::BT-1}. The path of the field from that context continues the path to it.
    */
   @Override
-  public Operand<?> visitFieldFromContextExpression(final FieldFromContextExpressionContext ctx) {
+  public Subexpression<?> visitFieldFromContextExpression(
+      final FieldFromContextExpressionContext ctx) {
     final Context context = this.contextBefore(ctx.expression());
     final String fieldId = this.fieldIdOf(ctx.linkedFieldReference());
-    final PathExpression field = this.symbols.getRelativePathOfField(fieldId, context.symbol());
-    return new Operand<>(this.joinReference(context.relativePath(), field),
-        new FieldOrigin(this, ctx, fieldId, this.efxContext.symbol()));
+    final PathExpression field = this.translation.symbols().getRelativePathOfField(fieldId,
+        context.symbol());
+    return new Subexpression<>(this.joinReference(context.relativePath(), field),
+        new FieldOrigin(this, ctx, fieldId, this.translation.efxContext().symbol()));
   }
 
   /**
    * A node read in the context its left side names: {@code ND-1::ND-2}, {@code $context::ND-1}.
    */
   @Override
-  public Operand<?> visitNodeFromContextExpression(final NodeFromContextExpressionContext ctx) {
+  public Subexpression<?> visitNodeFromContextExpression(
+      final NodeFromContextExpressionContext ctx) {
     final Context context = this.contextBefore(ctx.expression());
     final String nodeId = ctx.simpleNodeReference().NodeId().getText();
-    final PathExpression node = this.symbols.getRelativePathOfNode(nodeId, context.symbol());
-    return new Operand<>(this.joinReference(context.relativePath(), node),
+    final PathExpression node = this.translation.symbols().getRelativePathOfNode(nodeId,
+        context.symbol());
+    return new Subexpression<>(this.joinReference(context.relativePath(), node),
         new NodeOrigin(this, nodeId));
   }
 
   private Context contextBefore(final ExpressionContext left) {
-    final Operand<?> operand = this.visit(left);
-    return operand.context().orElseThrow(
-        () -> new Operands(CONTEXT_OVERRIDE, List.of(operand), List.of(operand.expression()))
-            .rejected(0, List.of(ParameterType.PATH), left));
+    final Subexpression<?> operand = this.visit(left);
+    return operand.context().orElseThrow(() -> this.unreadable(GrammarConstruct.CONTEXT_OVERRIDE,
+        List.of(operand), List.of(operand.expression()), 0, left));
   }
 
   /**
@@ -756,7 +712,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    */
   private PathExpression joinReference(final PathExpression context,
       final PathExpression reference) {
-    return continuing(context, this.script.joinPaths(context, reference));
+    return continuing(context, this.translation.script().joinPaths(context, reference));
   }
 
   // #endregion Steps after a reference ---------------------------------------
@@ -767,7 +723,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * A predicate, or a key in brackets after the name of a dictionary.
    */
   @Override
-  public Operand<?> visitFilteredExpression(final FilteredExpressionContext ctx) {
+  public Subexpression<?> visitFilteredExpression(final FilteredExpressionContext ctx) {
     return this.visit(ctx.expression(0)).filteredBy(ctx.expression(1));
   }
 
@@ -775,7 +731,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * An index: the element at a position in a sequence.
    */
   @Override
-  public Operand<?> visitIndexedExpression(final IndexedExpressionContext ctx) {
+  public Subexpression<?> visitIndexedExpression(final IndexedExpressionContext ctx) {
     return this.visit(ctx.expression(0)).indexedBy(ctx.expression(1));
   }
 
@@ -789,14 +745,16 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * @return the elements the predicate keeps, with the origin of the field or node
    * @throws TypeMismatchException if the condition is not an indicator
    */
-  Operand<?> filtered(final PathExpression path, final PathOrigin origin,
+  Subexpression<?> filtered(final PathExpression path, final PathOrigin origin,
       final ExpressionContext condition) {
     origin.pushElementContext();
+    final Subexpression<?> test = this.visit(condition);
     final PathExpression selected = origin.filter(path,
-        predicate(new Operand<>(path, origin), path, this.visit(condition))
-            .converted(1, BooleanExpression.class, condition));
-    this.readsInContexts.remove(this.efxContext.pop());
-    return new Operand<>(selected, origin);
+        this.resolved(GrammarConstruct.PREDICATE, List.of(new Subexpression<>(path, origin), test),
+            List.of(path, test.value()), position -> condition,
+            TypeMismatchException::cannotConvert).getArguments().booleanAt(1));
+    this.readsInContexts.remove(this.translation.efxContext().pop());
+    return new Subexpression<>(selected, origin);
   }
 
   /**
@@ -807,26 +765,12 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * @param condition the condition of the predicate
    * @return the error
    */
-  TypeMismatchException predicateOnValue(final Operand<?> sequence,
+  TypeMismatchException predicateOnValue(final Subexpression<?> sequence,
       final ExpressionContext condition) {
-    return predicate(sequence, sequence.expression(), this.visit(condition))
-        .rejected(0, List.of(ParameterType.PATH), this.stack.peekParserContext());
-  }
-
-  /**
-   * Gives the operands of a predicate. A number for its condition is a position written as a
-   * predicate, so its errors suggest the index.
-   *
-   * @param sequence what the predicate follows
-   * @param elements the elements the predicate reads from it
-   * @param condition the condition, translated
-   * @return the operands
-   */
-  private static Operands predicate(final Operand<?> sequence, final TypedExpression elements,
-      final Operand<?> condition) {
-    final TypedExpression value = condition.value();
-    return new Operands(PREDICATE, List.of(sequence, condition), List.of(elements, value),
-        value.is(EfxDataType.Number.class) ? SELECT_BY_POSITION : List.of());
+    final Subexpression<?> test = this.visit(condition);
+    return this.unreadable(GrammarConstruct.PREDICATE, List.of(sequence, test),
+        List.of(sequence.expression(), test.value()), 0,
+        this.translation.stack().peekParserContext());
   }
 
   /**
@@ -842,16 +786,18 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * @return the element at that position, with the origin of the field or node
    * @throws TypeMismatchException if the position is not a number
    */
-  Operand<?> positionInPath(final PathExpression path, final PathOrigin origin,
+  Subexpression<?> positionInPath(final PathExpression path, final PathOrigin origin,
       final ExpressionContext position) {
     final Reads reads = this.readsInCurrentContext();
     final int readsBefore = reads.ofContext();
-    final NumericExpression number = index(new Operand<>(path, origin), path,
-        this.visit(position)).converted(1, NumericExpression.class, position);
+    final Subexpression<?> index = this.visit(position);
+    final NumericExpression number = this.resolved(GrammarConstruct.INDEX_IN_PATH,
+        List.of(new Subexpression<>(path, origin), index), List.of(path, index.value()),
+        at -> position, TypeMismatchException::cannotConvert).getArguments().numericAt(1);
     final Class<? extends EfxDataType.Primitive> primitive =
         EfxTypeLattice.toPrimitive(path.getDataType());
     final Class<? extends SequencePath> elementsType = SequencePath.fromEfxDataType.get(primitive);
-    return new Operand<>(this.elementAt(this.inParentheses(path, elementsType), elementsType,
+    return new Subexpression<>(this.elementAt(this.inParentheses(path, elementsType), elementsType,
         number, ScalarPath.fromEfxDataType.get(primitive), reads.ofContext() > readsBefore),
         origin);
   }
@@ -866,34 +812,27 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * @param sequence the value
    * @param position the position the index selects
    * @return the value at that position
-   * @throws TypeMismatchException if the operand has no value or the position is not a number
+   * @throws TypeMismatchException if the sequence has no value or the position is not a number
    */
-  Operand<?> positionInValue(final Operand<?> sequence, final ExpressionContext position) {
+  Subexpression<?> positionInValue(final Subexpression<?> sequence,
+      final ExpressionContext position) {
     final TypedExpression given = sequence.value();
     final Reads reads = this.readsInCurrentContext();
     final int readsBefore = reads.all();
-    final Operands operands = index(sequence, given, this.visit(position));
-    final TypedExpression value = operands.valueAt(0, this.stack.peekParserContext());
-    final NumericExpression number = operands.converted(1, NumericExpression.class, position);
-    final Class<? extends SequenceExpression> listType = this.sequenceTypeOf(value);
-    final SequenceExpression list = value instanceof PathExpression
-        ? this.inParentheses(value, listType)
-        : TypedExpression.from(value, listType);
-    return this.operand(this.elementAt(list, listType, number, this.scalarTypeOf(value),
+    final Subexpression<?> index = this.visit(position);
+    final ParserRuleContext indexed = this.translation.stack().peekParserContext();
+    final Resolution indexing = this.resolved(GrammarConstruct.INDEX_IN_VALUE,
+        List.of(sequence, index), List.of(given, index.value()),
+        at -> at == 0 ? indexed : position, TypeMismatchException::cannotConvert);
+    final Class<? extends SequenceExpression> listType =
+        indexing.getArguments().sequenceTypeAt(0);
+    final SequenceExpression list = given instanceof PathExpression
+        ? this.inParentheses(given, listType)
+        : TypedExpression.from(given, listType);
+    return this.subexpression(this.elementAt(list, listType,
+        indexing.getArguments().numericAt(1),
+        GrammarConstruct.INDEX_IN_VALUE.resultOf(indexing).asSubclass(ScalarExpression.class),
         reads.all() > readsBefore));
-  }
-
-  /**
-   * Gives the operands of an index.
-   *
-   * @param sequence what the index follows
-   * @param elements the elements the index selects from
-   * @param position the position, translated
-   * @return the operands
-   */
-  private static Operands index(final Operand<?> sequence, final TypedExpression elements,
-      final Operand<?> position) {
-    return new Operands(INDEX, List.of(sequence, position), List.of(elements, position.value()));
   }
 
   /**
@@ -914,7 +853,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
       final Class<T> type, final boolean readForEachElement) {
     return readForEachElement
         ? this.elementAtBoundPosition(sequence, sequenceType, position, type)
-        : this.script.composeIndexer(sequence, position, type);
+        : this.translation.script().composeIndexer(sequence, position, type);
   }
 
   /**
@@ -933,14 +872,16 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   private <T extends ScalarExpression> T elementAtBoundPosition(final SequenceExpression sequence,
       final Class<? extends SequenceExpression> sequenceType, final NumericExpression position,
       final Class<T> type) {
-    final IteratorListExpression binding =
-        this.script.composeIteratorList(List.of(this.script.composeIteratorExpression(
-            this.script.composeVariableDeclaration(INDEX_VARIABLE, NumericExpression.class),
+    final IteratorListExpression binding = this.translation.script().composeIteratorList(
+        List.of(this.translation.script().composeIteratorExpression(
+            this.translation.script().composeVariableDeclaration(INDEX_VARIABLE,
+                NumericExpression.class),
             TypedExpression.from(position, NumericSequenceExpression.class))));
-    final T element = this.script.composeIndexer(sequence,
-        this.script.composeVariableReference(INDEX_VARIABLE, NumericExpression.class), type);
+    final T element = this.translation.script().composeIndexer(sequence,
+        this.translation.script().composeVariableReference(INDEX_VARIABLE, NumericExpression.class),
+        type);
     return this.inParentheses(
-        this.script.composeForExpression(binding, element, sequenceType), type);
+        this.translation.script().composeForExpression(binding, element, sequenceType), type);
   }
 
   /**
@@ -953,14 +894,16 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * @return the values the dictionary indexes by the key
    * @throws InvalidIdentifierException if no dictionary has the name
    */
-  Operand<?> lookUp(final String name, final ParserRuleContext reference,
+  Subexpression<?> lookUp(final String name, final ParserRuleContext reference,
       final ExpressionContext key) {
-    final Dictionary dictionary = this.stack.getDictionary(name);
+    final Dictionary dictionary = this.translation.stack().getDictionary(name);
     this.readsInCurrentContext().countReadOfRoot();
-    return new Operand<>(
-        this.script.composeDictionaryLookup(dictionary.name,
-            this.valueAs(key, StringExpression.class,
-                Construct.of("Dictionary '" + reference.getText() + "'", "key")),
+    return new Subexpression<>(
+        this.translation.script().composeDictionaryLookup(dictionary.name,
+            this.valueOf(key, GrammarConstruct.of("Dictionary '" + reference.getText() + "'",
+                signature(parameter("key", ParameterType.TEXT))
+                    .returning(ParameterType.of(dictionary.type))))
+                .stringAt(0),
             dictionary.type),
         new DictionaryOrigin(this, reference, dictionary.name));
   }
@@ -971,7 +914,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    */
   private PathExpression relativePathOfField(final String fieldId) {
     this.countReadOfCurrentContext();
-    return this.symbols.getRelativePathOfField(fieldId, this.efxContext.symbol());
+    return this.translation.symbols().getRelativePathOfField(fieldId,
+        this.translation.efxContext().symbol());
   }
 
   /**
@@ -980,7 +924,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    */
   private PathExpression relativePathOfNode(final String nodeId) {
     this.countReadOfCurrentContext();
-    return this.symbols.getRelativePathOfNode(nodeId, this.efxContext.symbol());
+    return this.translation.symbols().getRelativePathOfNode(nodeId,
+        this.translation.efxContext().symbol());
   }
 
   /**
@@ -988,7 +933,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    */
   private PathExpression absolutePathOfCurrentContext() {
     this.countReadOfCurrentContext();
-    return this.efxContext.peek().absolutePath();
+    return this.translation.efxContext().peek().absolutePath();
   }
 
   /**
@@ -997,7 +942,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    */
   private PathExpression absolutePathOfField(final String fieldId) {
     this.readsInCurrentContext().countReadOfRoot();
-    return this.symbols.getRelativePathOfField(fieldId, NO_CONTEXT);
+    return this.translation.symbols().getRelativePathOfField(fieldId, NO_CONTEXT);
   }
 
   /**
@@ -1006,7 +951,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    */
   private PathExpression absolutePathOfNode(final String nodeId) {
     this.readsInCurrentContext().countReadOfRoot();
-    return this.symbols.getRelativePathOfNode(nodeId, NO_CONTEXT);
+    return this.translation.symbols().getRelativePathOfNode(nodeId, NO_CONTEXT);
   }
 
   /**
@@ -1020,14 +965,15 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * @return the reads made in the current context, or where no context is declared
    */
   private Reads readsInCurrentContext() {
-    return this.efxContext.isEmpty() ? this.readsWithoutContext
-        : this.readsInContexts.computeIfAbsent(this.efxContext.peek(), context -> new Reads());
+    return this.translation.efxContext().isEmpty() ? this.readsWithoutContext
+        : this.readsInContexts.computeIfAbsent(this.translation.efxContext().peek(),
+            context -> new Reads());
   }
 
   private <T extends TypedExpression> T inParentheses(final TypedExpression expression,
       final Class<T> type) {
-    return this.script.composeParenthesizedExpression(TypedExpression.from(expression, type),
-        type);
+    return this.translation.script().composeParenthesizedExpression(
+        TypedExpression.from(expression, type), type);
   }
 
   /**
@@ -1069,46 +1015,46 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   // #region Operators --------------------------------------------------------
 
   @Override
-  public Operand<?> visitMultiplicativeExpression(final MultiplicativeExpressionContext ctx) {
+  public Subexpression<?> visitMultiplicativeExpression(final MultiplicativeExpressionContext ctx) {
     return this.operation(ctx, this.operatorNamed(ctx.operator));
   }
 
   @Override
-  public Operand<?> visitAdditiveExpression(final AdditiveExpressionContext ctx) {
+  public Subexpression<?> visitAdditiveExpression(final AdditiveExpressionContext ctx) {
     return this.operation(ctx, this.operatorNamed(ctx.operator));
   }
 
   @Override
-  public Operand<?> visitComparisonExpression(final ComparisonExpressionContext ctx) {
+  public Subexpression<?> visitComparisonExpression(final ComparisonExpressionContext ctx) {
     return this.operation(ctx, this.operatorNamed(ctx.operator));
   }
 
   @Override
-  public Operand<?> visitInListCondition(final InListConditionContext ctx) {
+  public Subexpression<?> visitInListCondition(final InListConditionContext ctx) {
     return this.operation(ctx,
         ctx.modifier == null ? ConditionOperators.IN : ConditionOperators.NOT_IN);
   }
 
   @Override
-  public Operand<?> visitUniqueValueCondition(final UniqueValueConditionContext ctx) {
+  public Subexpression<?> visitUniqueValueCondition(final UniqueValueConditionContext ctx) {
     return this.operation(ctx, ctx.modifier == null ? ConditionOperators.IS_UNIQUE_IN
         : ConditionOperators.IS_NOT_UNIQUE_IN);
   }
 
   @Override
-  public Operand<?> visitEmptinessCondition(final EmptinessConditionContext ctx) {
+  public Subexpression<?> visitEmptinessCondition(final EmptinessConditionContext ctx) {
     return this.condition(ctx,
         ctx.modifier == null ? ConditionOperators.IS_EMPTY : ConditionOperators.IS_NOT_EMPTY);
   }
 
   @Override
-  public Operand<?> visitDistinctCondition(final DistinctConditionContext ctx) {
+  public Subexpression<?> visitDistinctCondition(final DistinctConditionContext ctx) {
     return this.condition(ctx, ctx.modifier == null ? ConditionOperators.HAS_DUPLICATES
         : ConditionOperators.HAS_NO_DUPLICATES);
   }
 
   @Override
-  public Operand<?> visitLikePatternCondition(final LikePatternConditionContext ctx) {
+  public Subexpression<?> visitLikePatternCondition(final LikePatternConditionContext ctx) {
     final String pattern = ctx.pattern.getText();
     return this.condition(ctx,
         ctx.modifier == null ? PatternMatch.like(pattern) : PatternMatch.notLike(pattern));
@@ -1118,20 +1064,19 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * {@code is present} takes its operand as a path.
    */
   @Override
-  public Operand<?> visitPresenceCondition(final PresenceConditionContext ctx) {
+  public Subexpression<?> visitPresenceCondition(final PresenceConditionContext ctx) {
     final BuiltIn operator =
         ctx.modifier == null ? ConditionOperators.IS_PRESENT : ConditionOperators.IS_NOT_PRESENT;
-    return this.pathCall(ctx, operator, Construct.operator(operator.getName(), 1),
-        this.operandsOf(ctx));
+    return this.pathCall(ctx, operator, this.subexpressionsOf(ctx));
   }
 
   @Override
-  public Operand<?> visitLogicalAndCondition(final LogicalAndConditionContext ctx) {
+  public Subexpression<?> visitLogicalAndCondition(final LogicalAndConditionContext ctx) {
     return this.operation(ctx, LogicalOperators.AND);
   }
 
   @Override
-  public Operand<?> visitLogicalOrCondition(final LogicalOrConditionContext ctx) {
+  public Subexpression<?> visitLogicalOrCondition(final LogicalOrConditionContext ctx) {
     return this.operation(ctx, LogicalOperators.OR);
   }
 
@@ -1156,119 +1101,85 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * of the reference. A node has no value, so it is rejected in parentheses.
    */
   @Override
-  public Operand<?> visitParenthesizedExpression(final ParenthesizedExpressionContext ctx) {
-    final Operand<?> inner = this.visit(ctx.expression());
-    final TypedExpression value = new Operands(PARENTHESES, List.of(inner)).valueAt(0, ctx);
-    final Class<? extends TypedExpression> type = value instanceof SequenceExpression
-        ? this.sequenceTypeOf(value)
-        : this.scalarTypeOf(value);
-    return new Operand<>(this.inParentheses(value, type), inner.origin().asValue());
+  public Subexpression<?> visitParenthesizedExpression(final ParenthesizedExpressionContext ctx) {
+    final Subexpression<?> inner = this.visit(ctx.expression());
+    final Resolution content =
+        this.checked(GrammarConstruct.PARENTHESES, List.of(inner), position -> ctx);
+    return new Subexpression<>(
+        this.inParentheses(content.getArguments().at(0, TypedExpression.class),
+            GrammarConstruct.PARENTHESES.resultOf(content)),
+        inner.origin().asValue());
   }
 
   /**
-   * A conditional: the condition is a boolean, and the two branches have one primitive. It gives
-   * the join of its branches: a sequence if either branch is one, the other promoted to a sequence
-   * of one, and a single value if both are.
+   * A conditional: the condition is a boolean, and the two branches have one primitive. Two single
+   * values give a single value; a sequence on either side gives a sequence, the other branch
+   * promoted to a sequence of one by the parameter list that takes them.
    */
   @Override
-  public Operand<?> visitConditionalExpression(final ConditionalExpressionContext ctx) {
-    final Operands parts = new Operands(CONDITIONAL, this.operandsOf(ctx));
-    return this.operand(this.conditional(ctx, parts, this.joinOfBranches(ctx, parts)));
+  public Subexpression<?> visitConditionalExpression(final ConditionalExpressionContext ctx) {
+    final Resolution parts = this.checked(GrammarConstruct.CONDITIONAL,
+        this.subexpressionsOf(ctx), position -> position == 1 ? ctx : ctx.expression(position));
+    return this.subexpression(
+        this.conditional(parts.getArguments(), GrammarConstruct.CONDITIONAL.resultOf(parts)));
   }
 
-  /**
-   * Gives the class of a conditional, the join of its branches. The then branch binds {@code T},
-   * as the first argument of a generic built-in does, and the else branch must have its primitive,
-   * as a single value or as a sequence.
-   *
-   * @param ctx the conditional
-   * @param parts its condition and its two branches
-   * @return the sequence class of the primitive if either branch is a sequence, and its scalar
-   *         class otherwise
-   * @throws TypeMismatchException if the then branch is a node, or the else branch is not of the
-   *         primitive of the then branch
-   */
-  private Class<? extends TypedExpression> joinOfBranches(final ConditionalExpressionContext ctx,
-      final Operands parts) {
-    final TypedExpression then = parts.valueAt(1, ctx);
-    final ParameterType single = this.bindingOf(ParameterType.T, then);
-    final ParameterType sequence = this.bindingOf(ParameterType.T_SEQUENCE, then);
-    final TypedExpression otherwise =
-        parts.valueAt(2, List.of(single, sequence), ctx.expression(2));
-    return (then instanceof SequenceExpression || otherwise instanceof SequenceExpression
-        ? sequence
-        : single).getExpressionType();
-  }
-
-  private <T extends TypedExpression> T conditional(final ConditionalExpressionContext ctx,
-      final Operands parts, final Class<T> type) {
-    final T otherwise = parts.converted(2, type, ctx.expression(2));
-    final T then = parts.converted(1, type, ctx.expression(1));
-    final BooleanExpression test = parts.converted(0, BooleanExpression.class, ctx.expression(0));
-    return this.script.composeConditionalExpression(test, then, otherwise, type);
+  private <T extends TypedExpression> T conditional(final ParsedArguments<?> parts,
+      final Class<T> type) {
+    return this.translation.script().composeConditionalExpression(parts.booleanAt(0),
+        parts.at(1, type), parts.at(2, type), type);
   }
 
   /**
    * A list: its items are single values of the primitive of the first.
    */
   @Override
-  public Operand<?> visitList(final ListContext ctx) {
-    final List<ExpressionContext> expressions = ctx.expression();
-    final List<Operand<?>> items = new ArrayList<>(expressions.size());
-    final List<TypedExpression> values = new ArrayList<>(expressions.size());
-    for (final ExpressionContext item : expressions) {
-      final Operand<?> operand = this.visit(item);
-      items.add(operand);
-      values.add(operand.value());
-    }
-    final Operands list = new Operands(Construct.list(items.size()), items, values);
-    return this.operand(this.list(expressions, list, this.scalarTypeOf(list.valueAt(0, ctx))));
-  }
-
-  private <T extends ScalarExpression> SequenceExpression list(
-      final List<ExpressionContext> expressions, final Operands items, final Class<T> itemType) {
-    final List<T> list = new ArrayList<>(expressions.size());
-    for (int position = 0; position < expressions.size(); position++) {
-      list.add(items.converted(position, itemType, expressions.get(position)));
-    }
-    return this.script.composeList(list, this.sequenceTypeOf(list.get(0)));
+  public Subexpression<?> visitList(final ListContext ctx) {
+    final List<ExpressionContext> items = ctx.expression();
+    final Resolution list = this.checked(GrammarConstruct.LIST, this.subexpressionsOf(ctx),
+        position -> position == 0 ? ctx : items.get(position));
+    return this.subexpression(this.translation.script().composeList(
+        list.getArguments().getArgumentValues().stream().map(ScalarExpression.class::cast)
+            .collect(Collectors.toList()),
+        GrammarConstruct.LIST.resultOf(list).asSubclass(SequenceExpression.class)));
   }
 
   @Override
-  public Operand<?> visitQuantifiedExpression(final QuantifiedExpressionContext ctx) {
-    this.stack.pushStackFrame();
+  public Subexpression<?> visitQuantifiedExpression(final QuantifiedExpressionContext ctx) {
+    this.translation.stack().pushStackFrame();
     final IteratorListExpression iterators = this.iteratorsOf(ctx.iteratorList());
-    final BooleanExpression condition = this.valueAs(ctx.expression(), BooleanExpression.class,
-        Construct.of("Quantifier '" + (ctx.Every() != null ? ctx.Every() : ctx.Some()).getText()
-            + "'", "condition"));
+    final BooleanExpression condition = this.valueOf(ctx.expression(), GrammarConstruct
+        .quantifier((ctx.Every() != null ? ctx.Every() : ctx.Some()).getText())).booleanAt(0);
     final BooleanExpression quantified = ctx.Every() != null
-        ? this.script.composeAllSatisfy(iterators, condition)
-        : this.script.composeAnySatisfies(iterators, condition);
-    this.stack.popStackFrame();
-    return this.operand(quantified);
+        ? this.translation.script().composeAllSatisfy(iterators, condition)
+        : this.translation.script().composeAnySatisfies(iterators, condition);
+    this.translation.stack().popStackFrame();
+    return this.subexpression(quantified);
   }
 
   /**
-   * An iteration: a single value for each iteration gives the sequence of them, and a sequence
-   * for each iteration gives their concatenation.
+   * An iteration: the body gives a sequence for each iteration, a single value being a sequence of
+   * one, and the iteration gives their concatenation.
    */
   @Override
-  public Operand<?> visitSequenceFromIteration(final SequenceFromIterationContext ctx) {
-    this.stack.pushStackFrame();
+  public Subexpression<?> visitSequenceFromIteration(final SequenceFromIterationContext ctx) {
+    this.translation.stack().pushStackFrame();
     final IteratorListExpression iterators = this.iteratorsOf(ctx.iteratorList());
-    final TypedExpression body = this.valueOf(ctx.expression(), ITERATION);
-    final SequenceExpression iteration =
-        this.iteration(iterators, body, ctx.Distinct() != null, this.sequenceTypeOf(body));
-    this.stack.popStackFrame();
-    return this.operand(iteration);
+    final Resolution body = this.checked(GrammarConstruct.ITERATION,
+        List.of(this.visit(ctx.expression())), position -> ctx.expression());
+    final SequenceExpression iteration = this.iteration(iterators,
+        body.getArguments().sequenceAt(0), ctx.Distinct() != null,
+        GrammarConstruct.ITERATION.resultOf(body).asSubclass(SequenceExpression.class));
+    this.translation.stack().popStackFrame();
+    return this.subexpression(iteration);
   }
 
   private <T extends SequenceExpression> T iteration(final IteratorListExpression iterators,
-      final TypedExpression body, final boolean distinct, final Class<T> sequenceType) {
-    final T result = body instanceof ScalarExpression
-        ? this.script.composeForExpression(iterators, (ScalarExpression) body, sequenceType)
-        : this.script.composeForExpression(iterators, (SequenceExpression) body, sequenceType);
-    return distinct ? this.script.composeDistinctValuesFunction(result, sequenceType) : result;
+      final SequenceExpression body, final boolean distinct, final Class<T> sequenceType) {
+    final T result = this.translation.script().composeForExpression(iterators, body, sequenceType);
+    return distinct
+        ? this.translation.script().composeDistinctValuesFunction(result, sequenceType)
+        : result;
   }
 
   /**
@@ -1280,7 +1191,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
     for (final IteratorExpressionContext iterator : ctx.iteratorExpression()) {
       iterators.add(iterator.accept(this.iteratorDeclarations));
     }
-    return this.script.composeIteratorList(iterators);
+    return this.translation.script().composeIteratorList(iterators);
   }
 
   /**
@@ -1296,19 +1207,20 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
       final Class<? extends EfxDataType.Primitive> primitive = primitiveOf(ctx.primitiveType());
       final String name = ctx.variableName.getText();
       return this.iterator(name, ScalarExpression.fromEfxDataType.get(primitive),
-          EfxExpressionVisitor.this.valueAs(ctx.expression(),
-              SequenceExpression.fromEfxDataType.get(primitive),
-              Construct.of("Iterator '" + ctx.primitiveType().getText() + ":$" + name + "'",
-                  "sequence")));
+          EfxExpressionVisitor.this.valueOf(ctx.expression(),
+              GrammarConstruct.of("Iterator '" + ctx.primitiveType().getText() + ":$" + name + "'",
+                  parameter("sequence",
+                      ParameterType.of(SequenceExpression.fromEfxDataType.get(primitive)))))
+              .sequenceAt(0));
     }
 
     private <T extends ScalarExpression> IteratorExpression iterator(final String name,
         final Class<T> variableType, final SequenceExpression source) {
-      final ScriptGenerator script = EfxExpressionVisitor.this.script;
+      final ScriptGenerator script = EfxExpressionVisitor.this.translation.script();
       final Variable variable = new Variable(name,
           script.composeVariableDeclaration(name, variableType), source,
           script.composeVariableReference(name, variableType));
-      EfxExpressionVisitor.this.stack.declareIdentifier(variable);
+      EfxExpressionVisitor.this.translation.stack().declareIdentifier(variable);
       return script.composeIteratorExpression(variable.declarationExpression, source);
     }
 
@@ -1318,7 +1230,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
      */
     @Override
     public IteratorExpression visitContextIterator(final ContextIteratorContext ctx) {
-      final ScriptGenerator script = EfxExpressionVisitor.this.script;
+      final ScriptGenerator script = EfxExpressionVisitor.this.translation.script();
       final Context context = EfxExpressionVisitor.this
           .contextOf(ctx.getRuleContext(ParserRuleContext.class, 0));
       final PathExpression path = context.relativePath();
@@ -1337,61 +1249,62 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   // #region Field properties -------------------------------------------------
 
   @Override
-  public Operand<?> visitFieldPropertyExpression(final FieldPropertyExpressionContext ctx) {
+  public Subexpression<?> visitFieldPropertyExpression(final FieldPropertyExpressionContext ctx) {
     return this.visit(ctx.fieldProperty());
   }
 
   @Override
-  public Operand<?> visitFieldWasWithheldProperty(final FieldWasWithheldPropertyContext ctx) {
+  public Subexpression<?> visitFieldWasWithheldProperty(final FieldWasWithheldPropertyContext ctx) {
     final String fieldId = this.fieldIdOf(ctx.fieldMention());
-    return this.operand(
+    return this.subexpression(
         this.composeWasWithheldCondition(fieldId, this.privacyCodeOf(ctx, fieldId)));
   }
 
   @Override
-  public Operand<?> visitFieldIsWithheldProperty(final FieldIsWithheldPropertyContext ctx) {
+  public Subexpression<?> visitFieldIsWithheldProperty(final FieldIsWithheldPropertyContext ctx) {
     final String fieldId = this.fieldIdOf(ctx.fieldMention());
-    return this.operand(this.script.composeLogicalAnd(
+    return this.subexpression(this.translation.script().composeLogicalAnd(
         this.composeWasWithheldCondition(fieldId, this.privacyCodeOf(ctx, fieldId)),
         this.composeStillWithheldCondition(fieldId)));
   }
 
   @Override
-  public Operand<?> visitFieldIsWithholdableProperty(
+  public Subexpression<?> visitFieldIsWithholdableProperty(
       final FieldIsWithholdablePropertyContext ctx) {
-    return this.operand(
-        this.script.getBooleanEquivalent(this.isWithholdable(this.fieldIdOf(ctx.fieldMention()))));
+    return this.subexpression(this.translation.script().getBooleanEquivalent(
+        this.isWithholdable(this.fieldIdOf(ctx.fieldMention()))));
   }
 
   /**
    * A field is disclosed if it was withheld, is no longer withheld, and is not masked.
    */
   @Override
-  public Operand<?> visitFieldIsDisclosedProperty(final FieldIsDisclosedPropertyContext ctx) {
+  public Subexpression<?> visitFieldIsDisclosedProperty(final FieldIsDisclosedPropertyContext ctx) {
     final String fieldId = this.fieldIdOf(ctx.fieldMention());
-    return this.operand(this.script.composeLogicalAnd(
-        this.script.composeLogicalAnd(
+    return this.subexpression(this.translation.script().composeLogicalAnd(
+        this.translation.script().composeLogicalAnd(
             this.composeWasWithheldCondition(fieldId, this.privacyCodeOf(ctx, fieldId)),
-            this.script.composeLogicalNot(this.composeStillWithheldCondition(fieldId))),
-        this.script.composeLogicalNot(this.composeIsMaskedCondition(fieldId))));
+            this.translation.script().composeLogicalNot(
+                this.composeStillWithheldCondition(fieldId))),
+        this.translation.script().composeLogicalNot(this.composeIsMaskedCondition(fieldId))));
   }
 
   /**
    * A field is masked if it was withheld and its value is the privacy mask.
    */
   @Override
-  public Operand<?> visitFieldIsMaskedProperty(final FieldIsMaskedPropertyContext ctx) {
+  public Subexpression<?> visitFieldIsMaskedProperty(final FieldIsMaskedPropertyContext ctx) {
     final String fieldId = this.fieldIdOf(ctx.fieldMention());
-    return this.operand(this.script.composeLogicalAnd(
+    return this.subexpression(this.translation.script().composeLogicalAnd(
         this.composeWasWithheldCondition(fieldId, this.privacyCodeOf(ctx, fieldId)),
         this.composeIsMaskedCondition(fieldId)));
   }
 
   @Override
-  public Operand<?> visitFieldPrivacyCodeProperty(final FieldPrivacyCodePropertyContext ctx) {
+  public Subexpression<?> visitFieldPrivacyCodeProperty(final FieldPrivacyCodePropertyContext ctx) {
     final String fieldId = this.fieldIdOf(ctx.fieldMention());
-    return this.operand(
-        this.script.getStringLiteralFromUnquotedString(this.privacyCodeOf(ctx, fieldId)));
+    return this.subexpression(this.translation.script().getStringLiteralFromUnquotedString(
+        this.privacyCodeOf(ctx, fieldId)));
   }
 
   /**
@@ -1399,7 +1312,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    */
   private String privacyCodeOf(final ParserRuleContext property, final String fieldId) {
     this.requireWithholdable(property, fieldId);
-    return this.symbols.getPrivacyCodeOfField(fieldId);
+    return this.translation.symbols().getPrivacyCodeOfField(fieldId);
   }
 
   /**
@@ -1421,66 +1334,70 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * @return whether the field can be withheld from publication: whether it has a privacy code
    */
   private boolean isWithholdable(final String fieldId) {
-    final String privacyCode = this.symbols.getPrivacyCodeOfField(fieldId);
+    final String privacyCode = this.translation.symbols().getPrivacyCodeOfField(fieldId);
     return privacyCode != null && !privacyCode.isEmpty();
   }
 
   private BooleanExpression composeWasWithheldCondition(final String fieldId,
       final String privacyCode) {
     final String privacyCodeFieldId =
-        this.symbols.getPrivacySettingOfField(fieldId, PrivacySetting.PRIVACY_CODE_FIELD);
+        this.translation.symbols().getPrivacySettingOfField(fieldId,
+            PrivacySetting.PRIVACY_CODE_FIELD);
     if (privacyCodeFieldId == null) {
       throw SdkInconsistencyException.missingPrivacyCodeField(fieldId);
     }
-    return this.script.composeComparisonOperation(
-        new StringExpression(this.script.composeFieldValueReference(
+    return this.translation.script().composeComparisonOperation(
+        new StringExpression(this.translation.script().composeFieldValueReference(
             this.relativePathOfField(privacyCodeFieldId)).getScript()),
-        "==", this.script.getStringLiteralFromUnquotedString(privacyCode));
+        "==", this.translation.script().getStringLiteralFromUnquotedString(privacyCode));
   }
 
   private BooleanExpression composeStillWithheldCondition(final String fieldId) {
     final String publicationDateFieldId =
-        this.symbols.getPrivacySettingOfField(fieldId, PrivacySetting.PUBLICATION_DATE_FIELD);
+        this.translation.symbols().getPrivacySettingOfField(fieldId,
+            PrivacySetting.PUBLICATION_DATE_FIELD);
     if (publicationDateFieldId == null) {
       throw SdkInconsistencyException.missingPublicationDateField(fieldId);
     }
     final PathExpression publicationDate = this.relativePathOfField(publicationDateFieldId);
-    return this.script.composeParenthesizedExpression(
-        this.script.composeLogicalOr(
-            this.script.composeLogicalNot(this.script.composeExistsCondition(publicationDate)),
-            this.script.composeComparisonOperation(
-                new DateExpression(
-                    this.script.composeFieldValueReference(publicationDate).getScript()),
-                ">", this.script.getCurrentDate())),
+    return this.translation.script().composeParenthesizedExpression(
+        this.translation.script().composeLogicalOr(
+            this.translation.script().composeLogicalNot(
+                this.translation.script().composeExistsCondition(publicationDate)),
+            this.translation.script().composeComparisonOperation(
+                new DateExpression(this.translation.script()
+                    .composeFieldValueReference(publicationDate).getScript()),
+                ">", this.translation.script().getCurrentDate())),
         BooleanExpression.class);
   }
 
   private BooleanExpression composeIsMaskedCondition(final String fieldId) {
     final PathExpression fieldValue =
-        this.script.composeFieldValueReference(this.relativePathOfField(fieldId));
-    return this.script.composeComparisonOperation(
+        this.translation.script().composeFieldValueReference(this.relativePathOfField(fieldId));
+    return this.translation.script().composeComparisonOperation(
         TypedExpression.from(fieldValue, ScalarExpression.class), "==",
-        this.literalOf(this.symbols.getPrivacyMask(fieldId), fieldValue.getDataType()));
+        this.literalOf(this.translation.symbols().getPrivacyMask(fieldId),
+            fieldValue.getDataType()));
   }
 
   private ScalarExpression literalOf(final String value,
       final Class<? extends EfxDataType> type) {
     if (EfxDataType.Number.class.isAssignableFrom(type)) {
-      return this.script.getNumericLiteralEquivalent(value);
+      return this.translation.script().getNumericLiteralEquivalent(value);
     }
     if (EfxDataType.Date.class.isAssignableFrom(type)) {
-      return this.script.getDateLiteralEquivalent(value);
+      return this.translation.script().getDateLiteralEquivalent(value);
     }
     if (EfxDataType.Time.class.isAssignableFrom(type)) {
-      return this.script.getTimeLiteralEquivalent(value);
+      return this.translation.script().getTimeLiteralEquivalent(value);
     }
     if (EfxDataType.Duration.class.isAssignableFrom(type)) {
-      return this.script.getDurationLiteralEquivalent(value);
+      return this.translation.script().getDurationLiteralEquivalent(value);
     }
     if (EfxDataType.Boolean.class.isAssignableFrom(type)) {
-      return this.script.getBooleanEquivalent(Boolean.parseBoolean(value));
+      return this.translation.script().getBooleanEquivalent(Boolean.parseBoolean(value));
     }
-    return this.script.getStringLiteralFromUnquotedString(value);
+    return this.translation.script().getStringLiteralFromUnquotedString(value);
   }
 
   // #endregion Field properties ----------------------------------------------
@@ -1492,41 +1409,54 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * of the primitive of its value.
    */
   @Override
-  public Operand<?> visitFunctionInvocation(final FunctionInvocationContext ctx) {
+  public Subexpression<?> visitFunctionInvocation(final FunctionInvocationContext ctx) {
     final String name = ctx.functionName.getText();
-    final eu.europa.ted.efx.model.variables.Function function = this.stack.getFunction(name);
-    final ParsedArguments arguments = this.argumentsOf(ctx, function);
+    final Function function = this.translation.stack()
+        .getFunction(name);
+    final ParsedArguments<?> arguments = this.invocationOf(ctx, function, ctx.argumentList());
     final ParameterType result = EfxTypeLattice.isSequence(function.dataType)
         ? ParameterType.T_SEQUENCE
         : ParameterType.T;
-    return new Operand<>(
-        this.script.composeFunctionInvocation(name, arguments.getArgumentValues(),
+    return new Subexpression<>(
+        this.translation.script().composeFunctionInvocation(name, arguments.getArgumentValues(),
             this.bindingOf(result, function.expression).getExpressionType()),
         new IdentifierOrigin<>(this, ctx, name));
   }
 
   /**
-   * Translates the arguments of an invocation of a declared function, with
-   * {@link #argumentsOf(ParserRuleContext, Parametrised, ArgumentListContext, Construct)}.
+   * Translates the arguments of an invocation of a declared function.
    *
    * @param invocation the invocation
    * @param function the function invoked
    * @return the arguments, each converted to the class of its parameter
    * @throws InvalidArgumentException if the number of arguments or the type of one does not match
    */
-  ParsedArguments argumentsOf(final FunctionInvocationContext invocation,
-      final Parametrised function) {
-    final String name =
-        invocation.FunctionPrefix().getText() + invocation.functionName.getText();
-    return this.argumentsOf(invocation, function, invocation.argumentList(),
-        Construct.function(name, function.parameters.size()));
+  ParsedArguments<?> argumentsOf(final FunctionInvocationContext invocation,
+      final Invocable function) {
+    return this.invocationOf(invocation, function, invocation.argumentList());
   }
 
   /**
-   * Translates the arguments of an invocation of a declared function or template, and matches
-   * them against the parameters of the declaration, as the arguments of a built-in are matched
-   * against its overloads. The parameters reject an argument that does not fit them, a node
-   * included.
+   * Translates the arguments of an invocation of a declared template. The resolution pairs them
+   * with the template's parameters as parameters of any kind; they are paired again here with the
+   * declared parameters themselves, which the template model reads, rather than cast.
+   *
+   * @param invocation the invocation
+   * @param template the template invoked
+   * @param list the arguments, or {@code null} if there are none
+   * @return the arguments, each converted to the class of its parameter
+   * @throws InvalidArgumentException if the number of arguments or the type of one does not match
+   */
+  ParsedArguments<ParsedParameter> argumentsOf(final ParserRuleContext invocation,
+      final Invocable template, final ArgumentListContext list) {
+    return new ParsedArguments<>(template.parameters,
+        this.invocationOf(invocation, template, list).getArgumentValues());
+  }
+
+  /**
+   * Checks the arguments of an invocation of a declared function or template against the declared
+   * parameters, as the arguments of a call of a built-in are checked against its overloads. The
+   * parameters reject an argument that does not fit them, a node included.
    *
    * <p>An argument that does not fit is reported as such, even a sequence where a single value is
    * required. Only a context variable that holds a node is reported by itself, as it is wherever a
@@ -1535,38 +1465,36 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * @param call the invocation
    * @param declaration the function or template invoked
    * @param list the arguments, or {@code null} if there are none
-   * @param construct the invocation, as a type error names it, with an operand for each parameter
-   * @return the arguments, each converted to the class of its parameter
+   * @return the arguments, converted to the classes of the parameters
    * @throws InvalidArgumentException if the number of arguments or the type of one does not match
    * @throws TypeMismatchException if an argument is a context variable that holds a node
    */
-  ParsedArguments argumentsOf(final ParserRuleContext call, final Parametrised declaration,
-      final ArgumentListContext list, final Construct construct) {
-    final StrictArguments arguments = new StrictArguments(declaration);
-    final List<Operand<?>> operands = new ArrayList<>();
+  private ParsedArguments<?> invocationOf(final ParserRuleContext call,
+      final Invocable declaration, final ArgumentListContext list) {
+    final List<Subexpression<?>> subexpressions = new ArrayList<>();
     if (list != null) {
       for (final ArgumentContext argument : list.argument()) {
-        final Operand<?> operand = this.visit(argument.expression());
-        operands.add(operand);
-        arguments.addArgument(operand.value());
+        subexpressions.add(this.visit(argument.expression()));
       }
     }
-    final Match match = Parameters.of(declaration.parameters).match(arguments.getValues());
-    if (match.isCountMismatch()) {
+    final List<TypedExpression> arguments =
+        subexpressions.stream().map(Subexpression::value).collect(Collectors.toList());
+    final Resolution resolution = declaration.resolve(arguments);
+    if (resolution.isResolved()) {
+      return resolution.getArguments();
+    }
+    final Mismatch mismatch = resolution.getMismatch();
+    if (mismatch.isArityMismatch()) {
       throw InvalidArgumentException.argumentNumberMismatch(declaration,
-          declaration.parameters.size(), arguments.getValues().size());
+          declaration.parameters.size(), arguments.size());
     }
-    if (!match.isMatched()) {
-      final Diagnosis diagnosis = new Diagnosis(construct, arguments.getValues(),
-          match.getPosition(), List.of(match.getRequired().describe()));
-      final Optional<TypeMismatchException> noValue =
-          operands.get(match.getPosition()).errorOf(Rejection.Kind.PATH, diagnosis);
-      if (noValue.isPresent()) {
-        throw noValue.get();
-      }
-      throw InvalidArgumentException.argumentTypeMismatch(call, diagnosis);
+    final Diagnosis diagnosis = mismatch.diagnose();
+    final Optional<TypeMismatchException> noValue = subexpressions
+        .get(mismatch.getRejection().getPosition()).errorOf(Match.Kind.PATH, diagnosis);
+    if (noValue.isPresent()) {
+      throw noValue.get();
     }
-    return new ParsedArguments(declaration.parameters, match.getArguments().getValues());
+    throw InvalidArgumentException.argumentTypeMismatch(call, diagnosis);
   }
 
   // #endregion Function invocation -------------------------------------------
@@ -1574,263 +1502,266 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   // #region Built-in functions -----------------------------------------------
 
   @Override
-  public Operand<?> visitFunctionExpression(final FunctionExpressionContext ctx) {
+  public Subexpression<?> visitFunctionExpression(final FunctionExpressionContext ctx) {
     return this.visit(ctx.builtInFunction());
   }
 
   @Override
-  public Operand<?> visitBuiltInFunction(final BuiltInFunctionContext ctx) {
+  public Subexpression<?> visitBuiltInFunction(final BuiltInFunctionContext ctx) {
     return this.visitOnlyChild(ctx);
   }
 
   // Boolean functions
 
   @Override
-  public Operand<?> visitNotFunction(final NotFunctionContext ctx) {
+  public Subexpression<?> visitNotFunction(final NotFunctionContext ctx) {
     return this.call(ctx, LogicalOperators.NOT);
   }
 
   @Override
-  public Operand<?> visitContainsFunction(final ContainsFunctionContext ctx) {
+  public Subexpression<?> visitContainsFunction(final ContainsFunctionContext ctx) {
     return this.call(ctx, StringFunctions.CONTAINS);
   }
 
   @Override
-  public Operand<?> visitStartsWithFunction(final StartsWithFunctionContext ctx) {
+  public Subexpression<?> visitStartsWithFunction(final StartsWithFunctionContext ctx) {
     return this.call(ctx, StringFunctions.STARTS_WITH);
   }
 
   @Override
-  public Operand<?> visitEndsWithFunction(final EndsWithFunctionContext ctx) {
+  public Subexpression<?> visitEndsWithFunction(final EndsWithFunctionContext ctx) {
     return this.call(ctx, StringFunctions.ENDS_WITH);
   }
 
   @Override
-  public Operand<?> visitSequenceEqualFunction(final SequenceEqualFunctionContext ctx) {
+  public Subexpression<?> visitSequenceEqualFunction(final SequenceEqualFunctionContext ctx) {
     return this.call(ctx, SequenceFunctions.SEQUENCE_EQUAL);
   }
 
   @Override
-  public Operand<?> visitBooleanFromNumberFunction(final BooleanFromNumberFunctionContext ctx) {
+  public Subexpression<?> visitBooleanFromNumberFunction(
+      final BooleanFromNumberFunctionContext ctx) {
     return this.call(ctx, ConversionFunctions.TO_INDICATOR);
   }
 
   @Override
-  public Operand<?> visitStringEmptyFunction(final StringEmptyFunctionContext ctx) {
+  public Subexpression<?> visitStringEmptyFunction(final StringEmptyFunctionContext ctx) {
     return this.call(ctx, StringFunctions.EMPTY);
   }
 
   // Numeric functions
 
   @Override
-  public Operand<?> visitCountFunction(final CountFunctionContext ctx) {
+  public Subexpression<?> visitCountFunction(final CountFunctionContext ctx) {
     return this.call(ctx, NumericFunctions.COUNT);
   }
 
   @Override
-  public Operand<?> visitCountDuplicatesFunction(final CountDuplicatesFunctionContext ctx) {
+  public Subexpression<?> visitCountDuplicatesFunction(final CountDuplicatesFunctionContext ctx) {
     return this.call(ctx, SequenceFunctions.COUNT_DUPLICATES);
   }
 
   @Override
-  public Operand<?> visitNumberFunction(final NumberFunctionContext ctx) {
+  public Subexpression<?> visitNumberFunction(final NumberFunctionContext ctx) {
     return this.call(ctx, ConversionFunctions.TO_NUMBER);
   }
 
   @Override
-  public Operand<?> visitSumFunction(final SumFunctionContext ctx) {
+  public Subexpression<?> visitSumFunction(final SumFunctionContext ctx) {
     return this.call(ctx, NumericFunctions.SUM);
   }
 
   @Override
-  public Operand<?> visitMinFunction(final MinFunctionContext ctx) {
+  public Subexpression<?> visitMinFunction(final MinFunctionContext ctx) {
     return this.call(ctx, NumericFunctions.MIN);
   }
 
   @Override
-  public Operand<?> visitMaxFunction(final MaxFunctionContext ctx) {
+  public Subexpression<?> visitMaxFunction(final MaxFunctionContext ctx) {
     return this.call(ctx, NumericFunctions.MAX);
   }
 
   @Override
-  public Operand<?> visitAverageFunction(final AverageFunctionContext ctx) {
+  public Subexpression<?> visitAverageFunction(final AverageFunctionContext ctx) {
     return this.call(ctx, NumericFunctions.AVERAGE);
   }
 
   @Override
-  public Operand<?> visitStringLengthFunction(final StringLengthFunctionContext ctx) {
+  public Subexpression<?> visitStringLengthFunction(final StringLengthFunctionContext ctx) {
     return this.call(ctx, StringFunctions.STRING_LENGTH);
   }
 
   @Override
-  public Operand<?> visitIndexOfFunction(final IndexOfFunctionContext ctx) {
+  public Subexpression<?> visitIndexOfFunction(final IndexOfFunctionContext ctx) {
     return this.call(ctx, SequenceFunctions.INDEX_OF);
   }
 
   @Override
-  public Operand<?> visitIndexOfSubstringFunction(final IndexOfSubstringFunctionContext ctx) {
+  public Subexpression<?> visitIndexOfSubstringFunction(final IndexOfSubstringFunctionContext ctx) {
     return this.call(ctx, StringFunctions.INDEX_OF_SUBSTRING);
   }
 
   @Override
-  public Operand<?> visitAbsoluteFunction(final AbsoluteFunctionContext ctx) {
+  public Subexpression<?> visitAbsoluteFunction(final AbsoluteFunctionContext ctx) {
     return this.call(ctx, NumericFunctions.ABSOLUTE);
   }
 
   @Override
-  public Operand<?> visitRoundFunction(final RoundFunctionContext ctx) {
+  public Subexpression<?> visitRoundFunction(final RoundFunctionContext ctx) {
     return this.call(ctx, NumericFunctions.ROUND);
   }
 
   @Override
-  public Operand<?> visitRoundDownFunction(final RoundDownFunctionContext ctx) {
+  public Subexpression<?> visitRoundDownFunction(final RoundDownFunctionContext ctx) {
     return this.call(ctx, NumericFunctions.ROUND_DOWN);
   }
 
   @Override
-  public Operand<?> visitRoundUpFunction(final RoundUpFunctionContext ctx) {
+  public Subexpression<?> visitRoundUpFunction(final RoundUpFunctionContext ctx) {
     return this.call(ctx, NumericFunctions.ROUND_UP);
   }
 
   @Override
-  public Operand<?> visitYearFromDateFunction(final YearFromDateFunctionContext ctx) {
+  public Subexpression<?> visitYearFromDateFunction(final YearFromDateFunctionContext ctx) {
     return this.call(ctx, DateTimeFunctions.YEAR);
   }
 
   @Override
-  public Operand<?> visitMonthFromDateFunction(final MonthFromDateFunctionContext ctx) {
+  public Subexpression<?> visitMonthFromDateFunction(final MonthFromDateFunctionContext ctx) {
     return this.call(ctx, DateTimeFunctions.MONTH);
   }
 
   @Override
-  public Operand<?> visitDayFromDateFunction(final DayFromDateFunctionContext ctx) {
+  public Subexpression<?> visitDayFromDateFunction(final DayFromDateFunctionContext ctx) {
     return this.call(ctx, DateTimeFunctions.DAY);
   }
 
   @Override
-  public Operand<?> visitHoursFromTimeFunction(final HoursFromTimeFunctionContext ctx) {
+  public Subexpression<?> visitHoursFromTimeFunction(final HoursFromTimeFunctionContext ctx) {
     return this.call(ctx, DateTimeFunctions.HOURS);
   }
 
   @Override
-  public Operand<?> visitMinutesFromTimeFunction(final MinutesFromTimeFunctionContext ctx) {
+  public Subexpression<?> visitMinutesFromTimeFunction(final MinutesFromTimeFunctionContext ctx) {
     return this.call(ctx, DateTimeFunctions.MINUTES);
   }
 
   @Override
-  public Operand<?> visitSecondsFromTimeFunction(final SecondsFromTimeFunctionContext ctx) {
+  public Subexpression<?> visitSecondsFromTimeFunction(final SecondsFromTimeFunctionContext ctx) {
     return this.call(ctx, DateTimeFunctions.SECONDS);
   }
 
   @Override
-  public Operand<?> visitYearsFromDurationFunction(final YearsFromDurationFunctionContext ctx) {
+  public Subexpression<?> visitYearsFromDurationFunction(
+      final YearsFromDurationFunctionContext ctx) {
     return this.call(ctx, DateTimeFunctions.YEARS);
   }
 
   @Override
-  public Operand<?> visitMonthsFromDurationFunction(final MonthsFromDurationFunctionContext ctx) {
+  public Subexpression<?> visitMonthsFromDurationFunction(
+      final MonthsFromDurationFunctionContext ctx) {
     return this.call(ctx, DateTimeFunctions.MONTHS);
   }
 
   @Override
-  public Operand<?> visitDaysFromDurationFunction(final DaysFromDurationFunctionContext ctx) {
+  public Subexpression<?> visitDaysFromDurationFunction(final DaysFromDurationFunctionContext ctx) {
     return this.call(ctx, DateTimeFunctions.DAYS);
   }
 
   // String functions
 
   @Override
-  public Operand<?> visitSubstringFunction(final SubstringFunctionContext ctx) {
+  public Subexpression<?> visitSubstringFunction(final SubstringFunctionContext ctx) {
     return this.call(ctx, StringFunctions.SUBSTRING);
   }
 
   @Override
-  public Operand<?> visitSubstringBeforeFunction(final SubstringBeforeFunctionContext ctx) {
+  public Subexpression<?> visitSubstringBeforeFunction(final SubstringBeforeFunctionContext ctx) {
     return this.call(ctx, StringFunctions.SUBSTRING_BEFORE);
   }
 
   @Override
-  public Operand<?> visitSubstringAfterFunction(final SubstringAfterFunctionContext ctx) {
+  public Subexpression<?> visitSubstringAfterFunction(final SubstringAfterFunctionContext ctx) {
     return this.call(ctx, StringFunctions.SUBSTRING_AFTER);
   }
 
   @Override
-  public Operand<?> visitTextFunction(final TextFunctionContext ctx) {
+  public Subexpression<?> visitTextFunction(final TextFunctionContext ctx) {
     return this.call(ctx, ConversionFunctions.TO_TEXT);
   }
 
   @Override
-  public Operand<?> visitConcatFunction(final ConcatFunctionContext ctx) {
+  public Subexpression<?> visitConcatFunction(final ConcatFunctionContext ctx) {
     return this.call(ctx, StringFunctions.CONCAT);
   }
 
   @Override
-  public Operand<?> visitStringJoinFunction(final StringJoinFunctionContext ctx) {
+  public Subexpression<?> visitStringJoinFunction(final StringJoinFunctionContext ctx) {
     return this.call(ctx, StringFunctions.STRING_JOIN);
   }
 
   @Override
-  public Operand<?> visitFormatNumberFunction(final FormatNumberFunctionContext ctx) {
+  public Subexpression<?> visitFormatNumberFunction(final FormatNumberFunctionContext ctx) {
     return this.call(ctx, TemplateFunctions.FORMAT_NUMBER);
   }
 
   @Override
-  public Operand<?> visitFormatShortFunction(final FormatShortFunctionContext ctx) {
+  public Subexpression<?> visitFormatShortFunction(final FormatShortFunctionContext ctx) {
     return this.call(ctx, TemplateFunctions.FORMAT_SHORT);
   }
 
   @Override
-  public Operand<?> visitFormatMediumFunction(final FormatMediumFunctionContext ctx) {
+  public Subexpression<?> visitFormatMediumFunction(final FormatMediumFunctionContext ctx) {
     return this.call(ctx, TemplateFunctions.FORMAT_MEDIUM);
   }
 
   @Override
-  public Operand<?> visitFormatLongFunction(final FormatLongFunctionContext ctx) {
+  public Subexpression<?> visitFormatLongFunction(final FormatLongFunctionContext ctx) {
     return this.call(ctx, TemplateFunctions.FORMAT_LONG);
   }
 
   @Override
-  public Operand<?> visitUpperCaseFunction(final UpperCaseFunctionContext ctx) {
+  public Subexpression<?> visitUpperCaseFunction(final UpperCaseFunctionContext ctx) {
     return this.call(ctx, StringFunctions.UPPER_CASE);
   }
 
   @Override
-  public Operand<?> visitLowerCaseFunction(final LowerCaseFunctionContext ctx) {
+  public Subexpression<?> visitLowerCaseFunction(final LowerCaseFunctionContext ctx) {
     return this.call(ctx, StringFunctions.LOWER_CASE);
   }
 
   @Override
-  public Operand<?> visitNormalizeSpaceFunction(final NormalizeSpaceFunctionContext ctx) {
+  public Subexpression<?> visitNormalizeSpaceFunction(final NormalizeSpaceFunctionContext ctx) {
     return this.call(ctx, StringFunctions.NORMALIZE_SPACE);
   }
 
   @Override
-  public Operand<?> visitTrimFunction(final TrimFunctionContext ctx) {
+  public Subexpression<?> visitTrimFunction(final TrimFunctionContext ctx) {
     return this.call(ctx, StringFunctions.TRIM);
   }
 
   @Override
-  public Operand<?> visitTrimLeftFunction(final TrimLeftFunctionContext ctx) {
+  public Subexpression<?> visitTrimLeftFunction(final TrimLeftFunctionContext ctx) {
     return this.call(ctx, StringFunctions.TRIM_LEFT);
   }
 
   @Override
-  public Operand<?> visitTrimRightFunction(final TrimRightFunctionContext ctx) {
+  public Subexpression<?> visitTrimRightFunction(final TrimRightFunctionContext ctx) {
     return this.call(ctx, StringFunctions.TRIM_RIGHT);
   }
 
   @Override
-  public Operand<?> visitPadLeftFunction(final PadLeftFunctionContext ctx) {
+  public Subexpression<?> visitPadLeftFunction(final PadLeftFunctionContext ctx) {
     return this.call(ctx, StringFunctions.PAD_LEFT);
   }
 
   @Override
-  public Operand<?> visitPadRightFunction(final PadRightFunctionContext ctx) {
+  public Subexpression<?> visitPadRightFunction(final PadRightFunctionContext ctx) {
     return this.call(ctx, StringFunctions.PAD_RIGHT);
   }
 
   @Override
-  public Operand<?> visitReplaceFunction(final ReplaceFunctionContext ctx) {
+  public Subexpression<?> visitReplaceFunction(final ReplaceFunctionContext ctx) {
     return this.call(ctx, StringFunctions.REPLACE);
   }
 
@@ -1839,7 +1770,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * supports.
    */
   @Override
-  public Operand<?> visitReplaceRegexFunction(final ReplaceRegexFunctionContext ctx) {
+  public Subexpression<?> visitReplaceRegexFunction(final ReplaceRegexFunctionContext ctx) {
     if (ctx.pattern instanceof LiteralExpressionContext
         && ((LiteralExpressionContext) ctx.pattern).literal().stringLiteral() != null) {
       EfxRegexValidator.validate(ctx.pattern.getText());
@@ -1848,73 +1779,75 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   }
 
   @Override
-  public Operand<?> visitRepeatFunction(final RepeatFunctionContext ctx) {
+  public Subexpression<?> visitRepeatFunction(final RepeatFunctionContext ctx) {
     return this.call(ctx, StringFunctions.REPEAT);
   }
 
   @Override
-  public Operand<?> visitUrlEncodeFunction(final UrlEncodeFunctionContext ctx) {
+  public Subexpression<?> visitUrlEncodeFunction(final UrlEncodeFunctionContext ctx) {
     return this.call(ctx, StringFunctions.URL_ENCODE);
   }
 
   @Override
-  public Operand<?> visitCapitalizeFirstFunction(final CapitalizeFirstFunctionContext ctx) {
+  public Subexpression<?> visitCapitalizeFirstFunction(final CapitalizeFirstFunctionContext ctx) {
     return this.call(ctx, StringFunctions.CAPITALIZE_FIRST);
   }
 
   @Override
-  public Operand<?> visitPreferredLanguageFunction(final PreferredLanguageFunctionContext ctx) {
-    return this.preferredLanguage(ctx, ctx.expression(), TemplateFunctions.PREFERRED_LANGUAGE,
-        Construct.function(ctx.PreferredLanguageFunction().getText(), 1));
+  public Subexpression<?> visitPreferredLanguageFunction(
+      final PreferredLanguageFunctionContext ctx) {
+    return this.preferredLanguage(ctx, ctx.expression(), AsWritten.function(
+        ctx.PreferredLanguageFunction().getText(), TemplateFunctions.PREFERRED_LANGUAGE));
   }
 
   @Override
-  public Operand<?> visitPreferredLanguageTextFunction(
+  public Subexpression<?> visitPreferredLanguageTextFunction(
       final PreferredLanguageTextFunctionContext ctx) {
-    return this.preferredLanguage(ctx, ctx.expression(), TemplateFunctions.PREFERRED_LANGUAGE_TEXT,
-        Construct.function(ctx.PreferredLanguageTextFunction().getText(), 1));
+    return this.preferredLanguage(ctx, ctx.expression(), AsWritten.function(
+        ctx.PreferredLanguageTextFunction().getText(), TemplateFunctions.PREFERRED_LANGUAGE_TEXT));
   }
 
   // Date, time and duration functions
 
   @Override
-  public Operand<?> visitDateFromStringFunction(final DateFromStringFunctionContext ctx) {
+  public Subexpression<?> visitDateFromStringFunction(final DateFromStringFunctionContext ctx) {
     return this.call(ctx, ConversionFunctions.TO_DATE);
   }
 
   @Override
-  public Operand<?> visitDatePlusDurationFunction(final DatePlusDurationFunctionContext ctx) {
+  public Subexpression<?> visitDatePlusDurationFunction(final DatePlusDurationFunctionContext ctx) {
     return this.call(ctx, DateTimeFunctions.ADD_DURATION);
   }
 
   @Override
-  public Operand<?> visitDateMinusDurationFunction(final DateMinusDurationFunctionContext ctx) {
+  public Subexpression<?> visitDateMinusDurationFunction(
+      final DateMinusDurationFunctionContext ctx) {
     return this.call(ctx, DateTimeFunctions.SUBTRACT_DURATION);
   }
 
   @Override
-  public Operand<?> visitCurrentDateFunction(final CurrentDateFunctionContext ctx) {
+  public Subexpression<?> visitCurrentDateFunction(final CurrentDateFunctionContext ctx) {
     return this.call(ctx, DateTimeFunctions.CURRENT_DATE);
   }
 
   @Override
-  public Operand<?> visitTimeFromStringFunction(final TimeFromStringFunctionContext ctx) {
+  public Subexpression<?> visitTimeFromStringFunction(final TimeFromStringFunctionContext ctx) {
     return this.call(ctx, ConversionFunctions.TO_TIME);
   }
 
   @Override
-  public Operand<?> visitCurrentTimeFunction(final CurrentTimeFunctionContext ctx) {
+  public Subexpression<?> visitCurrentTimeFunction(final CurrentTimeFunctionContext ctx) {
     return this.call(ctx, DateTimeFunctions.CURRENT_TIME);
   }
 
   @Override
-  public Operand<?> visitDayTimeDurationFromStringFunction(
+  public Subexpression<?> visitDayTimeDurationFromStringFunction(
       final DayTimeDurationFromStringFunctionContext ctx) {
     return this.call(ctx, ConversionFunctions.TO_DAY_TIME_DURATION);
   }
 
   @Override
-  public Operand<?> visitYearMonthDurationFromStringFunction(
+  public Subexpression<?> visitYearMonthDurationFromStringFunction(
       final YearMonthDurationFromStringFunctionContext ctx) {
     return this.call(ctx, ConversionFunctions.TO_YEAR_MONTH_DURATION);
   }
@@ -1922,56 +1855,56 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   // Sequence functions
 
   @Override
-  public Operand<?> visitDistinctValuesFunction(final DistinctValuesFunctionContext ctx) {
+  public Subexpression<?> visitDistinctValuesFunction(final DistinctValuesFunctionContext ctx) {
     return this.call(ctx, SequenceFunctions.DISTINCT_VALUES);
   }
 
   @Override
-  public Operand<?> visitGetDuplicatesFunction(final GetDuplicatesFunctionContext ctx) {
+  public Subexpression<?> visitGetDuplicatesFunction(final GetDuplicatesFunctionContext ctx) {
     return this.call(ctx, SequenceFunctions.GET_DUPLICATES);
   }
 
   @Override
-  public Operand<?> visitUnionFunction(final UnionFunctionContext ctx) {
+  public Subexpression<?> visitUnionFunction(final UnionFunctionContext ctx) {
     return this.call(ctx, SequenceFunctions.VALUE_UNION);
   }
 
   @Override
-  public Operand<?> visitIntersectFunction(final IntersectFunctionContext ctx) {
+  public Subexpression<?> visitIntersectFunction(final IntersectFunctionContext ctx) {
     return this.call(ctx, SequenceFunctions.VALUE_INTERSECT);
   }
 
   @Override
-  public Operand<?> visitExceptFunction(final ExceptFunctionContext ctx) {
+  public Subexpression<?> visitExceptFunction(final ExceptFunctionContext ctx) {
     return this.call(ctx, SequenceFunctions.VALUE_EXCEPT);
   }
 
   @Override
-  public Operand<?> visitSortFunction(final SortFunctionContext ctx) {
+  public Subexpression<?> visitSortFunction(final SortFunctionContext ctx) {
     return this.call(ctx, SequenceFunctions.SORT);
   }
 
   @Override
-  public Operand<?> visitReverseFunction(final ReverseFunctionContext ctx) {
+  public Subexpression<?> visitReverseFunction(final ReverseFunctionContext ctx) {
     return this.call(ctx, SequenceFunctions.REVERSE);
   }
 
   @Override
-  public Operand<?> visitSubsequenceFunction(final SubsequenceFunctionContext ctx) {
+  public Subexpression<?> visitSubsequenceFunction(final SubsequenceFunctionContext ctx) {
     return this.call(ctx, SequenceFunctions.SUBSEQUENCE);
   }
 
   @Override
-  public Operand<?> visitSplitFunction(final SplitFunctionContext ctx) {
+  public Subexpression<?> visitSplitFunction(final SplitFunctionContext ctx) {
     return this.call(ctx, StringFunctions.SPLIT);
   }
 
   // #endregion Built-in functions --------------------------------------------
 
-  // #region Built-ins and operands -------------------------------------------
+  // #region Built-ins and sub-expressions ------------------------------------
 
   /**
-   * Translates a call of a built-in function with {@link #builtIn}: its operands are the
+   * Translates a call of a built-in function with {@link #builtIn}: its sub-expressions are the
    * expressions of its grammar label, in order, read as values, and an argument of the wrong
    * primitive cannot be converted. A type error names the function as the call writes it, which
    * may be another name of the built-in, as {@code string} is of {@code text}.
@@ -1980,11 +1913,9 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * @param function the built-in called
    * @return the result of the call
    */
-  private Operand<?> call(final ParserRuleContext call, final BuiltIn function) {
-    final List<Operand<?>> operands = this.operandsOf(call);
-    return this.builtIn(call, function,
-        Construct.function(call.getStart().getText(), operands.size()), operands, Operand::value,
-        TypeMismatchException::cannotConvert);
+  private Subexpression<?> call(final ParserRuleContext call, final BuiltIn function) {
+    return this.builtIn(call, AsWritten.function(call.getStart().getText(), function),
+        this.subexpressionsOf(call), ReadAs.VALUES);
   }
 
   /**
@@ -1996,25 +1927,22 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * @param operator the operator
    * @return the result of the condition
    */
-  private Operand<?> condition(final ParserRuleContext condition, final BuiltIn operator) {
-    return this.builtIn(condition, operator, Construct.operator(operator.getName(), 1),
-        this.operandsOf(condition), Operand::value, TypeMismatchException::cannotConvert);
+  private Subexpression<?> condition(final ParserRuleContext condition, final BuiltIn operator) {
+    return this.builtIn(condition, operator, this.subexpressionsOf(condition), ReadAs.VALUES);
   }
 
   /**
-   * Translates a call of a built-in that reads its operands as paths, with {@link #builtIn}: an
-   * argument of the wrong primitive cannot be converted.
+   * Translates a call of a built-in that reads its sub-expressions as paths, with {@link #builtIn}:
+   * an argument of the wrong primitive cannot be converted.
    *
    * @param call the call
-   * @param builtIn the built-in called
-   * @param construct the call, as a type error names it
-   * @param operands the operands of the call
+   * @param builtIn the built-in called, as the call writes it
+   * @param subexpressions the sub-expressions of the call
    * @return the result of the call
    */
-  private Operand<?> pathCall(final ParserRuleContext call, final BuiltIn builtIn,
-      final Construct construct, final List<Operand<?>> operands) {
-    return this.builtIn(call, builtIn, construct, operands, Operand::path,
-        TypeMismatchException::cannotConvert);
+  private Subexpression<?> pathCall(final ParserRuleContext call, final BuiltIn builtIn,
+      final List<Subexpression<?>> subexpressions) {
+    return this.builtIn(call, builtIn, subexpressions, ReadAs.PATHS);
   }
 
   /**
@@ -2025,53 +1953,172 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
    * @param operator the operator
    * @return the result of the operation
    */
-  private Operand<?> operation(final ParserRuleContext operation, final BuiltIn operator) {
-    return this.builtIn(operation, operator, Construct.operator(operator.getName(), 2),
-        this.operandsOf(operation), Operand::value, TypeMismatchException::incompatibleOperands);
+  private Subexpression<?> operation(final ParserRuleContext operation, final BuiltIn operator) {
+    return this.builtIn(operation, operator, this.subexpressionsOf(operation), ReadAs.OPERANDS);
   }
 
-  private List<Operand<?>> operandsOf(final ParserRuleContext call) {
+  private List<Subexpression<?>> subexpressionsOf(final ParserRuleContext call) {
     final List<ExpressionContext> expressions = call.getRuleContexts(ExpressionContext.class);
-    final List<Operand<?>> operands = new ArrayList<>(expressions.size());
+    final List<Subexpression<?>> subexpressions = new ArrayList<>(expressions.size());
     for (final ExpressionContext expression : expressions) {
-      operands.add(this.visit(expression));
+      subexpressions.add(this.visit(expression));
     }
-    return operands;
+    return subexpressions;
   }
 
   /**
-   * Resolves a built-in against the arguments its operands give, and composes the result.
-   *
-   * <p>An argument that no overload takes is reported by the reference the operand is written as,
-   * where the reference explains the mistake, such as a field that may repeat where a single value
-   * is required; any other mismatch gets the error the kind of call gives.</p>
+   * Checks the arguments its sub-expressions give a built-in, and translates the call with the
+   * built-in. A type error is reported at the call.
    *
    * @param call the call
-   * @param builtIn the built-in called
-   * @param construct the call, as a type error names it
-   * @param operands the operands of the call
-   * @param reading how the call reads each operand: as a value, or as a path
-   * @param typeError the error of a mismatch that the operand's origin does not report
+   * @param builtIn the built-in called, as the call writes it
+   * @param subexpressions the sub-expressions of the call
+   * @param readAs how the call reads its sub-expressions, and the error of a mismatch that the
+   *        origin of a sub-expression does not report
    * @return the result of the call
    */
-  private Operand<?> builtIn(final ParserRuleContext call, final BuiltIn builtIn,
-      final Construct construct, final List<Operand<?>> operands,
-      final Function<Operand<?>, TypedExpression> reading,
-      final BiFunction<ParserRuleContext, Diagnosis, TypeMismatchException> typeError) {
+  private Subexpression<?> builtIn(final ParserRuleContext call, final BuiltIn builtIn,
+      final List<Subexpression<?>> subexpressions, final ReadAs readAs) {
     final List<TypedExpression> arguments =
-        operands.stream().map(reading).collect(Collectors.toList());
+        subexpressions.stream().map(readAs::of).collect(Collectors.toList());
     if (builtIn.isTemplateOnly() && !this.translatesTemplateOnlyBuiltIns()) {
       throw InvalidUsageException.templateOnlyFunction(call, builtIn.getName());
     }
-    final Resolution resolution = builtIn.resolve(arguments);
-    if (!resolution.isResolved()) {
-      final Mismatch mismatch = resolution.getMismatch();
-      final Rejection rejection = mismatch.getRejection();
-      final Diagnosis diagnosis = mismatch.diagnose(construct);
-      throw operands.get(rejection.getPosition()).errorOf(rejection.getKind(), diagnosis)
-          .orElseGet(() -> typeError.apply(call, diagnosis));
+    return this.subexpression(builtIn.compose(
+        this.resolved(builtIn, subexpressions, arguments, position -> call, readAs::errorAt),
+        this.translation.script()));
+  }
+
+  /**
+   * How a call of a built-in reads its sub-expressions, and the error of a mismatch that the origin
+   * of a sub-expression does not report.
+   */
+  private enum ReadAs {
+
+    /** As values: an argument of the wrong primitive cannot be converted. */
+    VALUES,
+
+    /** As paths: an argument of the wrong primitive cannot be converted. */
+    PATHS {
+      @Override
+      TypedExpression of(final Subexpression<?> subexpression) {
+        return subexpression.path();
+      }
+    },
+
+    /**
+     * As the operands of an infix operator, which are values: operands of the wrong primitive are
+     * incompatible operands of the operator.
+     */
+    OPERANDS {
+      @Override
+      TypeMismatchException errorAt(final ParserRuleContext call, final Diagnosis diagnosis) {
+        return TypeMismatchException.incompatibleOperands(call, diagnosis);
+      }
+    };
+
+    /**
+     * @param subexpression a sub-expression of the call
+     * @return what the call reads from it
+     */
+    TypedExpression of(final Subexpression<?> subexpression) {
+      return subexpression.value();
     }
-    return this.operand(resolution.compose(this.script));
+
+    /**
+     * @param call the call
+     * @param diagnosis what the built-in was given, and what the argument at fault must be
+     * @return the error of the mismatch
+     */
+    TypeMismatchException errorAt(final ParserRuleContext call, final Diagnosis diagnosis) {
+      return TypeMismatchException.cannotConvert(call, diagnosis);
+    }
+  }
+
+  /**
+   * Checks the parts of a construct that the grammar writes, read as values, with
+   * {@link #resolved}: a part that does not fit cannot be converted, and is reported where the
+   * construct places the error of its position. The part that binds {@code T}, such as the then
+   * branch of a conditional or the first item of a list, is reported at the construct, as the
+   * argument that binds it is reported at the call of a built-in; any other part where it stands.
+   *
+   * @param construct the construct
+   * @param parts its parts, in order
+   * @param where where the error of the part at a position is reported
+   * @return the resolution, with the values of the parts converted to the parameters of the
+   *         construct
+   * @throws TypeMismatchException if a part does not fit
+   */
+  private Resolution checked(final Construct construct, final List<Subexpression<?>> parts,
+      final IntFunction<ParserRuleContext> where) {
+    return this.resolved(construct, parts,
+        parts.stream().map(Subexpression::value).collect(Collectors.toList()), where,
+        TypeMismatchException::cannotConvert);
+  }
+
+  /**
+   * Checks the arguments of a construct: the one way every operator, built-in, composite and
+   * clause is checked.
+   *
+   * @param construct the construct
+   * @param subexpressions its sub-expressions, in order
+   * @param arguments what it reads from each sub-expression, in the same order
+   * @param where where the error of the argument at a position is reported
+   * @param typeError the error of a mismatch that the origin of the sub-expression does not report
+   * @return the resolution, with the arguments converted to the parameter list that takes them
+   * @throws TypeMismatchException if no parameter list takes the arguments
+   */
+  private Resolution resolved(final Construct construct,
+      final List<Subexpression<?>> subexpressions, final List<TypedExpression> arguments,
+      final IntFunction<ParserRuleContext> where,
+      final BiFunction<ParserRuleContext, Diagnosis, TypeMismatchException> typeError) {
+    final Resolution resolution = construct.resolve(arguments);
+    if (resolution.isResolved()) {
+      return resolution;
+    }
+    throw this.errorOf(resolution.getMismatch(), subexpressions, where, typeError);
+  }
+
+  /**
+   * Gives the error of a mismatch. An argument is reported by the reference its sub-expression is
+   * written as, where the reference explains the mistake, such as a field that may repeat where a
+   * single value is required; any other mismatch gets the error the kind of construct gives, where
+   * the construct places it.
+   *
+   * @param mismatch the mismatch
+   * @param subexpressions the sub-expressions of the construct, in order
+   * @param where where the error of the argument at a position is reported
+   * @param typeError the error of a mismatch that the origin of the sub-expression does not report
+   * @return the error
+   */
+  private TypeMismatchException errorOf(final Mismatch mismatch,
+      final List<Subexpression<?>> subexpressions, final IntFunction<ParserRuleContext> where,
+      final BiFunction<ParserRuleContext, Diagnosis, TypeMismatchException> typeError) {
+    final Match rejection = mismatch.getRejection();
+    final Diagnosis diagnosis = mismatch.diagnose();
+    return subexpressions.get(rejection.getPosition()).errorOf(rejection.getKind(), diagnosis)
+        .orElseGet(() -> typeError.apply(where.apply(rejection.getPosition()), diagnosis));
+  }
+
+  /**
+   * Gives the error of an argument that a construct reads rather than resolves, where what the
+   * argument is written as cannot be read so: the left side of {@code ::} that names no context,
+   * or a value that a predicate follows, which has no elements. The error is the reference's
+   * where it explains the mistake, and otherwise says that the argument does not convert to what
+   * its parameter takes.
+   *
+   * @param construct the construct, which has one parameter list
+   * @param subexpressions its sub-expressions, in order
+   * @param arguments what it reads from each sub-expression, in the same order
+   * @param position the position of the argument that cannot be read
+   * @param where where the error is reported
+   * @return the error
+   */
+  private TypeMismatchException unreadable(final Construct construct,
+      final List<Subexpression<?>> subexpressions, final List<TypedExpression> arguments,
+      final int position, final ParserRuleContext where) {
+    return this.errorOf(Mismatch.unreadable(construct, arguments, position), subexpressions,
+        at -> where, TypeMismatchException::cannotConvert);
   }
 
   /**
@@ -2101,39 +2148,16 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Operand<?>> {
   }
 
   /**
-   * Gives the class of the single values of an operand: the one {@code T} is bound to by the
-   * operand.
+   * Gives the type a type variable is bound to by a translated expression. Each construct rejects
+   * a node, which binds no type variable, before it asks for the type of its values.
    *
-   * @param operand the operand
-   * @return the scalar class of the operand's primitive
-   */
-  private Class<? extends ScalarExpression> scalarTypeOf(final TypedExpression operand) {
-    return this.bindingOf(ParameterType.T, operand).getExpressionType()
-        .asSubclass(ScalarExpression.class);
-  }
-
-  /**
-   * Gives the class of the sequences of an operand: the one {@code T*} is bound to by the operand.
-   *
-   * @param operand the operand
-   * @return the sequence class of the operand's primitive
-   */
-  private Class<? extends SequenceExpression> sequenceTypeOf(final TypedExpression operand) {
-    return this.bindingOf(ParameterType.T_SEQUENCE, operand).getExpressionType()
-        .asSubclass(SequenceExpression.class);
-  }
-
-  /**
-   * Gives the type a type variable is bound to by an operand. Each construct rejects a node, which
-   * binds no type variable, before it asks for the type of its values.
-   *
-   * @throws IllegalStateException if the operand is a node
+   * @throws IllegalStateException if the expression is a node
    */
   private ParameterType bindingOf(final ParameterType typeVariable,
-      final TypedExpression operand) {
-    return typeVariable.boundBy(operand)
-        .orElseThrow(() -> new IllegalStateException("A node has no value: " + operand));
+      final TypedExpression expression) {
+    return typeVariable.boundBy(expression)
+        .orElseThrow(() -> new IllegalStateException("A node has no value: " + expression));
   }
 
-  // #endregion Built-ins and operands ----------------------------------------
+  // #endregion Built-ins and sub-expressions ---------------------------------
 }

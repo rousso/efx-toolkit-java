@@ -28,6 +28,17 @@ import eu.europa.ted.efx.EfxTranslatorOptions;
 import eu.europa.ted.efx.exceptions.InvalidUsageException;
 import eu.europa.ted.efx.exceptions.TranslatorConfigurationException;
 import eu.europa.ted.efx.interfaces.ScriptGenerator;
+import eu.europa.ted.efx.model.builtins.AmbiguousBuiltIn;
+import eu.europa.ted.efx.model.builtins.ArithmeticOperators;
+import eu.europa.ted.efx.model.builtins.BuiltIn;
+import eu.europa.ted.efx.model.builtins.BuiltIns;
+import eu.europa.ted.efx.model.builtins.ComparisonOperators;
+import eu.europa.ted.efx.model.builtins.ConditionOperators;
+import eu.europa.ted.efx.model.builtins.NumericFunctions;
+import eu.europa.ted.efx.model.builtins.PatternMatch;
+import eu.europa.ted.efx.model.builtins.SequenceFunctions;
+import eu.europa.ted.efx.model.builtins.SingleOrSequenceBuiltIn;
+import eu.europa.ted.efx.model.builtins.StringFunctions;
 import eu.europa.ted.efx.model.expressions.Expression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.expressions.scalar.BooleanExpression;
@@ -86,14 +97,14 @@ class ResolutionTest {
 
   @Test
   void testDatePlusDuration_IsADateAddition() {
-    TypedExpression result = resolve(ArithmeticOperators.PLUS, DATE_FIELD, DURATION).compose(SCRIPT);
+    TypedExpression result = compose(ArithmeticOperators.PLUS, DATE_FIELD, DURATION);
     assertEquals(DateExpression.class, result.getClass());
     assertEquals("($date + $duration)", result.getScript());
   }
 
   @Test
   void testDurationPlusDate_IsTheSameDateAddition() {
-    TypedExpression result = resolve(ArithmeticOperators.PLUS, DURATION, DATE_FIELD).compose(SCRIPT);
+    TypedExpression result = compose(ArithmeticOperators.PLUS, DURATION, DATE_FIELD);
     assertEquals(DateExpression.class, result.getClass());
     assertEquals("($date + $duration)", result.getScript());
   }
@@ -101,7 +112,7 @@ class ResolutionTest {
   @Test
   void testDateMinusDate_SubtractsTheSecondFromTheFirst() {
     DatePath later = Expression.instantiate("$later", DatePath.class);
-    TypedExpression result = resolve(ArithmeticOperators.MINUS, later, DATE_FIELD).compose(SCRIPT);
+    TypedExpression result = compose(ArithmeticOperators.MINUS, later, DATE_FIELD);
     assertEquals(SCRIPT.composeSubtraction(TypedExpression.from(DATE_FIELD, DateExpression.class),
         TypedExpression.from(later, DateExpression.class)).getScript(), result.getScript());
   }
@@ -146,15 +157,14 @@ class ResolutionTest {
 
   @Test
   void testUnionOfTextAndMultilingualSequences_IsATextSequence() {
-    TypedExpression result = resolve(SequenceFunctions.VALUE_UNION, REPEATABLE_TEXT_FIELD,
-        REPEATABLE_MULTILINGUAL_FIELD).compose(SCRIPT);
+    TypedExpression result = compose(SequenceFunctions.VALUE_UNION, REPEATABLE_TEXT_FIELD,
+        REPEATABLE_MULTILINGUAL_FIELD);
     assertEquals(StringSequenceExpression.class, result.getClass());
   }
 
   @Test
   void testConcatOfThreeTexts_ConcatenatesThemInOrder() {
-    TypedExpression result = resolve(StringFunctions.CONCAT, TEXT, OTHER_TEXT, TEXT_FIELD)
-        .compose(SCRIPT);
+    TypedExpression result = compose(StringFunctions.CONCAT, TEXT, OTHER_TEXT, TEXT_FIELD);
     assertEquals(SCRIPT.composeStringConcatenation(List.of(TEXT, OTHER_TEXT,
         TypedExpression.from(TEXT_FIELD, StringExpression.class)))
         .getScript(), result.getScript());
@@ -208,18 +218,18 @@ class ResolutionTest {
   @Test
   void testNotIn_NegatesIn() {
     assertEquals(SCRIPT.composeLogicalNot(composed(ConditionOperators.IN, TEXT, TEXTS)).getScript(),
-        resolve(ConditionOperators.NOT_IN, TEXT, TEXTS).compose(SCRIPT).getScript());
+        compose(ConditionOperators.NOT_IN, TEXT, TEXTS).getScript());
   }
 
   @Test
   void testHasDuplicates_NegatesHasNoDuplicates() {
     assertEquals(SCRIPT.composeLogicalNot(composed(ConditionOperators.HAS_NO_DUPLICATES, TEXTS))
-        .getScript(), resolve(ConditionOperators.HAS_DUPLICATES, TEXTS).compose(SCRIPT).getScript());
+        .getScript(), compose(ConditionOperators.HAS_DUPLICATES, TEXTS).getScript());
   }
 
   @Test
   void testLike_MatchesThePattern() {
-    TypedExpression result = resolve(PatternMatch.like("'[0-9]+'"), TEXT).compose(SCRIPT);
+    TypedExpression result = compose(PatternMatch.like("'[0-9]+'"), TEXT);
     assertEquals(SCRIPT.composePatternMatchCondition(TEXT, "'[0-9]+'").getScript(),
         result.getScript());
   }
@@ -227,7 +237,7 @@ class ResolutionTest {
   @Test
   void testNotLike_NegatesLike() {
     assertEquals(SCRIPT.composeLogicalNot(composed(PatternMatch.like("'[0-9]+'"), TEXT)).getScript(),
-        resolve(PatternMatch.notLike("'[0-9]+'"), TEXT).compose(SCRIPT).getScript());
+        compose(PatternMatch.notLike("'[0-9]+'"), TEXT).getScript());
   }
 
   @Test
@@ -236,9 +246,9 @@ class ResolutionTest {
   }
 
   @Test
-  void testMismatch_HasNoOverload() {
+  void testMismatch_HasNoParameterList() {
     Resolution resolution = ArithmeticOperators.PLUS.resolve(List.of(TEXT, NUMBER));
-    assertThrows(IllegalStateException.class, resolution::getOverload);
+    assertThrows(IllegalStateException.class, resolution::getParameters);
   }
 
   @Test
@@ -255,6 +265,18 @@ class ResolutionTest {
   }
 
   @Test
+  void testMoreSpecificOverload_IsChosenForASingleValue() {
+    assertEquals(SingleOrSequenceBuiltIn.INSTANCE.getOverloads().get(0).getSignature()
+        .getParameters(), SingleOrSequenceBuiltIn.INSTANCE.resolve(List.of(TEXT)).getParameters());
+  }
+
+  @Test
+  void testSequenceOverload_IsChosenForASequence() {
+    assertEquals(SingleOrSequenceBuiltIn.INSTANCE.getOverloads().get(1).getSignature()
+        .getParameters(), SingleOrSequenceBuiltIn.INSTANCE.resolve(List.of(TEXTS)).getParameters());
+  }
+
+  @Test
   void testCatalogue_FindsABuiltInByName() {
     assertSame(ConditionOperators.IS_NOT_EMPTY, BuiltIns.INSTANCE.find("is not empty").orElseThrow());
     assertTrue(BuiltIns.INSTANCE.find("like").isEmpty());
@@ -268,7 +290,12 @@ class ResolutionTest {
 
   private static BooleanExpression composed(final BuiltIn builtIn,
       final TypedExpression... arguments) {
-    return TypedExpression.from(resolve(builtIn, arguments).compose(SCRIPT), BooleanExpression.class);
+    return TypedExpression.from(compose(builtIn, arguments), BooleanExpression.class);
+  }
+
+  private static TypedExpression compose(final BuiltIn builtIn,
+      final TypedExpression... arguments) {
+    return builtIn.compose(resolve(builtIn, arguments), SCRIPT);
   }
 
   private static Mismatch mismatch(final BuiltIn builtIn, final TypedExpression... arguments) {
@@ -278,7 +305,7 @@ class ResolutionTest {
   }
 
   private static List<Integer> positions(final Mismatch mismatch) {
-    return mismatch.getRejections().stream().map(Mismatch.Rejection::getPosition)
+    return mismatch.getRejections().stream().map(Match::getPosition)
         .collect(Collectors.toList());
   }
 }

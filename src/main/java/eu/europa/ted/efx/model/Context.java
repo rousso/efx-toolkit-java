@@ -14,7 +14,7 @@
 package eu.europa.ted.efx.model;
 
 import eu.europa.ted.efx.model.expressions.PathExpression;
-import eu.europa.ted.efx.model.variables.Variable;
+import eu.europa.ted.efx.model.identifiers.Variable;
 
 /**
  * Used to store an evaluation context.

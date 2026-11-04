@@ -13,59 +13,19 @@
  */
 package eu.europa.ted.efx.model.signatures;
 
-import eu.europa.ted.efx.model.types.EfxDataType;
-
 /**
- * A parameter of a {@link Signature}: a name and a {@link ParameterType}. The names are those of
- * the autocomplete catalogue, so that the catalogue can be derived from the signatures.
+ * A parameter: a name, and the type an argument given for it must have. A function or template
+ * declared in EFX has the parameters parsed with it; a built-in has those its signatures declare.
  */
-public final class Parameter {
-
-  private final String name;
-  private final ParameterType type;
-
-  private Parameter(final String name, final ParameterType type) {
-    this.name = name;
-    this.type = type;
-  }
-
-  /**
-   * Declares a parameter.
-   *
-   * @param name the name of the parameter
-   * @param type the type of the parameter
-   * @return the parameter
-   */
-  public static Parameter parameter(final String name, final ParameterType type) {
-    return new Parameter(name, type);
-  }
+public interface Parameter {
 
   /**
    * @return the name of the parameter
    */
-  public String getName() {
-    return this.name;
-  }
+  String getName();
 
   /**
-   * @return the type of the parameter
+   * @return the type an argument given for this parameter must have
    */
-  public ParameterType getType() {
-    return this.type;
-  }
-
-  /**
-   * Gives this parameter with {@code T} bound.
-   *
-   * @param primitive the value primitive {@code T} is bound to
-   * @return the parameter with its type bound
-   */
-  Parameter bind(final Class<? extends EfxDataType.Primitive> primitive) {
-    return new Parameter(this.name, this.type.bind(primitive));
-  }
-
-  @Override
-  public String toString() {
-    return this.name + ": " + this.type;
-  }
+  ParameterType getType();
 }

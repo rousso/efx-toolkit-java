@@ -69,8 +69,8 @@ import eu.europa.ted.efx.model.expressions.sequence.TimeSequenceExpression;
 import eu.europa.ted.efx.model.types.EfxDataType;
 import eu.europa.ted.efx.model.types.EfxTypeLattice;
 import eu.europa.ted.efx.model.types.FieldTypes;
-import eu.europa.ted.efx.model.variables.ParsedParameter;
-import eu.europa.ted.efx.model.variables.Variable;
+import eu.europa.ted.efx.model.identifiers.ParsedParameter;
+import eu.europa.ted.efx.model.identifiers.Variable;
 import eu.europa.ted.efx.sdk1.EfxParser.*;
 
 /**

@@ -18,7 +18,7 @@ import java.util.Optional;
 
 import org.antlr.v4.runtime.ParserRuleContext;
 
-import eu.europa.ted.efx.exceptions.Construct;
+import eu.europa.ted.efx.model.signatures.Construct;
 import eu.europa.ted.efx.exceptions.Diagnosis;
 import eu.europa.ted.efx.exceptions.InvalidIdentifierException;
 import eu.europa.ted.efx.exceptions.TypeMismatchException;
@@ -28,20 +28,20 @@ import eu.europa.ted.efx.model.Context.NodeContext;
 import eu.europa.ted.efx.model.expressions.PathExpression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.expressions.scalar.BooleanExpression;
-import eu.europa.ted.efx.model.signatures.Mismatch.Rejection;
+import eu.europa.ted.efx.model.signatures.Match;
 import eu.europa.ted.efx.model.types.FieldTypes;
 import eu.europa.ted.efx.sdk2.EfxParser.ExpressionContext;
 
 /**
- * What an operand is written as: a field, a node, a value read from a field, a variable, a context
- * variable, a function invocation, a dictionary or a lookup in one, or anything else, such as a
- * literal, a list or the result of an operator.
+ * What a sub-expression is written as: a field, a node, a value read from a field, a variable, a
+ * context variable, a function invocation, a dictionary or a lookup in one, or anything else, such
+ * as a literal, a list or the result of an operator.
  *
- * <p>Each kind answers, for the translated expression of the operand, the questions its parent
- * asks: what its value is, what context it names for the reference after {@code ::}, what a
+ * <p>Each kind answers, for the translated expression of the sub-expression, the questions its
+ * parent asks: what its value is, what context it names for the reference after {@code ::}, what a
  * predicate or an index after it means, whether a step that reads a field may follow it, and which
  * error explains why a construct rejects it: a sequence where a single value is required, or a
- * node, which has no value, where a value is. The defaults are those of an operand written as
+ * node, which has no value, where a value is. The defaults are those of a sub-expression written as
  * anything but a reference.</p>
  *
  * @param <E> the class of the expressions of this kind: a path for a field or a node
@@ -58,7 +58,7 @@ abstract class Origin<E extends TypedExpression> {
      * @param origin the field
      * @return what the step gives
      */
-    Operand<?> read(PathExpression field, FieldOrigin origin);
+    Subexpression<?> read(PathExpression field, FieldOrigin origin);
   }
 
   /**
@@ -73,89 +73,90 @@ abstract class Origin<E extends TypedExpression> {
   }
 
   /**
-   * @param expression the translated operand
+   * @param expression the translated sub-expression
    * @return its value, where an operator, a built-in, a declaration or a clause takes it; for an
-   *         operand that has no value, such as a node, its path, which the construct rejects
+   *         sub-expression that has no value, such as a node, its path, which the construct rejects
    */
   TypedExpression valueOf(final E expression) {
     return expression;
   }
 
   /**
-   * @param expression the translated operand
-   * @return the operand as a path, where {@code is present} takes it
+   * @param expression the translated sub-expression
+   * @return the sub-expression as a path, where {@code is present} takes it
    */
   TypedExpression pathOf(final E expression) {
     return expression;
   }
 
   /**
-   * @param expression the translated operand
-   * @return the context the reference after {@code ::} is read in, if the operand names one
+   * @param expression the translated sub-expression
+   * @return the context the reference after {@code ::} is read in, if the sub-expression names one
    */
   Optional<Context> contextOf(final E expression) {
     return Optional.empty();
   }
 
   /**
-   * Translates a predicate after the operand. A value has no elements that the condition could be
-   * read from, so a predicate after it is rejected.
+   * Translates a predicate after the sub-expression. A value has no elements that the condition
+   * could be read from, so a predicate after it is rejected.
    *
-   * @param expression the translated operand
+   * @param expression the translated sub-expression
    * @param condition the condition of the predicate
-   * @return the operand the predicate selects
-   * @throws TypeMismatchException unless the operand is a field or a node
+   * @return the sub-expression the predicate selects
+   * @throws TypeMismatchException unless the sub-expression is a field or a node
    */
-  Operand<?> filteredBy(final E expression, final ExpressionContext condition) {
-    throw this.translator.predicateOnValue(new Operand<>(expression, this), condition);
+  Subexpression<?> filteredBy(final E expression, final ExpressionContext condition) {
+    throw this.translator.predicateOnValue(new Subexpression<>(expression, this), condition);
   }
 
   /**
-   * Translates an index after the operand: the value at a position in the sequence of its values.
-   * A single value is a sequence of one.
+   * Translates an index after the sub-expression: the value at a position in the sequence of its
+   * values. A single value is a sequence of one.
    *
-   * @param expression the translated operand
+   * @param expression the translated sub-expression
    * @param position the position the index selects
    * @return the value at that position
    */
-  Operand<?> indexedBy(final E expression, final ExpressionContext position) {
-    return this.translator.positionInValue(new Operand<>(expression, this), position);
+  Subexpression<?> indexedBy(final E expression, final ExpressionContext position) {
+    return this.translator.positionInValue(new Subexpression<>(expression, this), position);
   }
 
   /**
    * Translates a step that only a field has, such as an attribute or the raw value, after the
-   * operand.
+   * sub-expression.
    *
-   * @param expression the translated operand
+   * @param expression the translated sub-expression
    * @param step the step
    * @param construct the step as a type error names it, such as "Operator ':rawValue'"
    * @param reader what the step reads from the field
    * @return what the step gives
-   * @throws TypeMismatchException if the operand is not a field
+   * @throws TypeMismatchException if the sub-expression is not a field
    */
-  Operand<?> readFromField(final E expression, final ParserRuleContext step,
+  Subexpression<?> readFromField(final E expression, final ParserRuleContext step,
       final Construct construct, final FieldReader reader) {
     throw TypeMismatchException.cannotConvert(step,
-        new Diagnosis(construct, List.of(expression), 0, List.of(FIELD_REFERENCE)));
+        new Diagnosis(construct.describe(), construct.roleOf(0, 1), List.of(expression),
+            List.of(FIELD_REFERENCE)));
   }
 
   /**
-   * @return the origin of the operand's value, as parentheses give it: no longer a reference, but
-   *         with the error of the reference
+   * @return the origin of the sub-expression's value, as parentheses give it: no longer a
+   *         reference, but with the error of the reference
    */
   Origin<TypedExpression> asValue() {
     return new ValueOrigin(this.translator, this);
   }
 
   /**
-   * Gives the error of the reference the operand is written as, where the reference explains why
-   * a construct rejects the operand.
+   * Gives the error of the reference the sub-expression is written as, where the reference explains
+   * why a construct rejects the sub-expression.
    *
-   * @param kind what is wrong with the operand
+   * @param kind what is wrong with the sub-expression
    * @param diagnosis what the construct was given, and what it requires
    * @return the error of the reference, or nothing if the construct gives its own
    */
-  final Optional<TypeMismatchException> errorOf(final Rejection.Kind kind,
+  final Optional<TypeMismatchException> errorOf(final Match.Kind kind,
       final Diagnosis diagnosis) {
     switch (kind) {
       case CARDINALITY:
@@ -168,18 +169,18 @@ abstract class Origin<E extends TypedExpression> {
   }
 
   /**
-   * @param diagnosis what the construct taking the operand was given, and what it requires
-   * @return the error where the operand gives a sequence and a single value is required, if the
-   *         operand is written as a reference that it names
+   * @param diagnosis what the construct taking the sub-expression was given, and what it requires
+   * @return the error where the sub-expression gives a sequence and a single value is required, if
+   *         the sub-expression is written as a reference that it names
    */
   Optional<TypeMismatchException> sequenceError(final Diagnosis diagnosis) {
     return Optional.empty();
   }
 
   /**
-   * @param diagnosis what the construct taking the operand was given, and what it requires
-   * @return the error where the operand has no value and a value is required, if the operand is
-   *         written as a reference that it names
+   * @param diagnosis what the construct taking the sub-expression was given, and what it requires
+   * @return the error where the sub-expression has no value and a value is required, if the
+   *         sub-expression is written as a reference that it names
    */
   Optional<TypeMismatchException> noValueError(final Diagnosis diagnosis) {
     return Optional.empty();
@@ -188,8 +189,8 @@ abstract class Origin<E extends TypedExpression> {
   // #region Values -----------------------------------------------------------
 
   /**
-   * An operand written as anything but a reference: a literal, a list, the result of an operator
-   * or of a built-in.
+   * A sub-expression written as anything but a reference: a literal, a list, the result of an
+   * operator or of a built-in.
    */
   static final class None extends Origin<TypedExpression> {
 
@@ -199,8 +200,8 @@ abstract class Origin<E extends TypedExpression> {
   }
 
   /**
-   * The value of an operand that is no longer the reference it is read from, such as a field in
-   * parentheses or the attribute of a field. It keeps the error of the reference.
+   * The value of a sub-expression that is no longer the reference it is read from, such as a field
+   * in parentheses or the attribute of a field. It keeps the error of the reference.
    */
   static final class ValueOrigin extends Origin<TypedExpression> {
 
@@ -237,12 +238,12 @@ abstract class Origin<E extends TypedExpression> {
     }
 
     @Override
-    Operand<?> filteredBy(final PathExpression path, final ExpressionContext condition) {
+    Subexpression<?> filteredBy(final PathExpression path, final ExpressionContext condition) {
       return this.translator.filtered(path, this, condition);
     }
 
     @Override
-    Operand<?> indexedBy(final PathExpression path, final ExpressionContext position) {
+    Subexpression<?> indexedBy(final PathExpression path, final ExpressionContext position) {
       return this.translator.positionInPath(path, this, position);
     }
 
@@ -292,29 +293,30 @@ abstract class Origin<E extends TypedExpression> {
     @Override
     Optional<Context> contextOf(final PathExpression path) {
       return Optional.of(new FieldContext(this.fieldId,
-          this.translator.symbols().getAbsolutePathOfField(this.fieldId), path));
+          this.translator.translation().symbols().getAbsolutePathOfField(this.fieldId), path));
     }
 
     @Override
-    Operand<?> readFromField(final PathExpression path, final ParserRuleContext step,
+    Subexpression<?> readFromField(final PathExpression path, final ParserRuleContext step,
         final Construct construct, final FieldReader reader) {
       return reader.read(path, this);
     }
 
     @Override
     void pushElementContext() {
-      this.translator.efxContext().pushFieldContext(this.fieldId);
+      this.translator.translation().efxContext().pushFieldContext(this.fieldId);
     }
 
     @Override
     PathExpression filter(final PathExpression path, final BooleanExpression predicate) {
-      return this.translator.script().composeFieldReferenceWithPredicate(path, predicate);
+      return this.translator.translation().script().composeFieldReferenceWithPredicate(path,
+          predicate);
     }
 
     @Override
     Optional<TypeMismatchException> sequenceError(final Diagnosis diagnosis) {
       if (FieldTypes.TEXT_MULTILINGUAL.getName()
-          .equals(this.translator.symbols().getTypeOfField(this.fieldId))) {
+          .equals(this.translator.translation().symbols().getTypeOfField(this.fieldId))) {
         return Optional.of(
             TypeMismatchException.fieldIsMultilingual(this.reference, diagnosis, this.fieldId));
       }
@@ -339,17 +341,18 @@ abstract class Origin<E extends TypedExpression> {
     @Override
     Optional<Context> contextOf(final PathExpression path) {
       return Optional.of(new NodeContext(this.nodeId,
-          this.translator.symbols().getAbsolutePathOfNode(this.nodeId), path));
+          this.translator.translation().symbols().getAbsolutePathOfNode(this.nodeId), path));
     }
 
     @Override
     void pushElementContext() {
-      this.translator.efxContext().pushNodeContext(this.nodeId);
+      this.translator.translation().efxContext().pushNodeContext(this.nodeId);
     }
 
     @Override
     PathExpression filter(final PathExpression path, final BooleanExpression predicate) {
-      return this.translator.script().composeNodeReferenceWithPredicate(path, predicate);
+      return this.translator.translation().script().composeNodeReferenceWithPredicate(path,
+          predicate);
     }
   }
 
@@ -423,10 +426,11 @@ abstract class Origin<E extends TypedExpression> {
     @Override
     TypedExpression valueOf(final PathExpression variable) {
       final String symbol = this.context.symbol();
-      if (this.context.isNodeContext() || this.translator.symbols().isAttributeField(symbol)) {
+      if (this.context.isNodeContext()
+          || this.translator.translation().symbols().isAttributeField(symbol)) {
         return variable;
       }
-      return this.translator.script().composeFieldValueReference(variable);
+      return this.translator.translation().script().composeFieldValueReference(variable);
     }
 
     @Override
@@ -446,10 +450,10 @@ abstract class Origin<E extends TypedExpression> {
       final String symbol = this.context.symbol();
       if (this.context.isNodeContext()) {
         return Optional.of(new NodeContext(symbol,
-            this.translator.symbols().getAbsolutePathOfNode(symbol), variable));
+            this.translator.translation().symbols().getAbsolutePathOfNode(symbol), variable));
       }
       return Optional.of(new FieldContext(symbol,
-          this.translator.symbols().getAbsolutePathOfField(symbol), variable));
+          this.translator.translation().symbols().getAbsolutePathOfField(symbol), variable));
     }
   }
 
@@ -486,12 +490,12 @@ abstract class Origin<E extends TypedExpression> {
     }
 
     @Override
-    Operand<?> filteredBy(final TypedExpression expression, final ExpressionContext key) {
+    Subexpression<?> filteredBy(final TypedExpression expression, final ExpressionContext key) {
       return this.translator.lookUp(this.name, this.reference, key);
     }
 
     @Override
-    Operand<?> readFromField(final TypedExpression expression, final ParserRuleContext step,
+    Subexpression<?> readFromField(final TypedExpression expression, final ParserRuleContext step,
         final Construct construct, final FieldReader reader) {
       throw InvalidIdentifierException.undeclaredIdentifier(this.reference, this.name);
     }

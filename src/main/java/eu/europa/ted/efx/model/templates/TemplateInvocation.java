@@ -10,7 +10,7 @@ import eu.europa.ted.efx.interfaces.Argument;
 import eu.europa.ted.efx.interfaces.MarkupGenerator;
 import eu.europa.ted.efx.interfaces.TranslatorContext;
 import eu.europa.ted.efx.model.Context;
-import eu.europa.ted.efx.model.variables.Variables;
+import eu.europa.ted.efx.model.identifiers.Variables;
 
 /***
  * Represents a template invocation line.
@@ -38,7 +38,9 @@ public class TemplateInvocation extends ContentBlock {
    */
   @Override
   public Markup renderInvocation(MarkupGenerator markupGenerator, TranslatorContext translatorContext) {
-    Set<Argument> arguments = this.getOwnArguments().stream().map(a -> new Argument.Impl(a.name, markupGenerator.getEfxDataTypeEquivalent(a.dataType), a.value))
+    Set<Argument> arguments = this.getOwnArguments().stream()
+        .map(a -> new Argument.Impl(a.parameter.name,
+            markupGenerator.getEfxDataTypeEquivalent(a.parameter.dataType), a.value))
         .collect(Collectors.toCollection(LinkedHashSet::new));
     var content = markupGenerator.renderFragmentInvocation(this.id, arguments, translatorContext);
     return markupGenerator.renderContextLoop(this.context.relativePath(), content, arguments);

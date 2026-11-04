@@ -32,14 +32,14 @@ import eu.europa.ted.efx.exceptions.TypeMismatchException;
 import eu.europa.ted.efx.interfaces.TypeChecker;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.types.EfxDataType;
-import eu.europa.ted.efx.model.variables.ParsedParameter;
-import eu.europa.ted.efx.model.variables.Dictionary;
-import eu.europa.ted.efx.model.variables.Function;
-import eu.europa.ted.efx.model.variables.Identifier;
-import eu.europa.ted.efx.model.variables.Identifiers;
-import eu.europa.ted.efx.model.variables.ParsedParameters;
-import eu.europa.ted.efx.model.variables.Template;
-import eu.europa.ted.efx.model.variables.Variable;
+import eu.europa.ted.efx.model.identifiers.ParsedParameter;
+import eu.europa.ted.efx.model.identifiers.Dictionary;
+import eu.europa.ted.efx.model.identifiers.Function;
+import eu.europa.ted.efx.model.identifiers.Identifier;
+import eu.europa.ted.efx.model.identifiers.Identifiers;
+import eu.europa.ted.efx.model.identifiers.ParsedParameters;
+import eu.europa.ted.efx.model.identifiers.Template;
+import eu.europa.ted.efx.model.identifiers.Variable;
 
 /**
  * The call stack is a stack of stack frames. Each stack frame represents a

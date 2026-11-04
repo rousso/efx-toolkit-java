@@ -20,6 +20,8 @@ import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
 
+import eu.europa.ted.efx.model.builtins.SequenceFunctions;
+import eu.europa.ted.efx.model.builtins.StringFunctions;
 import eu.europa.ted.efx.model.expressions.sequence.BooleanSequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.DateSequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.DurationSequenceExpression;
@@ -41,7 +43,7 @@ class SignatureTest {
         DateSequenceExpression.class, TimeSequenceExpression.class,
         DurationSequenceExpression.class);
     assertEquals(sequences, forms.stream()
-        .map(form -> form.getParameters().getFixed().get(0).getType().getExpressionType())
+        .map(form -> form.getParameters().get(0).getType().getExpressionType())
         .collect(Collectors.toList()));
     assertEquals(sequences, forms.stream()
         .map(form -> form.getResult().getExpressionType())

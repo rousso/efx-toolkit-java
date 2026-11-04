@@ -38,7 +38,7 @@ import eu.europa.ted.efx.interfaces.ValidatorGenerator;
 import eu.europa.ted.efx.model.rules.ValidationPlan;
 import eu.europa.ted.efx.model.rules.RuleNature;
 import eu.europa.ted.efx.model.rules.ValidationStage;
-import eu.europa.ted.efx.model.variables.Variable;
+import eu.europa.ted.efx.model.identifiers.Variable;
 import eu.europa.ted.efx.interfaces.TranslatorOptions;
 import freemarker.cache.ClassTemplateLoader;
 import freemarker.cache.FileTemplateLoader;
