@@ -251,7 +251,7 @@ public class Parameters<P extends Parameter> extends LinkedList<P> {
    */
   Optional<Class<? extends EfxDataType.Primitive>> bindingOf(
       final List<? extends TypedExpression> arguments) {
-    return GenericParameterType.bindingOf(arguments.get(this.typeVariablePosition()));
+    return ParameterType.Generic.bindingOf(arguments.get(this.typeVariablePosition()));
   }
 
   private Optional<Parameters<?>> boundTo(final List<? extends TypedExpression> arguments) {

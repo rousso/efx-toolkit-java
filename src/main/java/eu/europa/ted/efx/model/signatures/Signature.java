@@ -99,7 +99,7 @@ public final class Signature {
     if (!this.parameters.isGeneric()) {
       return List.of(this);
     }
-    return GenericParameterType.valuePrimitives().stream().map(this::bind)
+    return ParameterType.Generic.valuePrimitives().stream().map(this::bind)
         .collect(Collectors.toUnmodifiableList());
   }
 
