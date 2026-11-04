@@ -77,8 +77,9 @@ class TypeVariableBindingTest {
   @Test
   void testCatalogue_HasBuiltInsOfTwoTypeVariables() {
     assertEquals(
-        List.of("==", "!=", "<", "<=", ">", ">=", "in", "not in", "value-union", "value-intersect",
-            "value-except", "sequence-equal", "index-of"),
+        List.of("==", "!=", "<", "<=", ">", ">=", "in", "not in", "is unique in",
+            "is not unique in", "value-union", "value-intersect", "value-except", "sequence-equal",
+            "index-of"),
         overloadsOfTwoTypeVariables().map(arguments -> arguments.get()[0])
             .collect(Collectors.toList()));
   }
