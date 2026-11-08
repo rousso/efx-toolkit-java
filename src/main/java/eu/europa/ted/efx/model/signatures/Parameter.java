@@ -27,5 +27,5 @@ public interface Parameter {
   /**
    * @return the type an argument given for this parameter must have
    */
-  ParameterType getType();
+  ParameterType<?> getType();
 }

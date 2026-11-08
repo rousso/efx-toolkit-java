@@ -70,11 +70,11 @@ class CatalogueResultTypesTest {
   }
 
   private static int arity(final Signature signature) {
-    Parameters<BuiltInParameter> parameters = signature.getParameters();
+    Parameters<BuiltInParameter<?>> parameters = signature.getParameters();
     return parameters.size() + (parameters.getVariadic().isPresent() ? VARIADIC_TAIL : 0);
   }
 
-  private static TypedExpression placeholder(final ParameterType type) {
+  private static TypedExpression placeholder(final ParameterType<?> type) {
     Class<? extends TypedExpression> expressionType = type.getExpressionType();
     Class<? extends TypedExpression> instantiable =
         expressionType == PathExpression.class ? StringPath.class : expressionType;

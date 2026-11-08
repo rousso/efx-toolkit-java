@@ -52,7 +52,7 @@ import eu.europa.ted.efx.model.expressions.sequence.StringSequenceExpression;
  */
 class TypeVariableBindingTest {
 
-  private static final Map<ParameterType, Map<String, TypedExpression>> VALUES = Map.of(
+  private static final Map<ParameterType<?>, Map<String, TypedExpression>> VALUES = Map.of(
       ParameterType.T, Map.of(
           "multilingual", value(MultilingualStringExpression.class),
           "text", value(StringExpression.class),
@@ -124,14 +124,14 @@ class TypeVariableBindingTest {
    */
   private static List<TypedExpression> arguments(final Overload overload, final String first,
       final String second) {
-    List<BuiltInParameter> parameters = overload.getSignature().getParameters();
+    List<BuiltInParameter<?>> parameters = overload.getSignature().getParameters();
     return List.of(
         VALUES.get(parameters.get(0).getType()).get(first),
         VALUES.get(parameters.get(1).getType()).get(second));
   }
 
   private static boolean takesTwoTypeVariables(final Overload overload) {
-    List<BuiltInParameter> parameters = overload.getSignature().getParameters();
+    List<BuiltInParameter<?>> parameters = overload.getSignature().getParameters();
     return parameters.size() == 2
         && parameters.stream().allMatch(parameter -> parameter.getType().isTypeVariable());
   }

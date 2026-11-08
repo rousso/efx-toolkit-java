@@ -61,31 +61,9 @@ public class Parameters<P extends Parameter> extends LinkedList<P> {
     this.variadic = null;
   }
 
-  Parameters(final List<P> fixed, final P variadic) {
+  Parameters(final List<? extends P> fixed, final P variadic) {
     super(fixed);
     this.variadic = variadic;
-  }
-
-  /**
-   * Gives the parameter list of a construct that the catalogue does not hold, such as the
-   * conditional, from fixed parameters.
-   *
-   * @param parameters the parameters, in order
-   * @return the list of those parameters, with no variadic tail
-   */
-  public static Parameters<BuiltInParameter> fixed(final BuiltInParameter... parameters) {
-    return new Parameters<>(List.of(parameters), null);
-  }
-
-  /**
-   * Gives the parameter list of a construct that the catalogue does not hold and that takes one or
-   * more arguments of the same parameter, such as a list.
-   *
-   * @param tail the parameter of every argument
-   * @return the list with no fixed parameters and that variadic tail
-   */
-  public static Parameters<BuiltInParameter> variadic(final BuiltInParameter tail) {
-    return new Parameters<>(List.of(), tail);
   }
 
   /**
@@ -216,7 +194,7 @@ public class Parameters<P extends Parameter> extends LinkedList<P> {
    * @param primitive the value primitive {@code T} is bound to
    * @return the parameter list with every parameter type bound
    */
-  Parameters<BuiltInParameter> bind(final Class<? extends EfxDataType.Primitive> primitive) {
+  Parameters<BuiltInParameter<?>> bind(final Class<? extends EfxDataType.Primitive> primitive) {
     return new Parameters<>(
         this.stream().map(parameter -> bound(parameter, primitive)).collect(Collectors.toList()),
         this.variadic == null ? null : bound(this.variadic, primitive));
@@ -256,7 +234,7 @@ public class Parameters<P extends Parameter> extends LinkedList<P> {
     return new ParsedArguments<>(parameters, values);
   }
 
-  private ParameterType typeAt(final int position) {
+  private ParameterType<?> typeAt(final int position) {
     return this.parameterAt(position).getType();
   }
 
@@ -290,7 +268,7 @@ public class Parameters<P extends Parameter> extends LinkedList<P> {
     return Stream.concat(this.stream(), this.getVariadic().stream());
   }
 
-  private static BuiltInParameter bound(final Parameter parameter,
+  private static BuiltInParameter<?> bound(final Parameter parameter,
       final Class<? extends EfxDataType.Primitive> primitive) {
     return parameter(parameter.getName(), parameter.getType().bind(primitive));
   }

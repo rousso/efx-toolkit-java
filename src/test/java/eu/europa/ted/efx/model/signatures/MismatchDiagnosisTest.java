@@ -67,21 +67,21 @@ class MismatchDiagnosisTest {
   private static final Overload NUMBER_THEN_TEXT = overload(
       signature(parameter("first", ParameterType.NUMBER), parameter("second", ParameterType.TEXT))
           .returning(ParameterType.TEXT),
-      (script, args) -> args.stringAt(1));
+      (script, first, second) -> second);
   private static final Overload TEXT_THEN_TEXT = overload(
       signature(parameter("first", ParameterType.TEXT), parameter("second", ParameterType.TEXT))
           .returning(ParameterType.TEXT),
-      (script, args) -> args.stringAt(1));
+      (script, first, second) -> second);
   private static final Overload TEXT_THEN_NUMBER = overload(
       signature(parameter("first", ParameterType.TEXT), parameter("second", ParameterType.NUMBER))
           .returning(ParameterType.TEXT),
-      (script, args) -> args.stringAt(0));
+      (script, first, second) -> first);
   private static final Overload NUMBER = overload(
       signature(parameter("value", ParameterType.NUMBER)).returning(ParameterType.NUMBER),
-      (script, args) -> args.numericAt(0));
+      (script, value) -> value);
   private static final Overload NODES = overload(
       signature(parameter("nodes", ParameterType.NODES)).returning(ParameterType.NUMBER),
-      (script, args) -> script.composeCountOperation(args.sequenceAt(0)));
+      (script, nodes) -> script.composeCountOperation(nodes));
 
   @Test
   void testFurthestPositionAndCardinalityWin_WhateverTheOrderOfTheOverloads() {

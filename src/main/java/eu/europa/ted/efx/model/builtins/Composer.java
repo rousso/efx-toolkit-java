@@ -13,21 +13,33 @@
  */
 package eu.europa.ted.efx.model.builtins;
 
+import java.util.List;
+
 import eu.europa.ted.efx.interfaces.ScriptGenerator;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.expressions.scalar.NumericExpression;
 import eu.europa.ted.efx.model.expressions.sequence.SequenceExpression;
+import eu.europa.ted.efx.model.signatures.ParameterType;
 import eu.europa.ted.efx.model.signatures.ParsedArguments;
+import eu.europa.ted.efx.model.signatures.Signature;
 
 /**
  * Translates a call of an {@link Overload}: it calls the {@link ScriptGenerator} method of the
  * overload with the converted {@link ParsedArguments}.
  *
- * <p>Most composers are a lambda. A generic method of {@link ScriptGenerator}, such as
- * {@link ScriptGenerator#composeUnionFunction}, cannot be called from a lambda for an unknown
- * sequence class, so each of its four shapes has a generic functional interface below, implemented
- * by a method reference, and a factory that applies it with the sequence class {@code T*} is bound
- * to.</p>
+ * <p>A built-in writes its composer in the shape of its {@link Signature}, one of the five nested
+ * here: {@link Nullary}, {@link Unary}, {@link Binary}, {@link Ternary} or {@link Variadic}. A
+ * composer of a shape takes the converted arguments one by one, of the expression classes the
+ * signature gives them, and returns the expression class of its result, so that the compiler
+ * checks it against the signature. {@link Overload} pairs each shape with a signature of the same
+ * shape, and makes it a composer of the arguments as a list.</p>
+ *
+ * <p>A generic method of {@link ScriptGenerator}, such as
+ * {@link ScriptGenerator#composeUnionFunction}, also takes the sequence class {@code T*} is bound
+ * to, which a lambda cannot name. So each of its four shapes has a generic functional interface
+ * below, implemented by a method reference, and a factory that applies it with the sequence class
+ * of its first sequence. That argument is the one that binds {@code T}, so its sequence class is
+ * the one {@code T*} is bound to.</p>
  */
 @FunctionalInterface
 public interface Composer {
@@ -45,69 +57,171 @@ public interface Composer {
    * Composes a generic function of one sequence, such as {@code sort}.
    *
    * @param function the script generator method, as a method reference
-   * @return a composer that applies it to the sequence at position 0
+   * @return a composer that applies it to the sequence
    */
-  static Composer ofSequence(final SequenceFunction function) {
-    return (script, arguments) -> applySequence(function, script, arguments,
-        arguments.sequenceTypeAt(0));
+  static Unary<SequenceExpression, SequenceExpression> ofSequence(
+      final SequenceFunction function) {
+    return (script, list) -> applySequence(function, script, list, sequenceClassOf(list));
   }
 
   /**
    * Composes a generic function of two sequences of the same class, such as {@code value-union}.
    *
    * @param function the script generator method, as a method reference
-   * @return a composer that applies it to the sequences at positions 0 and 1
+   * @return a composer that applies it to the two sequences
    */
-  static Composer ofSequencePair(final SequencePairFunction function) {
-    return (script, arguments) -> applySequencePair(function, script, arguments,
-        arguments.sequenceTypeAt(0));
+  static Binary<SequenceExpression, SequenceExpression, SequenceExpression> ofSequencePair(
+      final SequencePairFunction function) {
+    return (script, one, two) -> applySequencePair(function, script, one, two,
+        sequenceClassOf(one));
   }
 
   /**
    * Composes {@code subsequence} with a start.
    *
    * @param function the script generator method, as a method reference
-   * @return a composer that applies it to the sequence at position 0 and the start at position 1
+   * @return a composer that applies it to the sequence and the start
    */
-  static Composer ofSubsequence(final SubsequenceFunction function) {
-    return (script, arguments) -> applySubsequence(function, script, arguments,
-        arguments.sequenceTypeAt(0));
+  static Binary<SequenceExpression, NumericExpression, SequenceExpression> ofSubsequence(
+      final SubsequenceFunction function) {
+    return (script, list, start) -> applySubsequence(function, script, list, start,
+        sequenceClassOf(list));
   }
 
   /**
    * Composes {@code subsequence} with a start and a length.
    *
    * @param function the script generator method, as a method reference
-   * @return a composer that applies it to the sequence at position 0, the start at position 1 and
-   *         the length at position 2
+   * @return a composer that applies it to the sequence, the start and the length
    */
-  static Composer ofSubsequenceWithLength(final SubsequenceWithLengthFunction function) {
-    return (script, arguments) -> applySubsequenceWithLength(function, script, arguments,
-        arguments.sequenceTypeAt(0));
+  static Ternary<SequenceExpression, NumericExpression, NumericExpression, SequenceExpression>
+      ofSubsequenceWithLength(final SubsequenceWithLengthFunction function) {
+    return (script, list, start, length) -> applySubsequenceWithLength(function, script, list,
+        start, length, sequenceClassOf(list));
+  }
+
+  /**
+   * Gives the sequence class of a converted sequence: the class {@code T*} is bound to when that
+   * sequence binds {@code T}.
+   */
+  private static Class<? extends SequenceExpression> sequenceClassOf(
+      final SequenceExpression list) {
+    return ParameterType.T_SEQUENCE.boundBy(list).orElseThrow().getExpressionType();
   }
 
   private static <T extends SequenceExpression> T applySequence(final SequenceFunction function,
-      final ScriptGenerator script, final ParsedArguments<?> arguments, final Class<T> type) {
-    return function.apply(script, arguments.at(0, type), type);
+      final ScriptGenerator script, final SequenceExpression list, final Class<T> type) {
+    return function.apply(script, type.cast(list), type);
   }
 
   private static <T extends SequenceExpression> T applySequencePair(
       final SequencePairFunction function, final ScriptGenerator script,
-      final ParsedArguments<?> arguments, final Class<T> type) {
-    return function.apply(script, arguments.at(0, type), arguments.at(1, type), type);
+      final SequenceExpression one, final SequenceExpression two, final Class<T> type) {
+    return function.apply(script, type.cast(one), type.cast(two), type);
   }
 
   private static <T extends SequenceExpression> T applySubsequence(
       final SubsequenceFunction function, final ScriptGenerator script,
-      final ParsedArguments<?> arguments, final Class<T> type) {
-    return function.apply(script, arguments.at(0, type), arguments.numericAt(1), type);
+      final SequenceExpression list, final NumericExpression start, final Class<T> type) {
+    return function.apply(script, type.cast(list), start, type);
   }
 
   private static <T extends SequenceExpression> T applySubsequenceWithLength(
       final SubsequenceWithLengthFunction function, final ScriptGenerator script,
-      final ParsedArguments<?> arguments, final Class<T> type) {
-    return function.apply(script, arguments.at(0, type), arguments.numericAt(1),
-        arguments.numericAt(2), type);
+      final SequenceExpression list, final NumericExpression start,
+      final NumericExpression length, final Class<T> type) {
+    return function.apply(script, type.cast(list), start, length, type);
+  }
+
+  /**
+   * The composer of a {@link Signature.Nullary} signature.
+   *
+   * @param <R> the expression class of the result
+   */
+  @FunctionalInterface
+  interface Nullary<R extends TypedExpression> {
+
+    /**
+     * @param script the script generator of the target language
+     * @return the translated call
+     */
+    R compose(ScriptGenerator script);
+  }
+
+  /**
+   * The composer of a {@link Signature.Unary} signature.
+   *
+   * @param <A> the expression class of the parameter
+   * @param <R> the expression class of the result
+   */
+  @FunctionalInterface
+  interface Unary<A extends TypedExpression, R extends TypedExpression> {
+
+    /**
+     * @param script the script generator of the target language
+     * @param argument the converted argument
+     * @return the translated call
+     */
+    R compose(ScriptGenerator script, A argument);
+  }
+
+  /**
+   * The composer of a {@link Signature.Binary} signature.
+   *
+   * @param <A> the expression class of the first parameter
+   * @param <B> the expression class of the second parameter
+   * @param <R> the expression class of the result
+   */
+  @FunctionalInterface
+  interface Binary<A extends TypedExpression, B extends TypedExpression,
+      R extends TypedExpression> {
+
+    /**
+     * @param script the script generator of the target language
+     * @param first the converted first argument
+     * @param second the converted second argument
+     * @return the translated call
+     */
+    R compose(ScriptGenerator script, A first, B second);
+  }
+
+  /**
+   * The composer of a {@link Signature.Ternary} signature.
+   *
+   * @param <A> the expression class of the first parameter
+   * @param <B> the expression class of the second parameter
+   * @param <C> the expression class of the third parameter
+   * @param <R> the expression class of the result
+   */
+  @FunctionalInterface
+  interface Ternary<A extends TypedExpression, B extends TypedExpression,
+      C extends TypedExpression, R extends TypedExpression> {
+
+    /**
+     * @param script the script generator of the target language
+     * @param first the converted first argument
+     * @param second the converted second argument
+     * @param third the converted third argument
+     * @return the translated call
+     */
+    R compose(ScriptGenerator script, A first, B second, C third);
+  }
+
+  /**
+   * The composer of a {@link Signature.Variadic} signature.
+   *
+   * @param <V> the expression class of the tail
+   * @param <R> the expression class of the result
+   */
+  @FunctionalInterface
+  interface Variadic<V extends TypedExpression, R extends TypedExpression> {
+
+    /**
+     * @param script the script generator of the target language
+     * @param arguments the converted arguments of the tail, in order
+     * @return the translated call
+     */
+    R compose(ScriptGenerator script, List<V> arguments);
   }
 
   /**

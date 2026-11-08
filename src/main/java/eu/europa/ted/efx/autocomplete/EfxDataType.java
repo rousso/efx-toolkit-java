@@ -51,7 +51,7 @@ public enum EfxDataType {
    * @param parameterType a parameter or result type, with {@code T} bound
    * @return the data type that stands for it, or nothing for a node
    */
-  static Optional<EfxDataType> of(final ParameterType parameterType) {
+  static Optional<EfxDataType> of(final ParameterType<?> parameterType) {
     final var type = TypedExpression.getEfxDataType(parameterType.getExpressionType());
     return Arrays.stream(values()).filter(value -> value.type.isAssignableFrom(type)).findFirst();
   }

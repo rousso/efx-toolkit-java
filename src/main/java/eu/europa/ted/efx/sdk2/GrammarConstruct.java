@@ -127,7 +127,7 @@ class GrammarConstruct implements Construct {
    * @param parameter its parameter, such as {@code condition: INDICATOR}
    * @return the construct, whose result is the type of its parameter
    */
-  static GrammarConstruct of(final String name, final BuiltInParameter parameter) {
+  static GrammarConstruct of(final String name, final BuiltInParameter<?> parameter) {
     return new GrammarConstruct(name, signature(parameter).returning(parameter.getType()));
   }
 

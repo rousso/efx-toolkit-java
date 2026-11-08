@@ -45,7 +45,7 @@ public enum ComparisonOperators implements BuiltIn {
     this.name = symbol;
     this.overloads = List.of(
         overload(signature(parameter("left", T), parameter("right", T)).returning(INDICATOR),
-            (script, args) -> script.composeComparisonOperation(args.scalarAt(0), symbol, args.scalarAt(1))));
+            (script, left, right) -> script.composeComparisonOperation(left, symbol, right)));
   }
 
   @Override

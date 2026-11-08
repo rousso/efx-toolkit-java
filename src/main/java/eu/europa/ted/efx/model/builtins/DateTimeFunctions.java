@@ -30,55 +30,55 @@ public enum DateTimeFunctions implements BuiltIn {
 
   YEAR("year",
       overload(signature(parameter("value", DATE)).returning(NUMBER),
-          (script, args) -> script.composeYearFunction(args.dateAt(0)))),
+          (script, value) -> script.composeYearFunction(value))),
 
   MONTH("month",
       overload(signature(parameter("value", DATE)).returning(NUMBER),
-          (script, args) -> script.composeMonthFunction(args.dateAt(0)))),
+          (script, value) -> script.composeMonthFunction(value))),
 
   DAY("day",
       overload(signature(parameter("value", DATE)).returning(NUMBER),
-          (script, args) -> script.composeDayFunction(args.dateAt(0)))),
+          (script, value) -> script.composeDayFunction(value))),
 
   HOURS("hours",
       overload(signature(parameter("value", TIME)).returning(NUMBER),
-          (script, args) -> script.composeHoursFunction(args.timeAt(0)))),
+          (script, value) -> script.composeHoursFunction(value))),
 
   MINUTES("minutes",
       overload(signature(parameter("value", TIME)).returning(NUMBER),
-          (script, args) -> script.composeMinutesFunction(args.timeAt(0)))),
+          (script, value) -> script.composeMinutesFunction(value))),
 
   SECONDS("seconds",
       overload(signature(parameter("value", TIME)).returning(NUMBER),
-          (script, args) -> script.composeSecondsFunction(args.timeAt(0)))),
+          (script, value) -> script.composeSecondsFunction(value))),
 
   YEARS("years",
       overload(signature(parameter("value", DURATION)).returning(NUMBER),
-          (script, args) -> script.composeYearsFromDurationFunction(args.durationAt(0)))),
+          (script, value) -> script.composeYearsFromDurationFunction(value))),
 
   MONTHS("months",
       overload(signature(parameter("value", DURATION)).returning(NUMBER),
-          (script, args) -> script.composeMonthsFromDurationFunction(args.durationAt(0)))),
+          (script, value) -> script.composeMonthsFromDurationFunction(value))),
 
   DAYS("days",
       overload(signature(parameter("value", DURATION)).returning(NUMBER),
-          (script, args) -> script.composeDaysFromDurationFunction(args.durationAt(0)))),
+          (script, value) -> script.composeDaysFromDurationFunction(value))),
 
   CURRENT_DATE("current-date",
       overload(signature().returning(DATE),
-          (script, args) -> script.getCurrentDate())),
+          script -> script.getCurrentDate())),
 
   CURRENT_TIME("current-time",
       overload(signature().returning(TIME),
-          (script, args) -> script.getCurrentTime())),
+          script -> script.getCurrentTime())),
 
   ADD_DURATION("add-duration",
       overload(signature(parameter("date", DATE), parameter("duration", DURATION)).returning(DATE),
-          (script, args) -> script.composeAddition(args.dateAt(0), args.durationAt(1)))),
+          (script, date, duration) -> script.composeAddition(date, duration))),
 
   SUBTRACT_DURATION("subtract-duration",
       overload(signature(parameter("date", DATE), parameter("duration", DURATION)).returning(DATE),
-          (script, args) -> script.composeSubtraction(args.dateAt(0), args.durationAt(1))));
+          (script, date, duration) -> script.composeSubtraction(date, duration)));
 
   private final String name;
   private final List<Overload> overloads;

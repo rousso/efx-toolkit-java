@@ -22,6 +22,11 @@ import eu.europa.ted.efx.model.signatures.Signature;
 /**
  * One overload of a {@link BuiltIn}: a {@link Signature} and the {@link Composer} that translates
  * a call matching it.
+ *
+ * <p>An overload is declared with a signature and a composer of the same shape, so that the
+ * composer takes the arguments as the signature types them: {@code overload(signature(
+ * parameter("value", TEXT), parameter("start", NUMBER)).returning(TEXT), (script, value, start) ->
+ * script.composeSubstringExtraction(value, start))}.</p>
  */
 public final class Overload {
 
@@ -34,14 +39,88 @@ public final class Overload {
   }
 
   /**
-   * Declares an overload.
+   * Declares an overload of no parameter.
    *
+   * @param <R> the expression class of the result
    * @param signature the signature of the overload
    * @param composer the composer that translates a call of it
    * @return the overload
    */
-  public static Overload overload(final Signature signature, final Composer composer) {
-    return new Overload(signature, composer);
+  public static <R extends TypedExpression> Overload overload(
+      final Signature.Nullary<R> signature, final Composer.Nullary<R> composer) {
+    return new Overload(signature, (script, arguments) -> composer.compose(script));
+  }
+
+  /**
+   * Declares an overload of one parameter.
+   *
+   * @param <A> the expression class of the parameter
+   * @param <R> the expression class of the result
+   * @param signature the signature of the overload
+   * @param composer the composer that translates a call of it
+   * @return the overload
+   */
+  public static <A extends TypedExpression, R extends TypedExpression> Overload overload(
+      final Signature.Unary<A, R> signature, final Composer.Unary<A, R> composer) {
+    final Class<A> type = signature.getParameter().getType().getExpressionType();
+    return new Overload(signature,
+        (script, arguments) -> composer.compose(script, arguments.at(0, type)));
+  }
+
+  /**
+   * Declares an overload of two parameters.
+   *
+   * @param <A> the expression class of the first parameter
+   * @param <B> the expression class of the second parameter
+   * @param <R> the expression class of the result
+   * @param signature the signature of the overload
+   * @param composer the composer that translates a call of it
+   * @return the overload
+   */
+  public static <A extends TypedExpression, B extends TypedExpression, R extends TypedExpression>
+      Overload overload(final Signature.Binary<A, B, R> signature,
+          final Composer.Binary<A, B, R> composer) {
+    final Class<A> first = signature.getFirst().getType().getExpressionType();
+    final Class<B> second = signature.getSecond().getType().getExpressionType();
+    return new Overload(signature, (script, arguments) -> composer.compose(script,
+        arguments.at(0, first), arguments.at(1, second)));
+  }
+
+  /**
+   * Declares an overload of three parameters.
+   *
+   * @param <A> the expression class of the first parameter
+   * @param <B> the expression class of the second parameter
+   * @param <C> the expression class of the third parameter
+   * @param <R> the expression class of the result
+   * @param signature the signature of the overload
+   * @param composer the composer that translates a call of it
+   * @return the overload
+   */
+  public static <A extends TypedExpression, B extends TypedExpression, C extends TypedExpression,
+      R extends TypedExpression> Overload overload(final Signature.Ternary<A, B, C, R> signature,
+          final Composer.Ternary<A, B, C, R> composer) {
+    final Class<A> first = signature.getFirst().getType().getExpressionType();
+    final Class<B> second = signature.getSecond().getType().getExpressionType();
+    final Class<C> third = signature.getThird().getType().getExpressionType();
+    return new Overload(signature, (script, arguments) -> composer.compose(script,
+        arguments.at(0, first), arguments.at(1, second), arguments.at(2, third)));
+  }
+
+  /**
+   * Declares an overload of a variadic tail alone.
+   *
+   * @param <V> the expression class of the tail
+   * @param <R> the expression class of the result
+   * @param signature the signature of the overload
+   * @param composer the composer that translates a call of it
+   * @return the overload
+   */
+  public static <V extends TypedExpression, R extends TypedExpression> Overload overload(
+      final Signature.Variadic<V, R> signature, final Composer.Variadic<V, R> composer) {
+    final Class<V> type = signature.getTail().getType().getExpressionType();
+    return new Overload(signature,
+        (script, arguments) -> composer.compose(script, arguments.from(0, type)));
   }
 
   /**

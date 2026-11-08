@@ -40,6 +40,7 @@ import eu.europa.ted.efx.model.builtins.SequenceFunctions;
 import eu.europa.ted.efx.model.builtins.SingleOrSequenceBuiltIn;
 import eu.europa.ted.efx.model.builtins.StringFunctions;
 import eu.europa.ted.efx.model.expressions.Expression;
+import eu.europa.ted.efx.model.expressions.PathExpression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.expressions.scalar.BooleanExpression;
 import eu.europa.ted.efx.model.expressions.scalar.BooleanLiteral;
@@ -152,7 +153,7 @@ class ResolutionTest {
   @Test
   void testIsPresentOfAField_KeepsThePath() {
     Resolution resolution = resolve(ConditionOperators.IS_PRESENT, TEXT_FIELD);
-    assertSame(TEXT_FIELD, resolution.getArguments().pathAt(0));
+    assertSame(TEXT_FIELD, resolution.getArguments().at(0, PathExpression.class));
   }
 
   @Test

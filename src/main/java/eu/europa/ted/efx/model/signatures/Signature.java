@@ -27,38 +27,89 @@ import eu.europa.ted.efx.model.types.EfxDataType;
  * is not part of a signature: the built-in declares a second overload instead. A signature whose
  * parameters mention {@code T} is generic, and is bound to the value primitive of the argument at
  * the first position of {@code T} before its arguments are checked.</p>
+ *
+ * <p>A signature is declared in one of five shapes, nested here: {@link Nullary}, {@link Unary},
+ * {@link Binary} and {@link Ternary}, of no parameter up to three, and {@link Variadic}, of a
+ * variadic tail alone. A shape is typed by the expression classes of its parameter types and of
+ * its result type, so that what translates a call of it can be checked against it when the toolkit
+ * is built. A signature with {@code T} bound has no shape: it is listed, never translated.</p>
  */
-public final class Signature {
+public class Signature {
 
-  private final Parameters<BuiltInParameter> parameters;
-  private final ParameterType result;
+  private final Parameters<BuiltInParameter<?>> parameters;
+  private final ParameterType<?> result;
 
-  private Signature(final Parameters<BuiltInParameter> parameters, final ParameterType result) {
+  private Signature(final Parameters<BuiltInParameter<?>> parameters,
+      final ParameterType<?> result) {
     this.parameters = parameters;
     this.result = result;
   }
 
   /**
-   * Starts a signature with fixed parameters. Complete it with {@link Builder#returning}.
+   * Starts a signature without fixed parameters: of no parameter, or of a variadic tail alone.
+   * Complete it with {@link Nullary.Builder#returning}, or add the tail with
+   * {@link Nullary.Builder#variadic}.
    *
-   * @param parameters the fixed parameters, in order
    * @return a builder for the signature
    */
-  public static Builder signature(final BuiltInParameter... parameters) {
-    return new Builder(List.of(parameters), null);
+  public static Nullary.Builder signature() {
+    return new Nullary.Builder();
+  }
+
+  /**
+   * Starts a signature of one parameter. Complete it with {@link Unary.Builder#returning}.
+   *
+   * @param <A> the expression class of the parameter
+   * @param parameter the parameter
+   * @return a builder for the signature
+   */
+  public static <A extends TypedExpression> Unary.Builder<A> signature(
+      final BuiltInParameter<A> parameter) {
+    return new Unary.Builder<>(parameter);
+  }
+
+  /**
+   * Starts a signature of two parameters. Complete it with {@link Binary.Builder#returning}.
+   *
+   * @param <A> the expression class of the first parameter
+   * @param <B> the expression class of the second parameter
+   * @param first the first parameter
+   * @param second the second parameter
+   * @return a builder for the signature
+   */
+  public static <A extends TypedExpression, B extends TypedExpression> Binary.Builder<A, B>
+      signature(final BuiltInParameter<A> first, final BuiltInParameter<B> second) {
+    return new Binary.Builder<>(first, second);
+  }
+
+  /**
+   * Starts a signature of three parameters. Complete it with {@link Ternary.Builder#returning}.
+   *
+   * @param <A> the expression class of the first parameter
+   * @param <B> the expression class of the second parameter
+   * @param <C> the expression class of the third parameter
+   * @param first the first parameter
+   * @param second the second parameter
+   * @param third the third parameter
+   * @return a builder for the signature
+   */
+  public static <A extends TypedExpression, B extends TypedExpression, C extends TypedExpression>
+      Ternary.Builder<A, B, C> signature(final BuiltInParameter<A> first,
+          final BuiltInParameter<B> second, final BuiltInParameter<C> third) {
+    return new Ternary.Builder<>(first, second, third);
   }
 
   /**
    * @return the parameters, which arguments are matched against
    */
-  public Parameters<BuiltInParameter> getParameters() {
+  public Parameters<BuiltInParameter<?>> getParameters() {
     return this.parameters;
   }
 
   /**
    * @return the result type
    */
-  public ParameterType getResult() {
+  public ParameterType<?> getResult() {
     return this.result;
   }
 
@@ -71,11 +122,11 @@ public final class Signature {
    * @throws IllegalArgumentException if the parameters mention {@code T} and the arguments cannot
    *         bind it
    */
-  public ParameterType resultFor(final List<? extends TypedExpression> arguments) {
+  public ParameterType<?> resultFor(final List<? extends TypedExpression> arguments) {
     if (!this.parameters.isGeneric()) {
       return this.result;
     }
-    return this.parameters.bindingOf(arguments).map(this.result::bind)
+    return this.parameters.bindingOf(arguments).<ParameterType<?>>map(this.result::bind)
         .orElseThrow(() -> new IllegalArgumentException(this + " does not take " + arguments));
   }
 
@@ -109,37 +160,287 @@ public final class Signature {
   }
 
   /**
-   * Builds a {@link Signature} from its fixed parameters, an optional variadic tail and its result
-   * type.
+   * A signature of no parameter, such as that of {@code current-date}.
+   *
+   * @param <R> the expression class of the result
    */
-  public static final class Builder {
+  public static final class Nullary<R extends TypedExpression> extends Signature {
 
-    private final List<BuiltInParameter> parameters;
-    private final BuiltInParameter variadic;
-
-    private Builder(final List<BuiltInParameter> parameters, final BuiltInParameter variadic) {
-      this.parameters = parameters;
-      this.variadic = variadic;
+    private Nullary(final ParameterType<R> result) {
+      super(new Parameters<>(List.of(), null), result);
     }
 
     /**
-     * Adds a variadic tail, which takes one or more arguments after the fixed parameters.
-     *
-     * @param tail the parameter every argument of the tail matches
-     * @return a builder for the signature with that tail
+     * Builds a signature without fixed parameters: a {@link Nullary}, or a {@link Variadic} once a
+     * tail is added.
      */
-    public Builder variadic(final BuiltInParameter tail) {
-      return new Builder(this.parameters, tail);
+    public static final class Builder {
+
+      private Builder() {}
+
+      /**
+       * Adds a variadic tail, which takes one or more arguments.
+       *
+       * @param <V> the expression class of the tail
+       * @param tail the parameter every argument of the tail matches
+       * @return a builder for the signature with that tail
+       */
+      public <V extends TypedExpression> Variadic.Builder<V> variadic(
+          final BuiltInParameter<V> tail) {
+        return new Variadic.Builder<>(tail);
+      }
+
+      /**
+       * Completes the signature.
+       *
+       * @param <R> the expression class of the result
+       * @param result the result type
+       * @return the signature
+       */
+      public <R extends TypedExpression> Nullary<R> returning(final ParameterType<R> result) {
+        return new Nullary<>(result);
+      }
+    }
+  }
+
+  /**
+   * A signature of one parameter, such as that of {@code upper-case}.
+   *
+   * @param <A> the expression class of the parameter
+   * @param <R> the expression class of the result
+   */
+  public static final class Unary<A extends TypedExpression, R extends TypedExpression>
+      extends Signature {
+
+    private final BuiltInParameter<A> parameter;
+
+    private Unary(final BuiltInParameter<A> parameter, final ParameterType<R> result) {
+      super(new Parameters<>(List.of(parameter), null), result);
+      this.parameter = parameter;
     }
 
     /**
-     * Completes the signature.
-     *
-     * @param result the result type
-     * @return the signature
+     * @return the parameter
      */
-    public Signature returning(final ParameterType result) {
-      return new Signature(new Parameters<>(this.parameters, this.variadic), result);
+    public BuiltInParameter<A> getParameter() {
+      return this.parameter;
+    }
+
+    /**
+     * Builds a signature of one parameter.
+     *
+     * @param <A> the expression class of the parameter
+     */
+    public static final class Builder<A extends TypedExpression> {
+
+      private final BuiltInParameter<A> parameter;
+
+      private Builder(final BuiltInParameter<A> parameter) {
+        this.parameter = parameter;
+      }
+
+      /**
+       * Completes the signature.
+       *
+       * @param <R> the expression class of the result
+       * @param result the result type
+       * @return the signature
+       */
+      public <R extends TypedExpression> Unary<A, R> returning(final ParameterType<R> result) {
+        return new Unary<>(this.parameter, result);
+      }
+    }
+  }
+
+  /**
+   * A signature of two parameters, such as that of {@code contains}.
+   *
+   * @param <A> the expression class of the first parameter
+   * @param <B> the expression class of the second parameter
+   * @param <R> the expression class of the result
+   */
+  public static final class Binary<A extends TypedExpression, B extends TypedExpression,
+      R extends TypedExpression> extends Signature {
+
+    private final BuiltInParameter<A> first;
+    private final BuiltInParameter<B> second;
+
+    private Binary(final BuiltInParameter<A> first, final BuiltInParameter<B> second,
+        final ParameterType<R> result) {
+      super(new Parameters<>(List.of(first, second), null), result);
+      this.first = first;
+      this.second = second;
+    }
+
+    /**
+     * @return the first parameter
+     */
+    public BuiltInParameter<A> getFirst() {
+      return this.first;
+    }
+
+    /**
+     * @return the second parameter
+     */
+    public BuiltInParameter<B> getSecond() {
+      return this.second;
+    }
+
+    /**
+     * Builds a signature of two parameters.
+     *
+     * @param <A> the expression class of the first parameter
+     * @param <B> the expression class of the second parameter
+     */
+    public static final class Builder<A extends TypedExpression, B extends TypedExpression> {
+
+      private final BuiltInParameter<A> first;
+      private final BuiltInParameter<B> second;
+
+      private Builder(final BuiltInParameter<A> first, final BuiltInParameter<B> second) {
+        this.first = first;
+        this.second = second;
+      }
+
+      /**
+       * Completes the signature.
+       *
+       * @param <R> the expression class of the result
+       * @param result the result type
+       * @return the signature
+       */
+      public <R extends TypedExpression> Binary<A, B, R> returning(final ParameterType<R> result) {
+        return new Binary<>(this.first, this.second, result);
+      }
+    }
+  }
+
+  /**
+   * A signature of three parameters, such as that of {@code replace}.
+   *
+   * @param <A> the expression class of the first parameter
+   * @param <B> the expression class of the second parameter
+   * @param <C> the expression class of the third parameter
+   * @param <R> the expression class of the result
+   */
+  public static final class Ternary<A extends TypedExpression, B extends TypedExpression,
+      C extends TypedExpression, R extends TypedExpression> extends Signature {
+
+    private final BuiltInParameter<A> first;
+    private final BuiltInParameter<B> second;
+    private final BuiltInParameter<C> third;
+
+    private Ternary(final BuiltInParameter<A> first, final BuiltInParameter<B> second,
+        final BuiltInParameter<C> third, final ParameterType<R> result) {
+      super(new Parameters<>(List.of(first, second, third), null), result);
+      this.first = first;
+      this.second = second;
+      this.third = third;
+    }
+
+    /**
+     * @return the first parameter
+     */
+    public BuiltInParameter<A> getFirst() {
+      return this.first;
+    }
+
+    /**
+     * @return the second parameter
+     */
+    public BuiltInParameter<B> getSecond() {
+      return this.second;
+    }
+
+    /**
+     * @return the third parameter
+     */
+    public BuiltInParameter<C> getThird() {
+      return this.third;
+    }
+
+    /**
+     * Builds a signature of three parameters.
+     *
+     * @param <A> the expression class of the first parameter
+     * @param <B> the expression class of the second parameter
+     * @param <C> the expression class of the third parameter
+     */
+    public static final class Builder<A extends TypedExpression, B extends TypedExpression,
+        C extends TypedExpression> {
+
+      private final BuiltInParameter<A> first;
+      private final BuiltInParameter<B> second;
+      private final BuiltInParameter<C> third;
+
+      private Builder(final BuiltInParameter<A> first, final BuiltInParameter<B> second,
+          final BuiltInParameter<C> third) {
+        this.first = first;
+        this.second = second;
+        this.third = third;
+      }
+
+      /**
+       * Completes the signature.
+       *
+       * @param <R> the expression class of the result
+       * @param result the result type
+       * @return the signature
+       */
+      public <R extends TypedExpression> Ternary<A, B, C, R> returning(
+          final ParameterType<R> result) {
+        return new Ternary<>(this.first, this.second, this.third, result);
+      }
+    }
+  }
+
+  /**
+   * A signature of a variadic tail alone, which takes one or more arguments, such as that of
+   * {@code concat}.
+   *
+   * @param <V> the expression class of the tail
+   * @param <R> the expression class of the result
+   */
+  public static final class Variadic<V extends TypedExpression, R extends TypedExpression>
+      extends Signature {
+
+    private final BuiltInParameter<V> tail;
+
+    private Variadic(final BuiltInParameter<V> tail, final ParameterType<R> result) {
+      super(new Parameters<>(List.of(), tail), result);
+      this.tail = tail;
+    }
+
+    /**
+     * @return the parameter every argument of the tail matches
+     */
+    public BuiltInParameter<V> getTail() {
+      return this.tail;
+    }
+
+    /**
+     * Builds a signature of a variadic tail alone.
+     *
+     * @param <V> the expression class of the tail
+     */
+    public static final class Builder<V extends TypedExpression> {
+
+      private final BuiltInParameter<V> tail;
+
+      private Builder(final BuiltInParameter<V> tail) {
+        this.tail = tail;
+      }
+
+      /**
+       * Completes the signature.
+       *
+       * @param <R> the expression class of the result
+       * @param result the result type
+       * @return the signature
+       */
+      public <R extends TypedExpression> Variadic<V, R> returning(final ParameterType<R> result) {
+        return new Variadic<>(this.tail, result);
+      }
     }
   }
 }

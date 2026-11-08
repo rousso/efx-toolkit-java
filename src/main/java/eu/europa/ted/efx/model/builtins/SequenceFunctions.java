@@ -36,7 +36,7 @@ public enum SequenceFunctions implements BuiltIn {
 
   COUNT_DUPLICATES("count-duplicates",
       overload(signature(parameter("sequence", T_SEQUENCE)).returning(NUMBER),
-          (script, args) -> script.composeCountDuplicatesFunction(args.sequenceAt(0)))),
+          (script, sequence) -> script.composeCountDuplicatesFunction(sequence))),
 
   GET_DUPLICATES("get-duplicates",
       overload(signature(parameter("sequence", T_SEQUENCE)).returning(T_SEQUENCE),
@@ -56,7 +56,7 @@ public enum SequenceFunctions implements BuiltIn {
 
   SEQUENCE_EQUAL("sequence-equal",
       overload(signature(parameter("left", T_SEQUENCE), parameter("right", T_SEQUENCE)).returning(INDICATOR),
-          (script, args) -> script.composeSequenceEqualFunction(args.sequenceAt(0), args.sequenceAt(1)))),
+          (script, left, right) -> script.composeSequenceEqualFunction(left, right))),
 
   SORT("sort",
       overload(signature(parameter("sequence", T_SEQUENCE)).returning(T_SEQUENCE),
@@ -75,7 +75,7 @@ public enum SequenceFunctions implements BuiltIn {
 
   INDEX_OF("index-of",
       overload(signature(parameter("sequence", T_SEQUENCE), parameter("value", T)).returning(NUMBER),
-          (script, args) -> script.composeIndexOfFunction(args.sequenceAt(0), args.scalarAt(1))));
+          (script, sequence, value) -> script.composeIndexOfFunction(sequence, value)));
 
   private final String name;
   private final List<Overload> overloads;

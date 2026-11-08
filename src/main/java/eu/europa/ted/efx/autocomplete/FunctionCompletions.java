@@ -110,8 +110,8 @@ public final class FunctionCompletions {
         return false;
       }
       for (int position = 0; position < this.arity(); position++) {
-        final BuiltInParameter own = this.fixed().get(position);
-        final BuiltInParameter other = longer.fixed().get(position);
+        final BuiltInParameter<?> own = this.fixed().get(position);
+        final BuiltInParameter<?> other = longer.fixed().get(position);
         if (!own.getName().equals(other.getName()) || !sameType(own.getType(), other.getType())) {
           return false;
         }
@@ -127,7 +127,7 @@ public final class FunctionCompletions {
     CompletionItem itemNamed(final String name, final int required) {
       final List<EfxFunctionParameter> parameters = new ArrayList<>();
       for (int position = 0; position < this.arity(); position++) {
-        final BuiltInParameter parameter = this.fixed().get(position);
+        final BuiltInParameter<?> parameter = this.fixed().get(position);
         parameters.add(new EfxFunctionParameter(parameter.getName(),
             dataTypeOf(parameter.getType()), position >= required, false));
       }
@@ -137,24 +137,24 @@ public final class FunctionCompletions {
           dataTypeOf(this.signature.getResult()), List.copyOf(parameters));
     }
 
-    private List<BuiltInParameter> fixed() {
+    private List<BuiltInParameter<?>> fixed() {
       return this.signature.getParameters();
     }
 
-    private Optional<BuiltInParameter> variadic() {
+    private Optional<BuiltInParameter<?>> variadic() {
       return this.signature.getParameters().getVariadic();
     }
 
-    private Stream<ParameterType> types() {
+    private Stream<ParameterType<?>> types() {
       return Stream.concat(Stream.concat(this.fixed().stream(), this.variadic().stream())
           .map(BuiltInParameter::getType), Stream.of(this.signature.getResult()));
     }
 
-    private static boolean sameType(final ParameterType one, final ParameterType other) {
+    private static boolean sameType(final ParameterType<?> one, final ParameterType<?> other) {
       return one.getExpressionType().equals(other.getExpressionType());
     }
 
-    private static EfxDataType dataTypeOf(final ParameterType type) {
+    private static EfxDataType dataTypeOf(final ParameterType<?> type) {
       return EfxDataType.of(type).orElseThrow();
     }
   }

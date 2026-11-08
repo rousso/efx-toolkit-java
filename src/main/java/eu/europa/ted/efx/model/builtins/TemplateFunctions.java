@@ -23,7 +23,6 @@ import static eu.europa.ted.efx.model.signatures.ParameterType.TIME;
 import static eu.europa.ted.efx.model.signatures.Signature.signature;
 
 import java.util.List;
-import java.util.function.BiFunction;
 
 import eu.europa.ted.efx.interfaces.ScriptGenerator;
 import eu.europa.ted.efx.model.expressions.scalar.DateExpression;
@@ -38,7 +37,7 @@ public enum TemplateFunctions implements BuiltIn {
 
   FORMAT_NUMBER("format-number",
       overload(signature(parameter("value", NUMBER), parameter("format", TEXT)).returning(TEXT),
-          (script, args) -> script.composeNumberFormatting(args.numericAt(0), args.stringAt(1)))),
+          (script, value, format) -> script.composeNumberFormatting(value, format))),
 
   FORMAT_SHORT("format-short",
       formats(ScriptGenerator::composeFormatDateShort, ScriptGenerator::composeFormatTimeShort)),
@@ -51,11 +50,11 @@ public enum TemplateFunctions implements BuiltIn {
 
   PREFERRED_LANGUAGE("preferred-language",
       overload(signature(parameter("field", MULTILINGUAL_FIELD)).returning(TEXT),
-          (script, args) -> script.getPreferredLanguage(args.pathAt(0)))),
+          (script, field) -> script.getPreferredLanguage(field))),
 
   PREFERRED_LANGUAGE_TEXT("preferred-language-text",
       overload(signature(parameter("field", MULTILINGUAL_FIELD)).returning(TEXT),
-          (script, args) -> script.getTextInPreferredLanguage(args.pathAt(0))));
+          (script, field) -> script.getTextInPreferredLanguage(field)));
 
   private final String name;
   private final List<Overload> overloads;
@@ -70,18 +69,16 @@ public enum TemplateFunctions implements BuiltIn {
    * separated by a space.
    */
   private static Overload[] formats(
-      final BiFunction<ScriptGenerator, DateExpression, StringExpression> formatDate,
-      final BiFunction<ScriptGenerator, TimeExpression, StringExpression> formatTime) {
+      final Composer.Unary<DateExpression, StringExpression> formatDate,
+      final Composer.Unary<TimeExpression, StringExpression> formatTime) {
     return new Overload[] {
-        overload(signature(parameter("value", DATE)).returning(TEXT),
-            (script, args) -> formatDate.apply(script, args.dateAt(0))),
-        overload(signature(parameter("value", TIME)).returning(TEXT),
-            (script, args) -> formatTime.apply(script, args.timeAt(0))),
+        overload(signature(parameter("value", DATE)).returning(TEXT), formatDate),
+        overload(signature(parameter("value", TIME)).returning(TEXT), formatTime),
         overload(signature(parameter("value", DATE), parameter("time", TIME)).returning(TEXT),
-            (script, args) -> script.composeStringConcatenation(List.of(
-                formatDate.apply(script, args.dateAt(0)),
+            (script, value, time) -> script.composeStringConcatenation(List.of(
+                formatDate.compose(script, value),
                 script.getStringLiteralFromUnquotedString(" "),
-                formatTime.apply(script, args.timeAt(1)))))};
+                formatTime.compose(script, time))))};
   }
 
   @Override

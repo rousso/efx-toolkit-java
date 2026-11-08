@@ -26,10 +26,10 @@ public final class Rejection {
 
   private final Parameters<?> parameters;
   private final int position;
-  private final ParameterType required;
+  private final ParameterType<?> required;
   private final TypedExpression argument;
 
-  Rejection(final Parameters<?> parameters, final int position, final ParameterType required,
+  Rejection(final Parameters<?> parameters, final int position, final ParameterType<?> required,
       final TypedExpression argument) {
     this.parameters = parameters;
     this.position = position;
@@ -55,7 +55,7 @@ public final class Rejection {
    * @return the parameter type the rejected argument had to convert to, with {@code T} bound by
    *         the arguments if they bind it
    */
-  public ParameterType getRequired() {
+  public ParameterType<?> getRequired() {
     return this.required;
   }
 

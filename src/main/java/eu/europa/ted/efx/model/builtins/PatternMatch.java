@@ -53,7 +53,7 @@ public final class PatternMatch implements BuiltIn {
     EfxRegexValidator.validate(pattern);
     return new PatternMatch("like",
         overload(signature(parameter("value", TEXT)).returning(INDICATOR),
-            (script, arguments) -> script.composePatternMatchCondition(arguments.stringAt(0), pattern)));
+            (script, value) -> script.composePatternMatchCondition(value, pattern)));
   }
 
   /**

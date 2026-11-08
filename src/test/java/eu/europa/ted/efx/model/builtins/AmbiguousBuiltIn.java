@@ -31,9 +31,9 @@ public final class AmbiguousBuiltIn implements BuiltIn {
 
   private final List<Overload> overloads = List.of(
       overload(signature(parameter("text", TEXT)).returning(TEXT),
-          (script, args) -> args.stringAt(0)),
+          (script, text) -> text),
       overload(signature(parameter("value", T)).returning(T),
-          (script, args) -> args.scalarAt(0)));
+          (script, value) -> value));
 
   private AmbiguousBuiltIn() {}
 

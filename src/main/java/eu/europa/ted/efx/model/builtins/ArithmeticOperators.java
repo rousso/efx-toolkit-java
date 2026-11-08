@@ -30,27 +30,27 @@ public enum ArithmeticOperators implements BuiltIn {
   PLUS("+",
       numeric("+"),
       overload(signature(parameter("left", DURATION), parameter("right", DURATION)).returning(DURATION),
-          (script, args) -> script.composeAddition(args.durationAt(0), args.durationAt(1))),
+          (script, left, right) -> script.composeAddition(left, right)),
       overload(signature(parameter("date", DATE), parameter("duration", DURATION)).returning(DATE),
-          (script, args) -> script.composeAddition(args.dateAt(0), args.durationAt(1))),
+          (script, date, duration) -> script.composeAddition(date, duration)),
       overload(signature(parameter("duration", DURATION), parameter("date", DATE)).returning(DATE),
-          (script, args) -> script.composeAddition(args.dateAt(1), args.durationAt(0)))),
+          (script, duration, date) -> script.composeAddition(date, duration))),
 
   MINUS("-",
       numeric("-"),
       overload(signature(parameter("left", DURATION), parameter("right", DURATION)).returning(DURATION),
-          (script, args) -> script.composeSubtraction(args.durationAt(0), args.durationAt(1))),
+          (script, left, right) -> script.composeSubtraction(left, right)),
       overload(signature(parameter("end", DATE), parameter("start", DATE)).returning(DURATION),
-          (script, args) -> script.composeSubtraction(args.dateAt(1), args.dateAt(0))),
+          (script, end, start) -> script.composeSubtraction(start, end)),
       overload(signature(parameter("date", DATE), parameter("duration", DURATION)).returning(DATE),
-          (script, args) -> script.composeSubtraction(args.dateAt(0), args.durationAt(1)))),
+          (script, date, duration) -> script.composeSubtraction(date, duration))),
 
   MULTIPLY("*",
       numeric("*"),
       overload(signature(parameter("number", NUMBER), parameter("duration", DURATION)).returning(DURATION),
-          (script, args) -> script.composeMultiplication(args.numericAt(0), args.durationAt(1))),
+          (script, number, duration) -> script.composeMultiplication(number, duration)),
       overload(signature(parameter("duration", DURATION), parameter("number", NUMBER)).returning(DURATION),
-          (script, args) -> script.composeMultiplication(args.numericAt(1), args.durationAt(0)))),
+          (script, duration, number) -> script.composeMultiplication(number, duration))),
 
   DIVIDE("/",
       numeric("/")),
@@ -68,7 +68,7 @@ public enum ArithmeticOperators implements BuiltIn {
 
   private static Overload numeric(final String symbol) {
     return overload(signature(parameter("left", NUMBER), parameter("right", NUMBER)).returning(NUMBER),
-        (script, args) -> script.composeNumericOperation(args.numericAt(0), symbol, args.numericAt(1)));
+        (script, left, right) -> script.composeNumericOperation(left, symbol, right));
   }
 
   @Override

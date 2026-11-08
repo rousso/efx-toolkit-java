@@ -8,15 +8,10 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import eu.europa.ted.efx.model.expressions.PathExpression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.expressions.scalar.BooleanExpression;
-import eu.europa.ted.efx.model.expressions.scalar.DateExpression;
-import eu.europa.ted.efx.model.expressions.scalar.DurationExpression;
 import eu.europa.ted.efx.model.expressions.scalar.NumericExpression;
-import eu.europa.ted.efx.model.expressions.scalar.ScalarExpression;
 import eu.europa.ted.efx.model.expressions.scalar.StringExpression;
-import eu.europa.ted.efx.model.expressions.scalar.TimeExpression;
 import eu.europa.ted.efx.model.expressions.sequence.SequenceExpression;
 
 /**
@@ -24,9 +19,10 @@ import eu.europa.ted.efx.model.expressions.sequence.SequenceExpression;
  *
  * <p>Every argument is parsed from EFX, those of a built-in as much as those of a function or a
  * template declared in EFX, so one list serves them all. The arguments of a resolved call are
- * made by {@link Parameters#match}: each is converted to its parameter, with {@code T} bound, and
- * the typed accessors are what a built-in reads them with when it translates the call. A template
- * block passes its arguments down to the blocks it holds.</p>
+ * made by {@link Parameters#match}: each is converted to its parameter, with {@code T} bound. The
+ * overload of a built-in reads them as the expression classes its signature gives them, and the
+ * translation of a grammar construct with the typed accessors. A template block passes its
+ * arguments down to the blocks it holds.</p>
  *
  * @param <P> the kind of parameter: declared in the catalogue, or parsed with a declaration
  */
@@ -120,38 +116,6 @@ public class ParsedArguments<P extends Parameter> extends LinkedList<ParsedArgum
     }
 
     /**
-     * @param position the position of a date argument
-     * @return the argument
-     */
-    public DateExpression dateAt(final int position) {
-        return this.at(position, DateExpression.class);
-    }
-
-    /**
-     * @param position the position of a time argument
-     * @return the argument
-     */
-    public TimeExpression timeAt(final int position) {
-        return this.at(position, TimeExpression.class);
-    }
-
-    /**
-     * @param position the position of a duration argument
-     * @return the argument
-     */
-    public DurationExpression durationAt(final int position) {
-        return this.at(position, DurationExpression.class);
-    }
-
-    /**
-     * @param position the position of a single-value argument
-     * @return the argument
-     */
-    public ScalarExpression scalarAt(final int position) {
-        return this.at(position, ScalarExpression.class);
-    }
-
-    /**
      * @param position the position of a sequence argument
      * @return the argument
      */
@@ -160,22 +124,16 @@ public class ParsedArguments<P extends Parameter> extends LinkedList<ParsedArgum
     }
 
     /**
-     * @param position the position of a path argument
-     * @return the argument
-     */
-    public PathExpression pathAt(final int position) {
-        return this.at(position, PathExpression.class);
-    }
-
-    /**
-     * Gives the text arguments of a variadic tail.
+     * Gives the arguments of a variadic tail as expressions of its parameter's class.
      *
+     * @param <T> the expression class of the tail, or a supertype of it
      * @param position the position of the first argument of the tail
+     * @param type the expression class of the tail, or a supertype of it
      * @return the arguments from that position to the last
      */
-    public List<StringExpression> stringsFrom(final int position) {
+    public <T extends TypedExpression> List<T> from(final int position, final Class<T> type) {
         return this.subList(position, this.size()).stream()
-                .map(argument -> StringExpression.class.cast(argument.value))
+                .map(argument -> type.cast(argument.value))
                 .collect(Collectors.toList());
     }
 

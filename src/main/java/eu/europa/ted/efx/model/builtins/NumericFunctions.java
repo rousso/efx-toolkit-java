@@ -23,8 +23,6 @@ import static eu.europa.ted.efx.model.signatures.Signature.signature;
 
 import java.util.List;
 
-import eu.europa.ted.efx.model.expressions.sequence.NumericSequenceExpression;
-
 /**
  * The functions that count, aggregate or round numbers.
  */
@@ -32,41 +30,41 @@ public enum NumericFunctions implements BuiltIn {
 
   COUNT("count",
       overload(signature(parameter("sequence", T_SEQUENCE)).returning(NUMBER),
-          (script, args) -> script.composeCountOperation(args.sequenceAt(0))),
+          (script, sequence) -> script.composeCountOperation(sequence)),
       overload(signature(parameter("nodes", NODES)).returning(NUMBER),
-          (script, args) -> script.composeCountOperation(args.sequenceAt(0)))),
+          (script, nodes) -> script.composeCountOperation(nodes))),
 
   SUM("sum",
       overload(signature(parameter("values", NUMBER_SEQUENCE)).returning(NUMBER),
-          (script, args) -> script.composeSumOperation(args.at(0, NumericSequenceExpression.class)))),
+          (script, values) -> script.composeSumOperation(values))),
 
   MIN("min",
       overload(signature(parameter("values", NUMBER_SEQUENCE)).returning(NUMBER),
-          (script, args) -> script.composeMinFunction(args.at(0, NumericSequenceExpression.class)))),
+          (script, values) -> script.composeMinFunction(values))),
 
   MAX("max",
       overload(signature(parameter("values", NUMBER_SEQUENCE)).returning(NUMBER),
-          (script, args) -> script.composeMaxFunction(args.at(0, NumericSequenceExpression.class)))),
+          (script, values) -> script.composeMaxFunction(values))),
 
   AVERAGE("average",
       overload(signature(parameter("values", NUMBER_SEQUENCE)).returning(NUMBER),
-          (script, args) -> script.composeAvgFunction(args.at(0, NumericSequenceExpression.class)))),
+          (script, values) -> script.composeAvgFunction(values))),
 
   ABSOLUTE("absolute",
       overload(signature(parameter("value", NUMBER)).returning(NUMBER),
-          (script, args) -> script.composeAbsFunction(args.numericAt(0)))),
+          (script, value) -> script.composeAbsFunction(value))),
 
   ROUND("round",
       overload(signature(parameter("value", NUMBER)).returning(NUMBER),
-          (script, args) -> script.composeRoundFunction(args.numericAt(0)))),
+          (script, value) -> script.composeRoundFunction(value))),
 
   ROUND_DOWN("round-down",
       overload(signature(parameter("value", NUMBER)).returning(NUMBER),
-          (script, args) -> script.composeFloorFunction(args.numericAt(0)))),
+          (script, value) -> script.composeFloorFunction(value))),
 
   ROUND_UP("round-up",
       overload(signature(parameter("value", NUMBER)).returning(NUMBER),
-          (script, args) -> script.composeCeilingFunction(args.numericAt(0))));
+          (script, value) -> script.composeCeilingFunction(value)));
 
   private final String name;
   private final List<Overload> overloads;

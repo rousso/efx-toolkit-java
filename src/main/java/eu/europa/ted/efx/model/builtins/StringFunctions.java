@@ -23,8 +23,6 @@ import static eu.europa.ted.efx.model.signatures.Signature.signature;
 
 import java.util.List;
 
-import eu.europa.ted.efx.model.expressions.sequence.StringSequenceExpression;
-
 /**
  * The functions on texts.
  */
@@ -32,117 +30,116 @@ public enum StringFunctions implements BuiltIn {
 
   EMPTY("empty",
       overload(signature(parameter("value", TEXT)).returning(INDICATOR),
-          (script, args) -> script.composeComparisonOperation(args.stringAt(0), "==",
+          (script, value) -> script.composeComparisonOperation(value, "==",
               script.getStringLiteralFromUnquotedString("")))),
 
   CONTAINS("contains",
       overload(signature(parameter("haystack", TEXT), parameter("needle", TEXT)).returning(INDICATOR),
-          (script, args) -> script.composeContainsCondition(args.stringAt(0), args.stringAt(1)))),
+          (script, haystack, needle) -> script.composeContainsCondition(haystack, needle))),
 
   STARTS_WITH("starts-with",
       overload(signature(parameter("haystack", TEXT), parameter("needle", TEXT)).returning(INDICATOR),
-          (script, args) -> script.composeStartsWithCondition(args.stringAt(0), args.stringAt(1)))),
+          (script, haystack, needle) -> script.composeStartsWithCondition(haystack, needle))),
 
   ENDS_WITH("ends-with",
       overload(signature(parameter("haystack", TEXT), parameter("needle", TEXT)).returning(INDICATOR),
-          (script, args) -> script.composeEndsWithCondition(args.stringAt(0), args.stringAt(1)))),
+          (script, haystack, needle) -> script.composeEndsWithCondition(haystack, needle))),
 
   STRING_LENGTH("string-length",
       overload(signature(parameter("value", TEXT)).returning(NUMBER),
-          (script, args) -> script.composeStringLengthCalculation(args.stringAt(0)))),
+          (script, value) -> script.composeStringLengthCalculation(value))),
 
   INDEX_OF_SUBSTRING("index-of-substring",
       overload(signature(parameter("value", TEXT), parameter("substring", TEXT)).returning(NUMBER),
-          (script, args) -> script.composeIndexOfSubstringFunction(args.stringAt(0), args.stringAt(1)))),
+          (script, value, substring) -> script.composeIndexOfSubstringFunction(value, substring))),
 
   SUBSTRING("substring",
       overload(signature(parameter("value", TEXT), parameter("start", NUMBER)).returning(TEXT),
-          (script, args) -> script.composeSubstringExtraction(args.stringAt(0), args.numericAt(1))),
+          (script, value, start) -> script.composeSubstringExtraction(value, start)),
       overload(signature(parameter("value", TEXT), parameter("start", NUMBER), parameter("length", NUMBER))
           .returning(TEXT),
-          (script, args) -> script.composeSubstringExtraction(args.stringAt(0), args.numericAt(1),
-              args.numericAt(2)))),
+          (script, value, start, length) ->
+              script.composeSubstringExtraction(value, start, length))),
 
   SUBSTRING_BEFORE("substring-before",
       overload(signature(parameter("value", TEXT), parameter("delimiter", TEXT)).returning(TEXT),
-          (script, args) -> script.composeSubstringBeforeFunction(args.stringAt(0), args.stringAt(1)))),
+          (script, value, delimiter) -> script.composeSubstringBeforeFunction(value, delimiter))),
 
   SUBSTRING_AFTER("substring-after",
       overload(signature(parameter("value", TEXT), parameter("delimiter", TEXT)).returning(TEXT),
-          (script, args) -> script.composeSubstringAfterFunction(args.stringAt(0), args.stringAt(1)))),
+          (script, value, delimiter) -> script.composeSubstringAfterFunction(value, delimiter))),
 
   UPPER_CASE("upper-case",
       overload(signature(parameter("value", TEXT)).returning(TEXT),
-          (script, args) -> script.composeToUpperCaseConversion(args.stringAt(0)))),
+          (script, value) -> script.composeToUpperCaseConversion(value))),
 
   LOWER_CASE("lower-case",
       overload(signature(parameter("value", TEXT)).returning(TEXT),
-          (script, args) -> script.composeToLowerCaseConversion(args.stringAt(0)))),
+          (script, value) -> script.composeToLowerCaseConversion(value))),
 
   NORMALIZE_SPACE("normalize-space",
       overload(signature(parameter("value", TEXT)).returning(TEXT),
-          (script, args) -> script.composeNormalizeSpaceFunction(args.stringAt(0)))),
+          (script, value) -> script.composeNormalizeSpaceFunction(value))),
 
   TRIM("trim",
       overload(signature(parameter("value", TEXT)).returning(TEXT),
-          (script, args) -> script.composeTrimFunction(args.stringAt(0)))),
+          (script, value) -> script.composeTrimFunction(value))),
 
   TRIM_LEFT("trim-left",
       overload(signature(parameter("value", TEXT)).returning(TEXT),
-          (script, args) -> script.composeTrimLeftFunction(args.stringAt(0)))),
+          (script, value) -> script.composeTrimLeftFunction(value))),
 
   TRIM_RIGHT("trim-right",
       overload(signature(parameter("value", TEXT)).returning(TEXT),
-          (script, args) -> script.composeTrimRightFunction(args.stringAt(0)))),
+          (script, value) -> script.composeTrimRightFunction(value))),
 
   PAD_LEFT("pad-left",
       overload(signature(parameter("value", TEXT), parameter("length", NUMBER), parameter("padChar", TEXT))
           .returning(TEXT),
-          (script, args) -> script.composePadLeftFunction(args.stringAt(0), args.numericAt(1),
-              args.stringAt(2)))),
+          (script, value, length, padChar) ->
+              script.composePadLeftFunction(value, length, padChar))),
 
   PAD_RIGHT("pad-right",
       overload(signature(parameter("value", TEXT), parameter("length", NUMBER), parameter("padChar", TEXT))
           .returning(TEXT),
-          (script, args) -> script.composePadRightFunction(args.stringAt(0), args.numericAt(1),
-              args.stringAt(2)))),
+          (script, value, length, padChar) ->
+              script.composePadRightFunction(value, length, padChar))),
 
   REPEAT("repeat",
       overload(signature(parameter("value", TEXT), parameter("count", NUMBER)).returning(TEXT),
-          (script, args) -> script.composeRepeatFunction(args.stringAt(0), args.numericAt(1)))),
+          (script, value, count) -> script.composeRepeatFunction(value, count))),
 
   REPLACE("replace",
       overload(signature(parameter("value", TEXT), parameter("search", TEXT), parameter("replacement", TEXT))
           .returning(TEXT),
-          (script, args) -> script.composeReplaceFunction(args.stringAt(0), args.stringAt(1),
-              args.stringAt(2)))),
+          (script, value, search, replacement) ->
+              script.composeReplaceFunction(value, search, replacement))),
 
   REPLACE_REGEX("replace-regex",
       overload(signature(parameter("value", TEXT), parameter("pattern", TEXT), parameter("replacement", TEXT))
           .returning(TEXT),
-          (script, args) -> script.composeReplaceRegexFunction(args.stringAt(0), args.stringAt(1),
-              args.stringAt(2)))),
+          (script, value, pattern, replacement) ->
+              script.composeReplaceRegexFunction(value, pattern, replacement))),
 
   URL_ENCODE("url-encode",
       overload(signature(parameter("value", TEXT)).returning(TEXT),
-          (script, args) -> script.composeUrlEncodeFunction(args.stringAt(0)))),
+          (script, value) -> script.composeUrlEncodeFunction(value))),
 
   CAPITALIZE_FIRST("capitalize-first",
       overload(signature(parameter("value", TEXT)).returning(TEXT),
-          (script, args) -> script.composeCapitalizeFirstFunction(args.stringAt(0)))),
+          (script, value) -> script.composeCapitalizeFirstFunction(value))),
 
   CONCAT("concat",
       overload(signature().variadic(parameter("values", TEXT)).returning(TEXT),
-          (script, args) -> script.composeStringConcatenation(args.stringsFrom(0)))),
+          (script, values) -> script.composeStringConcatenation(values))),
 
   STRING_JOIN("string-join",
       overload(signature(parameter("values", TEXT_SEQUENCE), parameter("separator", TEXT)).returning(TEXT),
-          (script, args) -> script.composeStringJoin(args.at(0, StringSequenceExpression.class),
-              args.stringAt(1)))),
+          (script, values, separator) -> script.composeStringJoin(values, separator))),
 
   SPLIT("split",
       overload(signature(parameter("value", TEXT), parameter("delimiter", TEXT)).returning(TEXT_SEQUENCE),
-          (script, args) -> script.composeSplitFunction(args.stringAt(0), args.stringAt(1))));
+          (script, value, delimiter) -> script.composeSplitFunction(value, delimiter)));
 
   private final String name;
   private final List<Overload> overloads;

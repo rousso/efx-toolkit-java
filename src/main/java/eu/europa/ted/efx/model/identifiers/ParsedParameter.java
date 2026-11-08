@@ -32,7 +32,7 @@ public class ParsedParameter extends Identifier implements Parameter {
    * A parameter declared in EFX takes what converts to the class of the expression that reads it.
    */
   @Override
-  public ParameterType getType() {
+  public ParameterType<?> getType() {
     return ParameterType.of(this.getParameterType());
   }
 

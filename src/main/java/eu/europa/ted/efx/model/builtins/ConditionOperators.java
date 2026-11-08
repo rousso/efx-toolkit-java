@@ -26,7 +26,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import eu.europa.ted.efx.interfaces.ScriptGenerator;
-import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.expressions.scalar.BooleanExpression;
 import eu.europa.ted.efx.model.expressions.scalar.DateExpression;
 import eu.europa.ted.efx.model.expressions.scalar.DurationExpression;
@@ -38,9 +37,9 @@ import eu.europa.ted.efx.model.expressions.sequence.BooleanSequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.DateSequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.DurationSequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.NumericSequenceExpression;
+import eu.europa.ted.efx.model.expressions.sequence.SequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.StringSequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.TimeSequenceExpression;
-import eu.europa.ted.efx.model.signatures.ParsedArguments;
 
 /**
  * The condition operators: membership, emptiness, presence, uniqueness and duplicates, each with
@@ -53,19 +52,19 @@ public enum ConditionOperators implements BuiltIn {
 
   IN("in",
       overload(signature(parameter("needle", T), parameter("haystack", T_SEQUENCE)).returning(INDICATOR),
-          (script, args) -> script.composeContainsCondition(args.scalarAt(0), args.sequenceAt(1)))),
+          (script, needle, haystack) -> script.composeContainsCondition(needle, haystack))),
 
   NOT_IN("not in", IN),
 
   IS_EMPTY("is empty",
       overload(signature(parameter("sequence", T_SEQUENCE)).returning(INDICATOR),
-          (script, args) -> script.composeEmptySequenceCondition(args.sequenceAt(0)))),
+          (script, sequence) -> script.composeEmptySequenceCondition(sequence))),
 
   IS_NOT_EMPTY("is not empty", IS_EMPTY),
 
   IS_PRESENT("is present",
       overload(signature(parameter("reference", PATH)).returning(INDICATOR),
-          (script, args) -> script.composeExistsCondition(args.pathAt(0)))),
+          (script, reference) -> script.composeExistsCondition(reference))),
 
   IS_NOT_PRESENT("is not present", IS_PRESENT),
 
@@ -77,7 +76,7 @@ public enum ConditionOperators implements BuiltIn {
 
   HAS_NO_DUPLICATES("has no duplicates",
       overload(signature(parameter("sequence", T_SEQUENCE)).returning(INDICATOR),
-          (script, args) -> script.composeIsDistinctCondition(args.sequenceAt(0)))),
+          (script, sequence) -> script.composeIsDistinctCondition(sequence))),
 
   HAS_DUPLICATES("has duplicates", HAS_NO_DUPLICATES);
 
@@ -113,49 +112,56 @@ public enum ConditionOperators implements BuiltIn {
 
   /**
    * The condition {@code is unique in} for each value type. The script generator composes it with
-   * one method for each type, so the type of the needle picks the method.
+   * one method for each type, so the class of the needle picks the method.
    */
   private enum UniqueValueCondition {
 
-    STRING(StringExpression.class, (script, args) -> script.composeUniqueValueCondition(
-        args.stringAt(0), args.at(1, StringSequenceExpression.class))),
+    STRING(StringExpression.class, StringSequenceExpression.class,
+        (script, needle, haystack) -> script.composeUniqueValueCondition(needle, haystack)),
 
-    NUMERIC(NumericExpression.class, (script, args) -> script.composeUniqueValueCondition(
-        args.numericAt(0), args.at(1, NumericSequenceExpression.class))),
+    NUMERIC(NumericExpression.class, NumericSequenceExpression.class,
+        (script, needle, haystack) -> script.composeUniqueValueCondition(needle, haystack)),
 
-    BOOLEAN(BooleanExpression.class, (script, args) -> script.composeUniqueValueCondition(
-        args.booleanAt(0), args.at(1, BooleanSequenceExpression.class))),
+    BOOLEAN(BooleanExpression.class, BooleanSequenceExpression.class,
+        (script, needle, haystack) -> script.composeUniqueValueCondition(needle, haystack)),
 
-    DATE(DateExpression.class, (script, args) -> script.composeUniqueValueCondition(
-        args.dateAt(0), args.at(1, DateSequenceExpression.class))),
+    DATE(DateExpression.class, DateSequenceExpression.class,
+        (script, needle, haystack) -> script.composeUniqueValueCondition(needle, haystack)),
 
-    TIME(TimeExpression.class, (script, args) -> script.composeUniqueValueCondition(
-        args.timeAt(0), args.at(1, TimeSequenceExpression.class))),
+    TIME(TimeExpression.class, TimeSequenceExpression.class,
+        (script, needle, haystack) -> script.composeUniqueValueCondition(needle, haystack)),
 
-    DURATION(DurationExpression.class, (script, args) -> script.composeUniqueValueCondition(
-        args.durationAt(0), args.at(1, DurationSequenceExpression.class)));
+    DURATION(DurationExpression.class, DurationSequenceExpression.class,
+        (script, needle, haystack) -> script.composeUniqueValueCondition(needle, haystack));
 
     private final Class<? extends ScalarExpression> needleType;
-    private final Composer composer;
+    private final Composer.Binary<ScalarExpression, SequenceExpression, BooleanExpression> composer;
 
-    UniqueValueCondition(final Class<? extends ScalarExpression> needleType,
-        final Composer composer) {
+    /**
+     * @param needleType the class of the needle, which picks this condition
+     * @param haystackType the class of the haystack, a sequence of the same primitive
+     * @param composer the composer of the condition for those classes
+     */
+    <N extends ScalarExpression, H extends SequenceExpression> UniqueValueCondition(
+        final Class<N> needleType, final Class<H> haystackType,
+        final Composer.Binary<N, H, BooleanExpression> composer) {
       this.needleType = needleType;
-      this.composer = composer;
+      this.composer = (script, needle, haystack) -> composer.compose(script,
+          needleType.cast(needle), haystackType.cast(haystack));
     }
 
     /**
-     * Composes the condition with the method for the type of the needle.
+     * Composes the condition with the method for the class of the needle.
      *
      * @param script the script generator of the target language
-     * @param arguments the needle and the haystack, converted to the type {@code T} is bound to
+     * @param needle the needle, converted to the class {@code T} is bound to
+     * @param haystack the haystack, converted to the sequence class {@code T*} is bound to
      * @return the condition
      */
-    static TypedExpression compose(final ScriptGenerator script,
-        final ParsedArguments<?> arguments) {
-      final Class<? extends TypedExpression> needleType = arguments.typeAt(0);
-      return Arrays.stream(values()).filter(condition -> condition.needleType.equals(needleType))
-          .findFirst().orElseThrow().composer.compose(script, arguments);
+    static BooleanExpression compose(final ScriptGenerator script, final ScalarExpression needle,
+        final SequenceExpression haystack) {
+      return Arrays.stream(values()).filter(condition -> condition.needleType.isInstance(needle))
+          .findFirst().orElseThrow().composer.compose(script, needle, haystack);
     }
   }
 }

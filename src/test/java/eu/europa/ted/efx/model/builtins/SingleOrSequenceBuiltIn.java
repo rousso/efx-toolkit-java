@@ -32,9 +32,9 @@ public final class SingleOrSequenceBuiltIn implements BuiltIn {
 
   private final List<Overload> overloads = List.of(
       overload(signature(parameter("value", T)).returning(T),
-          (script, args) -> args.scalarAt(0)),
+          (script, value) -> value),
       overload(signature(parameter("values", T_SEQUENCE)).returning(T_SEQUENCE),
-          (script, args) -> args.sequenceAt(0)));
+          (script, values) -> values));
 
   private SingleOrSequenceBuiltIn() {}
 

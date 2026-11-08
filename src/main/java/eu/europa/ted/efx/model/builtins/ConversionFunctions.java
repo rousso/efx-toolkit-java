@@ -32,41 +32,41 @@ public enum ConversionFunctions implements BuiltIn {
 
   TO_TEXT("text",
       overload(signature(parameter("value", NUMBER)).returning(TEXT),
-          (script, args) -> script.composeToStringConversion(args.numericAt(0))),
+          (script, value) -> script.composeToStringConversion(value)),
       overload(signature(parameter("value", INDICATOR)).returning(TEXT),
-          (script, args) -> script.composeToStringConversion(args.booleanAt(0))),
+          (script, value) -> script.composeToStringConversion(value)),
       overload(signature(parameter("value", DATE)).returning(TEXT),
-          (script, args) -> script.composeToStringConversion(args.dateAt(0))),
+          (script, value) -> script.composeToStringConversion(value)),
       overload(signature(parameter("value", TIME)).returning(TEXT),
-          (script, args) -> script.composeToStringConversion(args.timeAt(0))),
+          (script, value) -> script.composeToStringConversion(value)),
       overload(signature(parameter("value", DURATION)).returning(TEXT),
-          (script, args) -> script.composeToStringConversion(args.durationAt(0)))),
+          (script, value) -> script.composeToStringConversion(value))),
 
   TO_NUMBER("number",
       overload(signature(parameter("value", TEXT)).returning(NUMBER),
-          (script, args) -> script.composeToNumberConversion(args.stringAt(0))),
+          (script, value) -> script.composeToNumberConversion(value)),
       overload(signature(parameter("value", INDICATOR)).returning(NUMBER),
-          (script, args) -> script.composeToNumberConversion(args.booleanAt(0)))),
+          (script, value) -> script.composeToNumberConversion(value))),
 
   TO_INDICATOR("indicator",
       overload(signature(parameter("value", NUMBER)).returning(INDICATOR),
-          (script, args) -> script.composeToBooleanConversion(args.numericAt(0)))),
+          (script, value) -> script.composeToBooleanConversion(value))),
 
   TO_DATE("date",
       overload(signature(parameter("value", TEXT)).returning(DATE),
-          (script, args) -> script.composeToDateConversion(args.stringAt(0)))),
+          (script, value) -> script.composeToDateConversion(value))),
 
   TO_TIME("time",
       overload(signature(parameter("value", TEXT)).returning(TIME),
-          (script, args) -> script.composeToTimeConversion(args.stringAt(0)))),
+          (script, value) -> script.composeToTimeConversion(value))),
 
   TO_DAY_TIME_DURATION("day-time-duration",
       overload(signature(parameter("value", TEXT)).returning(DURATION),
-          (script, args) -> script.composeToDayTimeDurationConversion(args.stringAt(0)))),
+          (script, value) -> script.composeToDayTimeDurationConversion(value))),
 
   TO_YEAR_MONTH_DURATION("year-month-duration",
       overload(signature(parameter("value", TEXT)).returning(DURATION),
-          (script, args) -> script.composeToYearMonthDurationConversion(args.stringAt(0))));
+          (script, value) -> script.composeToYearMonthDurationConversion(value)));
 
   private final String name;
   private final List<Overload> overloads;

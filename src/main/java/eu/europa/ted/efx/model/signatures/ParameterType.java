@@ -14,6 +14,7 @@
 package eu.europa.ted.efx.model.signatures;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import eu.europa.ted.efx.interfaces.TypeChecker;
@@ -55,71 +56,87 @@ import eu.europa.ted.efx.model.types.EfxTypeTokenLookup;
  * construct takes from one of its arguments: {@link #boundBy} binds them as a signature is
  * bound.</p>
  *
+ * <p>Each parameter type names the expression class it gives a composer, as in
+ * {@code ParameterType<StringExpression>}, so that a signature types the arguments of its
+ * composer.</p>
+ *
  * <p>The constants are named after the type vocabulary of the autocomplete catalogue.</p>
+ *
+ * @param <E> the expression class an argument is converted to
  */
-public interface ParameterType {
+public interface ParameterType<E extends TypedExpression> {
 
   /** A text, or a multilingual text read as a text. */
-  ParameterType TEXT = new Concrete(StringExpression.class);
+  ParameterType<StringExpression> TEXT = new Concrete<>(StringExpression.class);
 
   /** A number. */
-  ParameterType NUMBER = new Concrete(NumericExpression.class);
+  ParameterType<NumericExpression> NUMBER = new Concrete<>(NumericExpression.class);
 
   /** An indicator, or a dynamic value read as an indicator. */
-  ParameterType INDICATOR = new Concrete(BooleanExpression.class);
+  ParameterType<BooleanExpression> INDICATOR = new Concrete<>(BooleanExpression.class);
 
   /** A date. */
-  ParameterType DATE = new Concrete(DateExpression.class);
+  ParameterType<DateExpression> DATE = new Concrete<>(DateExpression.class);
 
   /** A time. */
-  ParameterType TIME = new Concrete(TimeExpression.class);
+  ParameterType<TimeExpression> TIME = new Concrete<>(TimeExpression.class);
 
   /** A duration. */
-  ParameterType DURATION = new Concrete(DurationExpression.class);
+  ParameterType<DurationExpression> DURATION = new Concrete<>(DurationExpression.class);
 
   /** A sequence of texts; a single text is promoted to a sequence of one. */
-  ParameterType TEXT_SEQUENCE = new Concrete(StringSequenceExpression.class);
+  ParameterType<StringSequenceExpression> TEXT_SEQUENCE =
+      new Concrete<>(StringSequenceExpression.class);
 
   /** A sequence of numbers; a single number is promoted to a sequence of one. */
-  ParameterType NUMBER_SEQUENCE = new Concrete(NumericSequenceExpression.class);
+  ParameterType<NumericSequenceExpression> NUMBER_SEQUENCE =
+      new Concrete<>(NumericSequenceExpression.class);
 
   /** A sequence of indicators; a single indicator is promoted to a sequence of one. */
-  ParameterType INDICATOR_SEQUENCE = new Concrete(BooleanSequenceExpression.class);
+  ParameterType<BooleanSequenceExpression> INDICATOR_SEQUENCE =
+      new Concrete<>(BooleanSequenceExpression.class);
 
   /** A sequence of dates; a single date is promoted to a sequence of one. */
-  ParameterType DATE_SEQUENCE = new Concrete(DateSequenceExpression.class);
+  ParameterType<DateSequenceExpression> DATE_SEQUENCE =
+      new Concrete<>(DateSequenceExpression.class);
 
   /** A sequence of times; a single time is promoted to a sequence of one. */
-  ParameterType TIME_SEQUENCE = new Concrete(TimeSequenceExpression.class);
+  ParameterType<TimeSequenceExpression> TIME_SEQUENCE =
+      new Concrete<>(TimeSequenceExpression.class);
 
   /** A sequence of durations; a single duration is promoted to a sequence of one. */
-  ParameterType DURATION_SEQUENCE = new Concrete(DurationSequenceExpression.class);
+  ParameterType<DurationSequenceExpression> DURATION_SEQUENCE =
+      new Concrete<>(DurationSequenceExpression.class);
 
   /** A single value of the value primitive {@code T} stands for. */
-  ParameterType T = Generic.SCALAR;
+  ParameterType<ScalarExpression> T = new Generic<>("T", "a value", ScalarExpression.class,
+      ScalarExpression.fromEfxDataType);
 
   /** A sequence of the value primitive {@code T} stands for, or a single value promoted to one. */
-  ParameterType T_SEQUENCE = Generic.SEQUENCE;
+  ParameterType<SequenceExpression> T_SEQUENCE = new Generic<>("T*", "a sequence of values",
+      SequenceExpression.class, SequenceExpression.fromEfxDataType);
 
   /** A reference to a field or a node, taken as a path rather than as its value. */
-  ParameterType PATH = new Path(PathExpression.class, "a field or node reference");
+  ParameterType<PathExpression> PATH =
+      new Path<>(PathExpression.class, "a field or node reference");
 
   /** A reference to a node, repeatable or not, taken as the sequence of nodes it selects. */
-  ParameterType NODES = new Path(NodeSequencePath.class, "a node reference");
+  ParameterType<NodeSequencePath> NODES = new Path<>(NodeSequencePath.class, "a node reference");
 
   /** A reference to a multilingual text field, taken as a path. */
-  ParameterType MULTILINGUAL_FIELD =
-      new Path(MultilingualStringSequencePath.class, "a multilingual field");
+  ParameterType<MultilingualStringSequencePath> MULTILINGUAL_FIELD =
+      new Path<>(MultilingualStringSequencePath.class, "a multilingual field");
 
   /**
    * Gives the parameter type of a value expression class, such as the class of a parameter
    * declared in an EFX file.
    *
+   * @param <E> the expression class
    * @param expressionType a scalar or sequence class of one value primitive
    * @return the parameter type that accepts what converts to that class
    */
-  static ParameterType of(final Class<? extends TypedExpression> expressionType) {
-    return new Concrete(expressionType);
+  static <E extends TypedExpression> ParameterType<E> of(final Class<E> expressionType) {
+    return new Concrete<>(expressionType);
   }
 
   /**
@@ -138,7 +155,7 @@ public interface ParameterType {
    * @param primitive the value primitive {@code T} is bound to
    * @return the concrete type for a type variable, and this parameter type for any other
    */
-  default ParameterType bind(Class<? extends EfxDataType.Primitive> primitive) {
+  default ParameterType<? extends E> bind(Class<? extends EfxDataType.Primitive> primitive) {
     return this;
   }
 
@@ -150,7 +167,7 @@ public interface ParameterType {
    * @return the concrete type for a type variable, or nothing if the argument cannot bind
    *         {@code T} (a node); this parameter type for any other
    */
-  default Optional<ParameterType> boundBy(TypedExpression argument) {
+  default Optional<ParameterType<? extends E>> boundBy(TypedExpression argument) {
     return Optional.of(this);
   }
 
@@ -161,7 +178,7 @@ public interface ParameterType {
    *
    * @return the expression class of this parameter type
    */
-  Class<? extends TypedExpression> getExpressionType();
+  Class<E> getExpressionType();
 
   /**
    * Tells whether an argument converts to this parameter type: unchanged, widened from a subtype,
@@ -199,25 +216,27 @@ public interface ParameterType {
    * @param argument an argument this parameter type accepts
    * @return the argument itself if it already has that class, otherwise its conversion
    */
-  default TypedExpression convert(TypedExpression argument) {
-    Class<? extends TypedExpression> type = this.getExpressionType();
-    return type.isInstance(argument) ? argument : TypedExpression.from(argument, type);
+  default E convert(TypedExpression argument) {
+    final Class<E> type = this.getExpressionType();
+    return type.isInstance(argument) ? type.cast(argument) : TypedExpression.from(argument, type);
   }
 
   /**
    * A parameter type that names one expression class, such as a number or a sequence of texts. An
    * argument matches it when the EFX-2 type checker allows the conversion.
+   *
+   * @param <E> the expression class
    */
-  public final class Concrete implements ParameterType {
+  public final class Concrete<E extends TypedExpression> implements ParameterType<E> {
 
-    private final Class<? extends TypedExpression> expressionType;
+    private final Class<E> expressionType;
 
-    Concrete(final Class<? extends TypedExpression> expressionType) {
+    Concrete(final Class<E> expressionType) {
       this.expressionType = expressionType;
     }
 
     @Override
-    public Class<? extends TypedExpression> getExpressionType() {
+    public Class<E> getExpressionType() {
       return this.expressionType;
     }
 
@@ -258,23 +277,25 @@ public interface ParameterType {
    * A parameter type that takes a reference as a path rather than as its value: any path, or a path
    * of one type. An argument that is not a path never matches it, and since a path parameter takes
    * no values, no argument is rejected by it for its cardinality alone.
+   *
+   * @param <E> the class of the paths it takes
    */
-  public final class Path implements ParameterType {
+  public final class Path<E extends PathExpression> implements ParameterType<E> {
 
-    private final Class<? extends PathExpression> pathType;
+    private final Class<E> pathType;
     private final String description;
 
     /**
      * @param pathType the class of the paths this type takes
      * @param description what it takes, as a type error says it, such as "a field reference"
      */
-    Path(final Class<? extends PathExpression> pathType, final String description) {
+    Path(final Class<E> pathType, final String description) {
       this.pathType = pathType;
       this.description = description;
     }
 
     @Override
-    public Class<? extends TypedExpression> getExpressionType() {
+    public Class<E> getExpressionType() {
       return this.pathType;
     }
 
@@ -301,28 +322,17 @@ public interface ParameterType {
   }
 
   /**
-   * The type variable {@code T} of a generic signature: as a single value, or as a sequence.
+   * The type variable {@code T} of a generic signature: as a single value, {@link #T}, or as a
+   * sequence, {@link #T_SEQUENCE}.
    *
    * <p>{@code T} ranges over the six value primitives. A multilingual text binds it to text and a
    * dynamic value to indicator, as the typed grammar reads them today; a node never binds it. Until
    * it is bound, a type variable accepts no argument, and its expression class is that of every
    * value, or every sequence, it stands for.</p>
+   *
+   * @param <E> the expression class of every value, or every sequence, it stands for
    */
-  public enum Generic implements ParameterType {
-
-    SCALAR("T", "a value", ScalarExpression.class) {
-      @Override
-      public ParameterType bind(final Class<? extends EfxDataType.Primitive> primitive) {
-        return new Concrete(ScalarExpression.fromEfxDataType.get(primitive));
-      }
-    },
-
-    SEQUENCE("T*", "a sequence of values", SequenceExpression.class) {
-      @Override
-      public ParameterType bind(final Class<? extends EfxDataType.Primitive> primitive) {
-        return new Concrete(SequenceExpression.fromEfxDataType.get(primitive));
-      }
-    };
+  public final class Generic<E extends TypedExpression> implements ParameterType<E> {
 
     private static final List<Class<? extends EfxDataType.Primitive>> VALUE_PRIMITIVES = List.of(
         EfxDataType.String.class, EfxDataType.Boolean.class, EfxDataType.Number.class,
@@ -330,20 +340,22 @@ public interface ParameterType {
 
     private final String symbol;
     private final String description;
-    private final Class<? extends TypedExpression> expressionType;
+    private final Class<E> expressionType;
+    private final Map<Class<? extends EfxDataType.Primitive>, Class<? extends E>> concreteTypes;
 
-    Generic(final String symbol, final String description,
-        final Class<? extends TypedExpression> expressionType) {
+    /**
+     * @param symbol the type variable as a signature writes it, such as "T*"
+     * @param description what it takes, as a type error says it, such as "a value"
+     * @param expressionType the class of every value, or every sequence, it stands for
+     * @param concreteTypes the class it stands for once {@code T} is bound, for each primitive
+     */
+    Generic(final String symbol, final String description, final Class<E> expressionType,
+        final Map<Class<? extends EfxDataType.Primitive>, Class<? extends E>> concreteTypes) {
       this.symbol = symbol;
       this.description = description;
       this.expressionType = expressionType;
+      this.concreteTypes = concreteTypes;
     }
-
-    /**
-     * Gives the concrete type this type variable stands for once {@code T} is bound.
-     */
-    @Override
-    public abstract ParameterType bind(Class<? extends EfxDataType.Primitive> primitive);
 
     /**
      * Gives the value primitive an argument binds {@code T} to.
@@ -373,13 +385,22 @@ public interface ParameterType {
       return true;
     }
 
+    /**
+     * Gives the concrete type this type variable stands for once {@code T} is bound.
+     */
     @Override
-    public Optional<ParameterType> boundBy(final TypedExpression argument) {
+    public ParameterType<? extends E> bind(
+        final Class<? extends EfxDataType.Primitive> primitive) {
+      return ParameterType.of(this.concreteTypes.get(primitive));
+    }
+
+    @Override
+    public Optional<ParameterType<? extends E>> boundBy(final TypedExpression argument) {
       return bindingOf(argument).map(this::bind);
     }
 
     @Override
-    public Class<? extends TypedExpression> getExpressionType() {
+    public Class<E> getExpressionType() {
       return this.expressionType;
     }
 

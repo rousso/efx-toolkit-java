@@ -1415,7 +1415,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
     final Function function = this.translation.stack()
         .getFunction(name);
     final ParsedArguments<?> arguments = this.invocationOf(ctx, function, ctx.argumentList());
-    final ParameterType result = EfxTypeLattice.isSequence(function.dataType)
+    final ParameterType<?> result = EfxTypeLattice.isSequence(function.dataType)
         ? ParameterType.T_SEQUENCE
         : ParameterType.T;
     return new Subexpression<>(
@@ -2164,7 +2164,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    *
    * @throws IllegalStateException if the expression is a node
    */
-  private ParameterType bindingOf(final ParameterType typeVariable,
+  private ParameterType<?> bindingOf(final ParameterType<?> typeVariable,
       final TypedExpression expression) {
     return typeVariable.boundBy(expression)
         .orElseThrow(() -> new IllegalStateException("A node has no value: " + expression));

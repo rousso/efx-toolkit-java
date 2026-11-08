@@ -27,15 +27,15 @@ public enum LogicalOperators implements BuiltIn {
 
   AND("and",
       overload(signature(parameter("left", INDICATOR), parameter("right", INDICATOR)).returning(INDICATOR),
-          (script, args) -> script.composeLogicalAnd(args.booleanAt(0), args.booleanAt(1)))),
+          (script, left, right) -> script.composeLogicalAnd(left, right))),
 
   OR("or",
       overload(signature(parameter("left", INDICATOR), parameter("right", INDICATOR)).returning(INDICATOR),
-          (script, args) -> script.composeLogicalOr(args.booleanAt(0), args.booleanAt(1)))),
+          (script, left, right) -> script.composeLogicalOr(left, right))),
 
   NOT("not",
       overload(signature(parameter("value", INDICATOR)).returning(INDICATOR),
-          (script, args) -> script.composeLogicalNot(args.booleanAt(0))));
+          (script, value) -> script.composeLogicalNot(value)));
 
   private final String name;
   private final List<Overload> overloads;
