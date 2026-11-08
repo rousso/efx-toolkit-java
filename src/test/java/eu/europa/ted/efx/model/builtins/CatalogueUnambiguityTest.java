@@ -176,6 +176,6 @@ class CatalogueUnambiguityTest {
 
   private static boolean applies(final Parameters<?> parameters,
       final List<TypedExpression> arguments) {
-    return parameters.takes(arguments.size()) && parameters.match(arguments).isMatched();
+    return parameters.takes(arguments.size()) && parameters.match(arguments).isPresent();
   }
 }

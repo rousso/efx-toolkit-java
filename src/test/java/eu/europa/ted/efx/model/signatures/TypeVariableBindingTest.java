@@ -14,8 +14,8 @@
 package eu.europa.ted.efx.model.signatures;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import java.util.Map;
@@ -103,31 +103,31 @@ class TypeVariableBindingTest {
   private static void assertResolvesInEitherOrder(final BuiltIn builtIn, final Overload overload,
       final String first, final String second) {
     assertSame(overload.getSignature().getParameters(),
-        resolve(builtIn, overload, first, second).getParameters());
+        builtIn.resolve(arguments(overload, first, second)).orElseThrow().getParameters());
     assertSame(overload.getSignature().getParameters(),
-        resolve(builtIn, overload, second, first).getParameters());
+        builtIn.resolve(arguments(overload, second, first)).orElseThrow().getParameters());
   }
 
   private static void assertRejectedAtTheSecond(final BuiltIn builtIn, final Overload overload,
       final String first, final String second) {
-    Resolution resolution = resolve(builtIn, overload, first, second);
-    assertFalse(resolution.isResolved());
-    assertEquals(List.of(1), resolution.getMismatch().getRejections().stream()
+    List<TypedExpression> arguments = arguments(overload, first, second);
+    assertTrue(builtIn.resolve(arguments).isEmpty());
+    assertEquals(List.of(1), builtIn.mismatchOf(arguments).getRejections().stream()
         .filter(rejection -> rejection.getParameters() == overload.getSignature().getParameters())
-        .map(Match::getPosition)
+        .map(Rejection::getPosition)
         .collect(Collectors.toList()));
   }
 
   /**
-   * Resolves a call of a built-in with two arguments of the given kinds, each in the cardinality the
-   * overload's parameter at its position expects.
+   * Gives two arguments of the given kinds, each in the cardinality the overload's parameter at its
+   * position expects.
    */
-  private static Resolution resolve(final BuiltIn builtIn, final Overload overload, final String first,
+  private static List<TypedExpression> arguments(final Overload overload, final String first,
       final String second) {
     List<BuiltInParameter> parameters = overload.getSignature().getParameters();
-    return builtIn.resolve(List.of(
+    return List.of(
         VALUES.get(parameters.get(0).getType()).get(first),
-        VALUES.get(parameters.get(1).getType()).get(second)));
+        VALUES.get(parameters.get(1).getType()).get(second));
   }
 
   private static boolean takesTwoTypeVariables(final Overload overload) {

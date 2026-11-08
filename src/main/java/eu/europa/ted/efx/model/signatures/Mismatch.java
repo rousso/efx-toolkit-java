@@ -15,31 +15,79 @@ package eu.europa.ted.efx.model.signatures;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import eu.europa.ted.efx.exceptions.Diagnosis;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 
 /**
- * Why no parameter list of a {@link Construct} takes the arguments of a call: either none takes
- * that many arguments, or each one that does rejects one of them.
+ * Why no parameter list of a {@link Construct} takes the arguments of a call of a number it
+ * {@link Construct#takes takes}: each parameter list that takes that many arguments rejects one of
+ * them.
  *
- * <p>A mismatch keeps the arguments and, for each parameter list that takes their number, the
- * rejected {@link Match}: the parameter list, the argument it rejected and why. Its
+ * <p>A mismatch keeps the arguments and, for each parameter list that takes their number, its
+ * {@link Rejection}: the parameter list, the argument it rejects and why. Its
  * {@link #getRejection rejection} tells the translator which argument to report, and its
  * {@link #diagnose diagnosis} what the error says about it.</p>
  */
 public final class Mismatch {
 
+  /**
+   * The order in which the rejections explain a mismatch: see {@link #getRejection}.
+   */
+  private static final Comparator<Rejection> REPORTING_ORDER = Comparator
+      .comparing((Rejection rejection) -> rejection.getKind() != Rejection.Kind.CARDINALITY)
+      .thenComparing(Comparator.comparingInt(Rejection::getPosition).reversed())
+      .thenComparing(Rejection::getKind);
+
   private final Construct construct;
   private final List<TypedExpression> arguments;
-  private final List<Match> rejections;
+  private final List<Rejection> rejections;
+  private final Rejection rejection;
 
-  Mismatch(final Construct construct, final List<? extends TypedExpression> arguments,
-      final List<Match> rejections) {
+  /**
+   * @throws IllegalArgumentException if there is no rejection
+   */
+  private Mismatch(final Construct construct, final List<? extends TypedExpression> arguments,
+      final List<Rejection> rejections) {
     this.construct = construct;
     this.arguments = List.copyOf(arguments);
     this.rejections = List.copyOf(rejections);
+    this.rejection = rejections.stream().min(REPORTING_ORDER).orElseThrow(
+        () -> new IllegalArgumentException("A mismatch of " + construct.describe()
+            + " needs a rejection"));
+  }
+
+  /**
+   * Gives why no parameter list of a construct takes the arguments of a call: the rejection of
+   * each one that takes their number.
+   *
+   * @param construct the construct called
+   * @param arguments the translated arguments of the call, of a number the construct takes,
+   *        which no parameter list takes
+   * @return the mismatch
+   * @throws IllegalArgumentException if no parameter list takes that many arguments, or one takes
+   *         the arguments
+   */
+  static Mismatch of(final Construct construct,
+      final List<? extends TypedExpression> arguments) {
+    final List<Parameters<?>> taking = construct.getParameterLists().stream()
+        .filter(parameters -> parameters.takes(arguments.size()))
+        .collect(Collectors.toList());
+    if (taking.isEmpty()) {
+      throw new IllegalArgumentException("No parameter list of " + construct.describe()
+          + " takes " + arguments.size() + " arguments");
+    }
+    final List<Rejection> rejections = taking.stream()
+        .map(parameters -> parameters.rejectionOf(arguments))
+        .flatMap(Optional::stream)
+        .collect(Collectors.toList());
+    if (rejections.size() < taking.size()) {
+      throw new IllegalArgumentException(construct.describe() + " takes ("
+          + describe(arguments) + ")");
+    }
+    return new Mismatch(construct, arguments, rejections);
   }
 
   /**
@@ -55,23 +103,14 @@ public final class Mismatch {
   public static Mismatch unreadable(final Construct construct,
       final List<? extends TypedExpression> arguments, final int position) {
     final Parameters<?> parameters = construct.getParameterLists().get(0);
-    return new Mismatch(construct, arguments, List.of(Match.rejected(parameters, position,
+    return new Mismatch(construct, arguments, List.of(new Rejection(parameters, position,
         parameters.parameterAt(position).getType(), arguments.get(position))));
   }
 
   /**
-   * Tells whether the mismatch is the number of arguments.
-   *
-   * @return {@code true} if no parameter list takes that many arguments
+   * @return for each parameter list that takes that many arguments, its rejection
    */
-  public boolean isArityMismatch() {
-    return this.rejections.isEmpty();
-  }
-
-  /**
-   * @return for each parameter list that takes that many arguments, the rejected match
-   */
-  public List<Match> getRejections() {
+  public List<Rejection> getRejections() {
     return this.rejections;
   }
 
@@ -84,15 +123,9 @@ public final class Mismatch {
    * failure before a path one.</p>
    *
    * @return the rejection to report
-   * @throws IllegalStateException if the mismatch is the number of arguments
    */
-  public Match getRejection() {
-    return this.rejections.stream()
-        .min(Comparator
-            .comparing((Match rejection) -> rejection.getKind() != Match.Kind.CARDINALITY)
-            .thenComparing(Comparator.comparingInt(Match::getPosition).reversed())
-            .thenComparing(Match::getKind))
-        .orElseThrow(() -> new IllegalStateException(this.toString()));
+  public Rejection getRejection() {
+    return this.rejection;
   }
 
   /**
@@ -103,10 +136,9 @@ public final class Mismatch {
    * the arguments follows them.
    *
    * @return the diagnosis of the mismatch
-   * @throws IllegalStateException if the mismatch is the number of arguments
    */
   public Diagnosis diagnose() {
-    final Match reported = this.getRejection();
+    final Rejection reported = this.getRejection();
     final List<String> requirements = this.rejections.stream()
         .filter(rejection -> rejection.getPosition() == reported.getPosition()
             && rejection.getKind() == reported.getKind())

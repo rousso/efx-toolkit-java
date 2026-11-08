@@ -46,9 +46,10 @@ public class Parameters<P extends Parameter> extends LinkedList<P> {
    * primitive, or not the path required, before a sequence where a single value is required, and
    * then by position.
    */
-  private static final Comparator<Match> REPORTING_ORDER =
-      Comparator.comparing((Match rejection) -> rejection.getKind() == Match.Kind.CARDINALITY)
-          .thenComparingInt(Match::getPosition);
+  private static final Comparator<Rejection> REPORTING_ORDER =
+      Comparator
+          .comparing((Rejection rejection) -> rejection.getKind() == Rejection.Kind.CARDINALITY)
+          .thenComparingInt(Rejection::getPosition);
 
   private final P variadic;
 
@@ -164,6 +165,21 @@ public class Parameters<P extends Parameter> extends LinkedList<P> {
    * argument at its first position, checks each argument against its parameter, and converts the
    * arguments to the expression classes of their parameters.
    *
+   * @param arguments the translated arguments of the call, as many as the list takes
+   * @return the converted arguments, or nothing if the list {@link #rejectionOf rejects} one
+   * @throws IllegalArgumentException if the parameter list does not take that many arguments
+   */
+  public Optional<ParsedArguments<?>> match(final List<? extends TypedExpression> arguments) {
+    this.requireTaken(arguments);
+    return this.boundTo(arguments)
+        .filter(bound -> bound.rejectionsOf(this, arguments).findAny().isEmpty())
+        .map(bound -> bound.converted(arguments));
+  }
+
+  /**
+   * Gives the argument of a call that the parameter list {@link #takes} that it reports when it
+   * does not {@link #match} them.
+   *
    * <p>Every argument is checked before one is reported, and a wrong primitive or path is reported
    * before a wrong cardinality: the first argument of another primitive than its parameter's, or
    * that is not the path its parameter requires, and only if there is none, the first sequence
@@ -171,21 +187,26 @@ public class Parameters<P extends Parameter> extends LinkedList<P> {
    * whichever of its arguments is the sequence.</p>
    *
    * @param arguments the translated arguments of the call, as many as the list takes
-   * @return the converted arguments, or the argument to report: the one at the first position of
-   *         a {@code T} it cannot bind, or the one the reporting order puts first
+   * @return the argument to report: the one at the first position of a {@code T} it cannot bind,
+   *         or the one the reporting order puts first; nothing if the list matches the arguments
    * @throws IllegalArgumentException if the parameter list does not take that many arguments
    */
-  public Match match(final List<? extends TypedExpression> arguments) {
+  public Optional<Rejection> rejectionOf(final List<? extends TypedExpression> arguments) {
+    this.requireTaken(arguments);
+    final Optional<Parameters<?>> bound = this.boundTo(arguments);
+    if (bound.isEmpty()) {
+      final int position = this.typeVariablePosition();
+      return Optional.of(
+          new Rejection(this, position, this.typeAt(position), arguments.get(position)));
+    }
+    return bound.get().rejectionsOf(this, arguments).min(REPORTING_ORDER);
+  }
+
+  private void requireTaken(final List<? extends TypedExpression> arguments) {
     if (!this.takes(arguments.size())) {
       throw new IllegalArgumentException(this + " does not take " + arguments.size()
           + " arguments");
     }
-    Optional<Parameters<?>> bound = this.boundTo(arguments);
-    if (bound.isEmpty()) {
-      int position = this.typeVariablePosition();
-      return Match.rejected(this, position, this.typeAt(position), arguments.get(position));
-    }
-    return bound.get().matchBound(this, arguments);
   }
 
   /**
@@ -211,31 +232,28 @@ public class Parameters<P extends Parameter> extends LinkedList<P> {
   }
 
   /**
-   * Matches the arguments against these parameters, with {@code T} bound.
+   * Checks the arguments against these parameters, with {@code T} bound.
    *
-   * @param declared the parameter list as the construct declares it, which the match reports
+   * @param declared the parameter list as the construct declares it, which a rejection reports
    * @param arguments the translated arguments of the call
-   * @return the converted arguments, or the argument to report
+   * @return a rejection for each argument that does not convert to its parameter, in order
    */
-  private Match matchBound(final Parameters<?> declared,
+  private Stream<Rejection> rejectionsOf(final Parameters<?> declared,
       final List<? extends TypedExpression> arguments) {
     return IntStream.range(0, arguments.size())
         .filter(position -> !this.typeAt(position).accepts(arguments.get(position)))
-        .mapToObj(position -> Match.rejected(declared, position, this.typeAt(position),
-            arguments.get(position)))
-        .min(REPORTING_ORDER)
-        .orElseGet(() -> this.converted(declared, arguments));
+        .mapToObj(position -> new Rejection(declared, position, this.typeAt(position),
+            arguments.get(position)));
   }
 
-  private Match converted(final Parameters<?> declared,
-      final List<? extends TypedExpression> arguments) {
+  private ParsedArguments<?> converted(final List<? extends TypedExpression> arguments) {
     List<P> parameters = new ArrayList<>();
     List<TypedExpression> values = new ArrayList<>();
     for (int position = 0; position < arguments.size(); position++) {
       parameters.add(this.parameterAt(position));
       values.add(this.typeAt(position).convert(arguments.get(position)));
     }
-    return Match.of(declared, new ParsedArguments<>(parameters, values));
+    return new ParsedArguments<>(parameters, values);
   }
 
   private ParameterType typeAt(final int position) {

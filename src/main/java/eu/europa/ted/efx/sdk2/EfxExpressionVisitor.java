@@ -30,6 +30,7 @@ import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.tree.ParseTree;
 
 import eu.europa.ted.efx.exceptions.Diagnosis;
+import eu.europa.ted.efx.exceptions.EfxCompilationException;
 import eu.europa.ted.efx.exceptions.InvalidArgumentException;
 import eu.europa.ted.efx.exceptions.InvalidIdentifierException;
 import eu.europa.ted.efx.exceptions.InvalidUsageException;
@@ -78,10 +79,10 @@ import eu.europa.ted.efx.model.identifiers.Invocable;
 import eu.europa.ted.efx.model.identifiers.ParsedParameter;
 import eu.europa.ted.efx.model.identifiers.Variable;
 import eu.europa.ted.efx.model.signatures.Construct;
-import eu.europa.ted.efx.model.signatures.Match;
 import eu.europa.ted.efx.model.signatures.Mismatch;
 import eu.europa.ted.efx.model.signatures.ParameterType;
 import eu.europa.ted.efx.model.signatures.ParsedArguments;
+import eu.europa.ted.efx.model.signatures.Rejection;
 import eu.europa.ted.efx.model.signatures.Resolution;
 import eu.europa.ted.efx.model.types.EfxDataType;
 import eu.europa.ted.efx.model.types.EfxTypeLattice;
@@ -1479,22 +1480,35 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
     }
     final List<TypedExpression> arguments =
         subexpressions.stream().map(Subexpression::value).collect(Collectors.toList());
-    final Resolution resolution = declaration.resolve(arguments);
-    if (resolution.isResolved()) {
-      return resolution.getArguments();
-    }
-    final Mismatch mismatch = resolution.getMismatch();
-    if (mismatch.isArityMismatch()) {
-      throw InvalidArgumentException.argumentNumberMismatch(declaration,
+    return declaration.resolve(arguments).map(Resolution::getArguments)
+        .orElseThrow(() -> this.invocationError(call, declaration, subexpressions, arguments));
+  }
+
+  /**
+   * Gives the error of an invocation whose arguments the declared parameters do not take.
+   *
+   * @param call the invocation
+   * @param declaration the function or template invoked
+   * @param subexpressions the arguments as written, in order
+   * @param arguments their values, in the same order
+   * @return the error: the number of arguments, a context variable that holds a node, or the type
+   *         of an argument
+   */
+  private EfxCompilationException invocationError(final ParserRuleContext call,
+      final Invocable declaration, final List<Subexpression<?>> subexpressions,
+      final List<TypedExpression> arguments) {
+    if (!declaration.takes(arguments.size())) {
+      return InvalidArgumentException.argumentNumberMismatch(declaration,
           declaration.parameters.size(), arguments.size());
     }
+    final Mismatch mismatch = declaration.mismatchOf(arguments);
     final Diagnosis diagnosis = mismatch.diagnose();
     final Optional<TypeMismatchException> noValue = subexpressions
-        .get(mismatch.getRejection().getPosition()).errorOf(Match.Kind.PATH, diagnosis);
+        .get(mismatch.getRejection().getPosition()).errorOf(Rejection.Kind.PATH, diagnosis);
     if (noValue.isPresent()) {
-      throw noValue.get();
+      return noValue.get();
     }
-    throw InvalidArgumentException.argumentTypeMismatch(call, diagnosis);
+    return InvalidArgumentException.argumentTypeMismatch(call, diagnosis);
   }
 
   // #endregion Function invocation -------------------------------------------
@@ -2072,11 +2086,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
       final List<Subexpression<?>> subexpressions, final List<TypedExpression> arguments,
       final IntFunction<ParserRuleContext> where,
       final BiFunction<ParserRuleContext, Diagnosis, TypeMismatchException> typeError) {
-    final Resolution resolution = construct.resolve(arguments);
-    if (resolution.isResolved()) {
-      return resolution;
-    }
-    throw this.errorOf(resolution.getMismatch(), subexpressions, where, typeError);
+    return construct.resolve(arguments).orElseThrow(() -> this
+        .errorOf(construct.mismatchOf(arguments), subexpressions, where, typeError));
   }
 
   /**
@@ -2094,7 +2105,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
   private TypeMismatchException errorOf(final Mismatch mismatch,
       final List<Subexpression<?>> subexpressions, final IntFunction<ParserRuleContext> where,
       final BiFunction<ParserRuleContext, Diagnosis, TypeMismatchException> typeError) {
-    final Match rejection = mismatch.getRejection();
+    final Rejection rejection = mismatch.getRejection();
     final Diagnosis diagnosis = mismatch.diagnose();
     return subexpressions.get(rejection.getPosition()).errorOf(rejection.getKind(), diagnosis)
         .orElseGet(() -> typeError.apply(where.apply(rejection.getPosition()), diagnosis));

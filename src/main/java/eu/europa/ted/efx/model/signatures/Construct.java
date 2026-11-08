@@ -14,6 +14,7 @@
 package eu.europa.ted.efx.model.signatures;
 
 import java.util.List;
+import java.util.Optional;
 
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 
@@ -63,10 +64,35 @@ public interface Construct {
    * Checks the arguments of a call against the parameter lists of this construct.
    *
    * @param arguments the translated arguments of the call
-   * @return the parameter list that takes them, with the converted arguments, or the mismatch
+   * @return the parameter list that takes them, with the converted arguments, or nothing if none
+   *         does
    */
-  default Resolution resolve(final List<? extends TypedExpression> arguments) {
+  default Optional<Resolution> resolve(final List<? extends TypedExpression> arguments) {
     return Resolution.of(this, arguments);
+  }
+
+  /**
+   * Tells whether a parameter list of this construct takes a number of arguments.
+   *
+   * @param count the number of arguments of a call
+   * @return {@code true} if one does; otherwise a call of that many arguments is wrong by its
+   *         number alone
+   */
+  default boolean takes(final int count) {
+    return this.getParameterLists().stream().anyMatch(parameters -> parameters.takes(count));
+  }
+
+  /**
+   * Says why no parameter list of this construct takes the arguments of a call that does not
+   * {@link #resolve}, although one {@link #takes} their number.
+   *
+   * @param arguments the translated arguments of the call
+   * @return the mismatch
+   * @throws IllegalArgumentException if no parameter list takes that many arguments, or one takes
+   *         the arguments
+   */
+  default Mismatch mismatchOf(final List<? extends TypedExpression> arguments) {
+    return Mismatch.of(this, arguments);
   }
 
   /**

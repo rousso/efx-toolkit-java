@@ -181,7 +181,7 @@ public interface ParameterType {
    * @param argument a translated argument this parameter type does not {@link #accepts accept}
    * @return the kind of the rejection
    */
-  Match.Kind rejectionKindOf(TypedExpression argument);
+  Rejection.Kind rejectionKindOf(TypedExpression argument);
 
   /**
    * Says what this parameter type takes, as a type error says it: a type in quotes, as a
@@ -231,12 +231,12 @@ public interface ParameterType {
      * with this one: if they convert, only the argument's cardinality is wrong.
      */
     @Override
-    public Match.Kind rejectionKindOf(final TypedExpression argument) {
+    public Rejection.Kind rejectionKindOf(final TypedExpression argument) {
       return T.boundBy(argument)
           .map(value -> TypeChecker.V2.canConvert(value.getExpressionType(), this.expressionType)
-              ? Match.Kind.CARDINALITY
-              : Match.Kind.PRIMITIVE)
-          .orElse(Match.Kind.PATH);
+              ? Rejection.Kind.CARDINALITY
+              : Rejection.Kind.PRIMITIVE)
+          .orElse(Rejection.Kind.PATH);
     }
 
     /**
@@ -285,8 +285,8 @@ public interface ParameterType {
     }
 
     @Override
-    public Match.Kind rejectionKindOf(final TypedExpression argument) {
-      return Match.Kind.PATH;
+    public Rejection.Kind rejectionKindOf(final TypedExpression argument) {
+      return Rejection.Kind.PATH;
     }
 
     @Override
@@ -392,8 +392,8 @@ public interface ParameterType {
      * An unbound type variable rejects only the argument that cannot bind it, a node.
      */
     @Override
-    public Match.Kind rejectionKindOf(final TypedExpression argument) {
-      return Match.Kind.PATH;
+    public Rejection.Kind rejectionKindOf(final TypedExpression argument) {
+      return Rejection.Kind.PATH;
     }
 
     /**

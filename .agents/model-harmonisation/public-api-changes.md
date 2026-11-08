@@ -116,3 +116,7 @@ H10 to H15 apply the rule Yannis agreed for overloads and generic signatures (se
 
 H17 renames `model.identifiers.Parametrised` `model.identifiers.Invocable`: the same public members, its constructor included, under the new name. The class is on develop (as `model.variables.Parametrised`, renamed package in H9), so the CHANGELOG lists the rename under breaking changes. `InvalidArgumentException.argumentNumberMismatch` takes an `Invocable` in its two overloads.
 
+
+## Two questions for a call (H18)
+
+H18 removes `model.signatures.Match` and adds `model.signatures.Rejection`, which holds what a rejected `Match` held (`getParameters`, `getPosition`, `getRequired`, `getKind`) and the enum `Rejection.Kind` (`CARDINALITY`, `PRIMITIVE`, `PATH`), formerly `Match.Kind`. `Parameters.match` gives an `Optional<ParsedArguments<?>>`, and the added `Parameters.rejectionOf` gives an `Optional<Rejection>`: exactly one of the two holds a value. `Resolution` is a final class that holds only a call that fits (`getParameters`, `getArguments`); `isResolved` and `getMismatch` are removed. `Construct.resolve` gives an `Optional<Resolution>`; the added `Construct.takes(int)` tells whether a parameter list takes that many arguments, and the added `Construct.mismatchOf` gives the `Mismatch` of a call of such a number. `Mismatch.isArityMismatch` is removed, since every mismatch has a rejection; `Mismatch.getRejection` and `getRejections` give `Rejection`. `ParameterType.rejectionKindOf` gives `Rejection.Kind`. None of these classes is on develop, so the CHANGELOG is unchanged.

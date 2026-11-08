@@ -90,7 +90,7 @@ class GrammarConstructTest {
 
   private static void assertResult(final Class<? extends TypedExpression> expected,
       final GrammarConstruct construct, final TypedExpression... arguments) {
-    assertEquals(expected, construct.resultOf(construct.resolve(List.of(arguments))));
+    assertEquals(expected, construct.resultOf(construct.resolve(List.of(arguments)).orElseThrow()));
   }
 
   private static TypedExpression value(final Class<? extends TypedExpression> type) {

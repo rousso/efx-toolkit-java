@@ -64,7 +64,7 @@ class CatalogueResultTypesTest {
         .mapToObj(position -> placeholder(bound.getParameters().parameterAt(position).getType()))
         .collect(Collectors.toList());
     TypedExpression result = overload.compose(SCRIPT,
-        overload.getSignature().getParameters().match(arguments).getArguments());
+        overload.getSignature().getParameters().match(arguments).orElseThrow());
     assertTrue(bound.getResult().getExpressionType().isInstance(result),
         () -> name + " " + bound + " returned " + result.getClass().getSimpleName());
   }

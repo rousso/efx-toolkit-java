@@ -14,7 +14,7 @@
 package eu.europa.ted.efx.model.builtins;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import java.util.stream.Stream;
@@ -33,7 +33,6 @@ import eu.europa.ted.efx.model.expressions.scalar.StringLiteral;
 import eu.europa.ted.efx.model.expressions.scalar.TimeLiteral;
 import eu.europa.ted.efx.model.expressions.sequence.NumericSequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.StringSequenceExpression;
-import eu.europa.ted.efx.model.signatures.Resolution;
 import eu.europa.ted.efx.xpath.XPathScriptGenerator;
 
 /**
@@ -92,7 +91,8 @@ class CatalogueRejectionTest {
         rejectedArity("upper-case()", StringFunctions.UPPER_CASE),
         // The result of a built-in function has the type the function declares
         rejected("count(['a']) like 'a'", PatternMatch.like("'a'"),
-            NumericFunctions.COUNT.compose(NumericFunctions.COUNT.resolve(List.of(TEXTS)),
+            NumericFunctions.COUNT.compose(
+                NumericFunctions.COUNT.resolve(List.of(TEXTS)).orElseThrow(),
                 new XPathScriptGenerator(EfxTranslatorOptions.DEFAULT))),
         // Each argument of a template-only function has the type its parameter declares
         rejected("format-number('x', '0.00')", TemplateFunctions.FORMAT_NUMBER, TEXT, OTHER_TEXT),
@@ -104,9 +104,8 @@ class CatalogueRejectionTest {
   @MethodSource("rejectedCalls")
   void testCall_IsRejected(final String expression, final BuiltIn builtIn,
       final List<TypedExpression> arguments, final boolean arityMismatch) {
-    Resolution resolution = builtIn.resolve(arguments);
-    assertFalse(resolution.isResolved());
-    assertEquals(arityMismatch, resolution.getMismatch().isArityMismatch());
+    assertTrue(builtIn.resolve(arguments).isEmpty());
+    assertEquals(arityMismatch, !builtIn.takes(arguments.size()));
   }
 
   private static org.junit.jupiter.params.provider.Arguments rejected(final String expression,

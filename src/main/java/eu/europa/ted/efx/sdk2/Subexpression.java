@@ -22,7 +22,7 @@ import eu.europa.ted.efx.exceptions.Diagnosis;
 import eu.europa.ted.efx.exceptions.TypeMismatchException;
 import eu.europa.ted.efx.model.Context;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
-import eu.europa.ted.efx.model.signatures.Match;
+import eu.europa.ted.efx.model.signatures.Rejection;
 import eu.europa.ted.efx.sdk2.EfxParser.ExpressionContext;
 
 /**
@@ -126,7 +126,7 @@ final class Subexpression<E extends TypedExpression> {
    * @param diagnosis what the construct was given, and what it requires
    * @return the error of the reference, or nothing if the construct gives its own
    */
-  Optional<TypeMismatchException> errorOf(final Match.Kind kind, final Diagnosis diagnosis) {
+  Optional<TypeMismatchException> errorOf(final Rejection.Kind kind, final Diagnosis diagnosis) {
     return this.origin.errorOf(kind, diagnosis);
   }
 }

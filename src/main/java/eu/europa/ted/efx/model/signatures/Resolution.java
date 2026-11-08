@@ -13,8 +13,8 @@
  */
 package eu.europa.ted.efx.model.signatures;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -23,9 +23,8 @@ import eu.europa.ted.efx.interfaces.TypeChecker;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 
 /**
- * The outcome of checking the arguments of a call against the parameter lists of a
- * {@link Construct}: the parameter list that takes them, with the arguments converted to its
- * parameters, or the {@link Mismatch} when none does.
+ * The parameter list of a {@link Construct} that takes the arguments of a call, with the arguments
+ * converted to its parameters.
  *
  * <p>A parameter list takes the arguments when it {@link Parameters#match matches} them: it takes
  * their number and, once {@code T} is bound, every argument converts to its parameter. When more
@@ -35,17 +34,19 @@ import eu.europa.ted.efx.model.expressions.TypedExpression;
  * a {@link TranslatorConfigurationException}: the construct is ambiguous, which the catalogue's
  * unit tests prove no built-in is.</p>
  *
- * <p>A built-in translates a resolved call itself; any other construct is translated where it is
+ * <p>A call that no parameter list takes has no resolution; its {@link Mismatch} says why. A
+ * built-in translates a resolved call itself; any other construct is translated where it is
  * written, from the converted arguments.</p>
- *
- * <p>Each outcome is a class of its own that holds only its own facts: a resolved call the
- * {@link Match} of the parameter list that takes the arguments, an unresolved one its mismatch.
- * Each answers every question, and one about a fact of the other outcome with an
- * {@link IllegalStateException}.</p>
  */
-public abstract class Resolution {
+public final class Resolution {
 
-  private Resolution() {}
+  private final Parameters<?> parameters;
+  private final ParsedArguments<?> arguments;
+
+  private Resolution(final Parameters<?> parameters, final ParsedArguments<?> arguments) {
+    this.parameters = parameters;
+    this.arguments = arguments;
+  }
 
   /**
    * Checks the arguments of a call of a construct against each of its parameter lists that takes
@@ -53,28 +54,21 @@ public abstract class Resolution {
    *
    * @param construct the construct called
    * @param arguments the translated arguments of the call
-   * @return the resolution
+   * @return the resolution, or nothing if no parameter list takes the arguments
    * @throws TranslatorConfigurationException if more than one parameter list takes the arguments
    *         and none of them is more specific than all the others, a defect of the construct
    */
-  static Resolution of(final Construct construct,
+  static Optional<Resolution> of(final Construct construct,
       final List<? extends TypedExpression> arguments) {
-    final List<Resolved> applicable = new ArrayList<>();
-    final List<Match> rejections = new ArrayList<>();
-    for (Parameters<?> parameters : construct.getParameterLists()) {
-      if (parameters.takes(arguments.size())) {
-        final Match match = parameters.match(arguments);
-        if (match.isMatched()) {
-          applicable.add(new Resolved(match));
-        } else {
-          rejections.add(match);
-        }
-      }
-    }
+    final List<Resolution> applicable = construct.getParameterLists().stream()
+        .filter(parameters -> parameters.takes(arguments.size()))
+        .flatMap(parameters -> parameters.match(arguments)
+            .map(converted -> new Resolution(parameters, converted)).stream())
+        .collect(Collectors.toList());
     if (applicable.isEmpty()) {
-      return new Unresolved(new Mismatch(construct, arguments, rejections));
+      return Optional.empty();
     }
-    final List<Resolved> mostSpecific = applicable.stream()
+    final List<Resolution> mostSpecific = applicable.stream()
         .filter(candidate -> applicable.stream().allMatch(candidate::isAsSpecificAs))
         .collect(Collectors.toList());
     if (mostSpecific.size() != 1) {
@@ -83,103 +77,36 @@ public abstract class Resolution {
               .collect(Collectors.joining(", ", "[", "]")),
           Mismatch.describe(arguments));
     }
-    return mostSpecific.get(0);
+    return Optional.of(mostSpecific.get(0));
   }
-
-  /**
-   * @return {@code true} if a parameter list takes the arguments
-   */
-  public abstract boolean isResolved();
 
   /**
    * @return the parameter list that takes the arguments, as the construct declares it
-   * @throws IllegalStateException if none does
    */
-  public abstract Parameters<?> getParameters();
+  public Parameters<?> getParameters() {
+    return this.parameters;
+  }
 
   /**
    * @return the arguments, converted to the parameters of the parameter list that takes them
-   * @throws IllegalStateException if none does
    */
-  public abstract ParsedArguments<?> getArguments();
-
-  /**
-   * @return why no parameter list takes the arguments
-   * @throws IllegalStateException if one does
-   */
-  public abstract Mismatch getMismatch();
-
-  private static final class Resolved extends Resolution {
-
-    private final Match match;
-
-    private Resolved(final Match match) {
-      this.match = match;
-    }
-
-    @Override
-    public boolean isResolved() {
-      return true;
-    }
-
-    @Override
-    public Parameters<?> getParameters() {
-      return this.match.getParameters();
-    }
-
-    @Override
-    public ParsedArguments<?> getArguments() {
-      return this.match.getArguments();
-    }
-
-    @Override
-    public Mismatch getMismatch() {
-      throw new IllegalStateException("The call is resolved");
-    }
-
-    /**
-     * Tells whether this resolution is at least as specific as another of the same arguments:
-     * each argument was converted to a class that converts to the class the other converted it
-     * to, as a single value converts to a sequence of one.
-     *
-     * @param other a resolution of the same arguments by another parameter list
-     * @return {@code true} if every argument of this resolution would also convert to the
-     *         parameter of the other
-     */
-    private boolean isAsSpecificAs(final Resolved other) {
-      final ParsedArguments<?> mine = this.getArguments();
-      final ParsedArguments<?> theirs = other.getArguments();
-      return IntStream.range(0, mine.size()).allMatch(position -> TypeChecker.V2
-          .canConvert(mine.typeAt(position), theirs.typeAt(position)));
-    }
+  public ParsedArguments<?> getArguments() {
+    return this.arguments;
   }
 
-  private static final class Unresolved extends Resolution {
-
-    private final Mismatch mismatch;
-
-    private Unresolved(final Mismatch mismatch) {
-      this.mismatch = mismatch;
-    }
-
-    @Override
-    public boolean isResolved() {
-      return false;
-    }
-
-    @Override
-    public Parameters<?> getParameters() {
-      throw new IllegalStateException(this.mismatch.toString());
-    }
-
-    @Override
-    public ParsedArguments<?> getArguments() {
-      throw new IllegalStateException(this.mismatch.toString());
-    }
-
-    @Override
-    public Mismatch getMismatch() {
-      return this.mismatch;
-    }
+  /**
+   * Tells whether this resolution is at least as specific as another of the same arguments: each
+   * argument was converted to a class that converts to the class the other converted it to, as a
+   * single value converts to a sequence of one.
+   *
+   * @param other a resolution of the same arguments by another parameter list
+   * @return {@code true} if every argument of this resolution would also convert to the parameter
+   *         of the other
+   */
+  private boolean isAsSpecificAs(final Resolution other) {
+    final ParsedArguments<?> mine = this.getArguments();
+    final ParsedArguments<?> theirs = other.getArguments();
+    return IntStream.range(0, mine.size()).allMatch(position -> TypeChecker.V2
+        .canConvert(mine.typeAt(position), theirs.typeAt(position)));
   }
 }

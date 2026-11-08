@@ -17,8 +17,8 @@ import static eu.europa.ted.efx.model.builtins.Overload.overload;
 import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
 import static eu.europa.ted.efx.model.signatures.Signature.signature;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -86,9 +86,9 @@ class MismatchDiagnosisTest {
   @Test
   void testFurthestPositionAndCardinalityWin_WhateverTheOrderOfTheOverloads() {
     for (List<Overload> overloads : orders(NUMBER_THEN_TEXT, TEXT_THEN_TEXT, TEXT_THEN_NUMBER)) {
-      Match rejection = rejection(overloads, TEXT, REPEATABLE_TEXT_FIELD);
+      Rejection rejection = rejection(overloads, TEXT, REPEATABLE_TEXT_FIELD);
       assertEquals(1, rejection.getPosition(), overloads::toString);
-      assertEquals(Match.Kind.CARDINALITY, rejection.getKind(), overloads::toString);
+      assertEquals(Rejection.Kind.CARDINALITY, rejection.getKind(), overloads::toString);
       assertEquals(StringExpression.class, rejection.getRequired().getExpressionType(),
           overloads::toString);
     }
@@ -97,8 +97,8 @@ class MismatchDiagnosisTest {
   @Test
   void testPrimitiveWinsOverPath_WhateverTheOrderOfTheOverloads() {
     for (List<Overload> overloads : orders(NUMBER, NODES)) {
-      Match rejection = rejection(overloads, TEXT);
-      assertEquals(Match.Kind.PRIMITIVE, rejection.getKind(), overloads::toString);
+      Rejection rejection = rejection(overloads, TEXT);
+      assertEquals(Rejection.Kind.PRIMITIVE, rejection.getKind(), overloads::toString);
       assertEquals(NumericExpression.class, rejection.getRequired().getExpressionType(),
           overloads::toString);
     }
@@ -106,15 +106,15 @@ class MismatchDiagnosisTest {
 
   @Test
   void testNodeWhereAValueIsRequired_IsAPathFailure() {
-    assertEquals(Match.Kind.PATH, rejection(List.of(NUMBER), NODE).getKind());
+    assertEquals(Rejection.Kind.PATH, rejection(List.of(NUMBER), NODE).getKind());
   }
 
   @Test
   void testSequenceWhereASingleValueOfItsPrimitiveIsRequired_IsACardinalityFailure() {
-    Match rejection = ComparisonOperators.EQUAL.resolve(List.of(REPEATABLE_TEXT_FIELD, TEXT))
-        .getMismatch().getRejection();
+    Rejection rejection = ComparisonOperators.EQUAL
+        .mismatchOf(List.of(REPEATABLE_TEXT_FIELD, TEXT)).getRejection();
     assertEquals(0, rejection.getPosition());
-    assertEquals(Match.Kind.CARDINALITY, rejection.getKind());
+    assertEquals(Rejection.Kind.CARDINALITY, rejection.getKind());
   }
 
   @Test
@@ -122,10 +122,9 @@ class MismatchDiagnosisTest {
     for (List<TypedExpression> arguments : List.<List<TypedExpression>>of(
         List.of(REPEATABLE_TEXT_FIELD, NUMBER_LITERAL),
         List.of(NUMBER_LITERAL, REPEATABLE_TEXT_FIELD))) {
-      Match rejection =
-          ComparisonOperators.EQUAL.resolve(arguments).getMismatch().getRejection();
+      Rejection rejection = ComparisonOperators.EQUAL.mismatchOf(arguments).getRejection();
       assertEquals(1, rejection.getPosition(), arguments::toString);
-      assertEquals(Match.Kind.PRIMITIVE, rejection.getKind(), arguments::toString);
+      assertEquals(Rejection.Kind.PRIMITIVE, rejection.getKind(), arguments::toString);
     }
   }
 
@@ -133,10 +132,10 @@ class MismatchDiagnosisTest {
   void testSequenceOfDatesMinusADate_IsACardinalityFailure() {
     // The date - date overload fits but for the cardinality of the left operand, so that is
     // reported, not that the right operand must be a duration.
-    Match rejection = ArithmeticOperators.MINUS.resolve(List.of(REPEATABLE_DATE_FIELD, DATE))
-        .getMismatch().getRejection();
+    Rejection rejection = ArithmeticOperators.MINUS
+        .mismatchOf(List.of(REPEATABLE_DATE_FIELD, DATE)).getRejection();
     assertEquals(0, rejection.getPosition());
-    assertEquals(Match.Kind.CARDINALITY, rejection.getKind());
+    assertEquals(Rejection.Kind.CARDINALITY, rejection.getKind());
     assertEquals(DateExpression.class, rejection.getRequired().getExpressionType());
   }
 
@@ -145,21 +144,21 @@ class MismatchDiagnosisTest {
     assertEquals(
         "Operator '+' cannot take 'text' and 'number'. "
             + "Its left operand must be 'number', 'duration' or 'date'.",
-        ArithmeticOperators.PLUS.resolve(List.of(TEXT, NUMBER_LITERAL)).getMismatch()
-            .diagnose().describe());
+        ArithmeticOperators.PLUS.mismatchOf(List.of(TEXT, NUMBER_LITERAL)).diagnose()
+            .describe());
   }
 
   @Test
-  void testArityMismatch_HasNoRejection() {
-    Mismatch mismatch = StringFunctions.SUBSTRING.resolve(List.of(TEXT)).getMismatch();
-    assertThrows(IllegalStateException.class, mismatch::getRejection);
+  void testArityMismatch_HasNoMismatch() {
+    assertThrows(IllegalArgumentException.class,
+        () -> StringFunctions.SUBSTRING.mismatchOf(List.of(TEXT)));
   }
 
-  private static Match rejection(final List<Overload> overloads,
+  private static Rejection rejection(final List<Overload> overloads,
       final TypedExpression... arguments) {
-    Resolution resolution = new TestBuiltIn(overloads).resolve(List.of(arguments));
-    assertFalse(resolution.isResolved());
-    return resolution.getMismatch().getRejection();
+    BuiltIn builtIn = new TestBuiltIn(overloads);
+    assertTrue(builtIn.resolve(List.of(arguments)).isEmpty());
+    return builtIn.mismatchOf(List.of(arguments)).getRejection();
   }
 
   /**

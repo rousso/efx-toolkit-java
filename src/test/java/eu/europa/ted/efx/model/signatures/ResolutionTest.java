@@ -172,9 +172,7 @@ class ResolutionTest {
 
   @Test
   void testTextPlusNumber_IsRejectedAtTheTextByEveryOverload() {
-    Mismatch mismatch = mismatch(ArithmeticOperators.PLUS, TEXT, NUMBER);
-    assertFalse(mismatch.isArityMismatch());
-    assertEquals(List.of(0, 0, 0, 0), positions(mismatch));
+    assertEquals(List.of(0, 0, 0, 0), positions(mismatch(ArithmeticOperators.PLUS, TEXT, NUMBER)));
   }
 
   @Test
@@ -207,12 +205,12 @@ class ResolutionTest {
 
   @Test
   void testSubstringOfOneArgument_IsAnArityMismatch() {
-    assertTrue(mismatch(StringFunctions.SUBSTRING, TEXT).isArityMismatch());
+    assertFalse(StringFunctions.SUBSTRING.takes(1));
   }
 
   @Test
   void testConcatOfNoArgument_IsAnArityMismatch() {
-    assertTrue(mismatch(StringFunctions.CONCAT).isArityMismatch());
+    assertFalse(StringFunctions.CONCAT.takes(0));
   }
 
   @Test
@@ -246,15 +244,14 @@ class ResolutionTest {
   }
 
   @Test
-  void testMismatch_HasNoParameterList() {
-    Resolution resolution = ArithmeticOperators.PLUS.resolve(List.of(TEXT, NUMBER));
-    assertThrows(IllegalStateException.class, resolution::getParameters);
+  void testTextPlusNumber_HasNoResolution() {
+    assertTrue(ArithmeticOperators.PLUS.resolve(List.of(TEXT, NUMBER)).isEmpty());
   }
 
   @Test
-  void testResolution_HasNoMismatch() {
-    Resolution resolution = ArithmeticOperators.PLUS.resolve(List.of(NUMBER, NUMBER));
-    assertThrows(IllegalStateException.class, resolution::getMismatch);
+  void testNumberPlusNumber_HasNoMismatch() {
+    assertThrows(IllegalArgumentException.class,
+        () -> ArithmeticOperators.PLUS.mismatchOf(List.of(NUMBER, NUMBER)));
   }
 
   @Test
@@ -267,13 +264,13 @@ class ResolutionTest {
   @Test
   void testMoreSpecificOverload_IsChosenForASingleValue() {
     assertEquals(SingleOrSequenceBuiltIn.INSTANCE.getOverloads().get(0).getSignature()
-        .getParameters(), SingleOrSequenceBuiltIn.INSTANCE.resolve(List.of(TEXT)).getParameters());
+        .getParameters(), resolve(SingleOrSequenceBuiltIn.INSTANCE, TEXT).getParameters());
   }
 
   @Test
   void testSequenceOverload_IsChosenForASequence() {
     assertEquals(SingleOrSequenceBuiltIn.INSTANCE.getOverloads().get(1).getSignature()
-        .getParameters(), SingleOrSequenceBuiltIn.INSTANCE.resolve(List.of(TEXTS)).getParameters());
+        .getParameters(), resolve(SingleOrSequenceBuiltIn.INSTANCE, TEXTS).getParameters());
   }
 
   @Test
@@ -283,9 +280,8 @@ class ResolutionTest {
   }
 
   private static Resolution resolve(final BuiltIn builtIn, final TypedExpression... arguments) {
-    Resolution resolution = builtIn.resolve(List.of(arguments));
-    assertTrue(resolution.isResolved(), () -> resolution.getMismatch().toString());
-    return resolution;
+    return builtIn.resolve(List.of(arguments))
+        .orElseThrow(() -> new AssertionError(builtIn.mismatchOf(List.of(arguments))));
   }
 
   private static BooleanExpression composed(final BuiltIn builtIn,
@@ -299,13 +295,12 @@ class ResolutionTest {
   }
 
   private static Mismatch mismatch(final BuiltIn builtIn, final TypedExpression... arguments) {
-    Resolution resolution = builtIn.resolve(List.of(arguments));
-    assertFalse(resolution.isResolved());
-    return resolution.getMismatch();
+    assertTrue(builtIn.resolve(List.of(arguments)).isEmpty());
+    return builtIn.mismatchOf(List.of(arguments));
   }
 
   private static List<Integer> positions(final Mismatch mismatch) {
-    return mismatch.getRejections().stream().map(Match::getPosition)
+    return mismatch.getRejections().stream().map(Rejection::getPosition)
         .collect(Collectors.toList());
   }
 }
