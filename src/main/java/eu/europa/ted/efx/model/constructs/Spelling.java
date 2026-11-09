@@ -50,7 +50,7 @@ public final class Spelling {
   }
 
   /**
-   * @return what a type error calls what was written: "Function 'string'" or
+   * @return how a type error names what was written: "Function 'string'" or
    *         "Operator ':preferredLanguage'"
    */
   public String describe() {
@@ -61,7 +61,7 @@ public final class Spelling {
   /**
    * @param position the position of an argument
    * @param count the number of arguments
-   * @return what a type error calls the argument at that position: the arguments of a function by
+   * @return how a type error names the argument at that position: the arguments of a function by
    *         their position, such as "2nd argument"; the operands of an operator, "operand", or
    *         "left operand" and "right operand"
    */

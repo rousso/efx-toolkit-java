@@ -11,8 +11,8 @@ import eu.europa.ted.efx.model.types.EfxDataType;
  * invoked as {@code ?name(...)}, or a template, invoked as {@code invoke name(...)}.
  *
  * <p>An invocable is a {@link Construct} with one parameter list, its declared parameters, so
- * that an invocation of it is checked as a call of a built-in is. The caller translates the
- * invocation from the converted arguments.</p>
+ * that a call of it is checked as a call of a built-in is. The translator translates the call
+ * from the converted arguments.</p>
  */
 public abstract class Invocable extends Identifier implements Construct {
 

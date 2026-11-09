@@ -57,8 +57,8 @@ import eu.europa.ted.efx.model.types.EfxTypeLattice;
  * {@code PATH}: the reference it gives is of the class of the reference it takes, the one on the
  * right for a context override.</p>
  *
- * <p>A type error calls it by its name and its arguments by the names of its parameters, numbered
- * among the items of a list.</p>
+ * <p>A type error gives its name, and names its arguments by the names of its parameters,
+ * numbered among the items of a list.</p>
  */
 class ExpressionConstruct implements Composable {
 

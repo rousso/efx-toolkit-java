@@ -108,7 +108,7 @@ public class Parameters<P extends Parameter> extends LinkedList<P> {
   }
 
   /**
-   * Says what a type error calls the argument at a position: the name of its parameter, numbered
+   * Says how a type error names the argument at a position: the name of its parameter, numbered
    * by position among the arguments of a variadic tail that takes more than one.
    *
    * @param position the position of an argument the parameter list {@link #takes}

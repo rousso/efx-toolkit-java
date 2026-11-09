@@ -23,16 +23,21 @@ import eu.europa.ted.efx.model.expressions.TypedExpression;
  * A construct as a type check sees it: the parameter lists its arguments are checked against, and
  * the words a type error uses for it and for each of its arguments.
  *
+ * <p>A <em>call</em> is one place in EFX where a construct is written with its arguments, such as
+ * {@code substring($s, 1, 3)}, {@code $a == $b}, {@code if $c then 1 else 2} or
+ * {@code invoke greeting('World')}. The construct checks the type of each argument against what
+ * it takes at that position.</p>
+ *
  * <p>Every construct is checked this way. A {@link Composable} also translates its calls, with
  * the overload that takes them: a built-in, a construct that the grammar writes inside an
- * expression, or a function declared in EFX. Any other construct, such as a template or the condition of a
- * rule, is only checked: its arguments are {@link #match matched} against its parameter lists,
- * and what it is part of translates them.</p>
+ * expression, or a function declared in EFX. Any other construct, such as a template or the
+ * condition of a rule, is only checked: its arguments are {@link #match matched} against its
+ * parameter lists, and what it is part of translates them.</p>
  */
 public interface Construct {
 
   /**
-   * @return what a type error calls the construct, such as "Operator '+'",
+   * @return how a type error names the construct, such as "Operator '+'",
    *         "Function 'substring'", "Template 'greeting'" or "Predicate"
    */
   String describe();
@@ -40,7 +45,7 @@ public interface Construct {
   /**
    * @param position the position of an argument
    * @param count the number of arguments of the call
-   * @return what a type error calls the argument at that position, such as "right operand",
+   * @return how a type error names the argument at that position, such as "right operand",
    *         "2nd argument" or "condition"
    */
   String roleOf(int position, int count);

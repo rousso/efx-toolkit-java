@@ -40,9 +40,9 @@ public final class Diagnosis {
   private final List<String> suggestions;
 
   /**
-   * @param construct what the error calls the construct that rejects an argument, such as
+   * @param construct how the error names the construct that rejects an argument, such as
    *        "Operator '=='"
-   * @param role what it calls the argument it rejects, such as "right operand"
+   * @param role how it names the argument it rejects, such as "right operand"
    * @param arguments all its arguments, in order, as it read them
    * @param requirements what the argument it rejects must be, each as a message says it: a type in
    *        quotes, such as 'text', or a phrase, such as "a field reference"
@@ -53,9 +53,9 @@ public final class Diagnosis {
   }
 
   /**
-   * @param construct what the error calls the construct that rejects an argument, such as
+   * @param construct how the error names the construct that rejects an argument, such as
    *        "Operator '=='"
-   * @param role what it calls the argument it rejects, such as "right operand"
+   * @param role how it names the argument it rejects, such as "right operand"
    * @param arguments all its arguments, in order, as it read them
    * @param requirements what the argument it rejects must be, each as a message says it: a type in
    *        quotes, such as 'text', or a phrase, such as "a field reference"

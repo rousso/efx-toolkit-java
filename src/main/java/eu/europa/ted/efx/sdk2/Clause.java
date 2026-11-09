@@ -31,9 +31,9 @@ import eu.europa.ted.efx.model.constructs.Parameters;
  * the source of an iterator.
  *
  * <p>A clause only checks its expression: what it belongs to translates the expression, converted
- * to the parameter of the clause. A type error calls the clause by its name and its expression by
- * the name of its parameter. The fixed clauses are constants where they are written; those named
- * after what a declaration writes are made for each one.</p>
+ * to the parameter of the clause. A type error gives the name of the clause, and names its
+ * expression by the name of its parameter. The fixed clauses are constants where they are
+ * written; those named after what a declaration writes are made for each one.</p>
  */
 final class Clause implements Construct {
 

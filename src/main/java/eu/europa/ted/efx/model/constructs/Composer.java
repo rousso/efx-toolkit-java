@@ -21,8 +21,8 @@ import eu.europa.ted.efx.model.expressions.scalar.NumericExpression;
 import eu.europa.ted.efx.model.expressions.sequence.SequenceExpression;
 
 /**
- * Translates a call of an {@link Overload}: it calls the {@link ScriptGenerator} method of the
- * overload with the converted {@link Arguments}.
+ * Translates a call of an {@link Overload}: it gives the converted {@link Arguments} to the
+ * {@link ScriptGenerator} method of the overload.
  *
  * <p>An overload of a built-in or of an expression construct writes its composer in the shape of
  * its {@link Signature}, one of the five nested here: {@link Nullary}, {@link Unary},
