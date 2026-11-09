@@ -107,15 +107,16 @@ class ExpressionConstruct implements Composable {
   };
 
   /**
-   * An index after a field or a node: the element at a position of the whole sequence. It puts
-   * the sequence in parentheses, so that it selects from the whole sequence; its argument is the
-   * path as written, which an error names.
+   * An index after a field or a node: the element at a position of the whole sequence the path
+   * selects. The visitor gives it the path in parentheses, so that it selects from the whole
+   * sequence, and of the class it is written with, which an error names; the index takes it as
+   * that sequence.
    */
   static final ExpressionConstruct INDEX_IN_PATH = new ExpressionConstruct("Index",
       overload(signature(parameter("sequence", PATH), parameter("position", NUMBER))
           .returning(PATH),
           (script, sequence, position) -> script.composeIndexer(
-              inParentheses(script, sequence, sequenceClassOf(sequence)), position,
+              TypedExpression.from(sequence, sequenceClassOf(sequence)), position,
               elementClassOf(sequence))));
 
   /**
@@ -246,8 +247,11 @@ class ExpressionConstruct implements Composable {
 
   /**
    * Gives the class of the whole sequence a path selects: a path of a sequence of its primitive.
+   *
+   * @param path the path of a field or a node
+   * @return the class of the sequence an index after the path selects from
    */
-  private static Class<? extends SequencePath> sequenceClassOf(final PathExpression path) {
+  static Class<? extends SequencePath> sequenceClassOf(final PathExpression path) {
     return SequencePath.fromEfxDataType.get(EfxTypeLattice.toPrimitive(path.getDataType()));
   }
 

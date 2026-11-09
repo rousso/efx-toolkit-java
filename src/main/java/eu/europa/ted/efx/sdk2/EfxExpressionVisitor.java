@@ -76,7 +76,6 @@ import eu.europa.ted.efx.model.expressions.sequence.DateSequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.DurationSequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.NumericSequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.SequenceExpression;
-import eu.europa.ted.efx.model.expressions.sequence.SequencePath;
 import eu.europa.ted.efx.model.expressions.sequence.StringSequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.TimeSequenceExpression;
 import eu.europa.ted.efx.model.identifiers.Dictionary;
@@ -85,7 +84,6 @@ import eu.europa.ted.efx.model.identifiers.Invocable;
 import eu.europa.ted.efx.model.identifiers.ParsedParameter;
 import eu.europa.ted.efx.model.identifiers.Variable;
 import eu.europa.ted.efx.model.types.EfxDataType;
-import eu.europa.ted.efx.model.types.EfxTypeLattice;
 import eu.europa.ted.efx.model.types.EfxTypeTokenLookup;
 import eu.europa.ted.efx.model.types.FieldTypes;
 import eu.europa.ted.efx.sdk2.EfxParser.*;
@@ -780,8 +778,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
   /**
    * An index after a field or a node: the element at a position in the whole sequence the path
    * selects, rather than at that position among the children of each parent, which a predicate on
-   * the last step of the path would select. So the index puts the path in parentheses. The
-   * position is read once, where the expression stands: see {@link #elementAt}.
+   * the last step of the path would select: see {@link #wholeSequence}. The position is read once,
+   * where the expression stands: see {@link #elementAt}.
    *
    * @param path the path of the field or the node
    * @param origin the field or the node
@@ -794,21 +792,21 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
     final Reads reads = this.readsInCurrentContext();
     final int readsBefore = reads.ofContext();
     final Subexpression<?> index = this.visit(position);
-    final Class<? extends SequencePath> elementsType =
-        SequencePath.fromEfxDataType.get(EfxTypeLattice.toPrimitive(path.getDataType()));
     final Resolution indexing = this.resolved(ExpressionConstruct.INDEX_IN_PATH,
-        List.of(new Subexpression<>(path, origin), index), List.of(path, index.value()),
-        at -> position, TypeMismatchException::cannotConvert);
+        List.of(new Subexpression<>(path, origin), index),
+        List.of(this.wholeSequence(path), index.value()), at -> position,
+        TypeMismatchException::cannotConvert);
     return new Subexpression<>(
         PathExpression.class.cast(this.elementAt(ExpressionConstruct.INDEX_IN_PATH, indexing,
-            elementsType, reads.ofContext() > readsBefore)),
+            ExpressionConstruct.sequenceClassOf(path), reads.ofContext() > readsBefore)),
         origin);
   }
 
   /**
    * An index after a value: the value at a position in the sequence of its values. A single value
-   * is a sequence of one, and a path is put in parentheses, so that the index selects from the
-   * whole sequence. The position is read once, where the expression stands: see
+   * is a sequence of one, and a value that is still a path, as an attribute or a field context
+   * variable is, selects from its whole sequence: see {@link #wholeSequence}. The position is read
+   * once, where the expression stands: see
    * {@link #elementAt}. Here the target language would read it for each value if it reads the
    * context or the root, by a path or by a lookup in a dictionary, since a value has no element
    * that a path or a lookup could start from.
@@ -825,10 +823,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
     final int readsBefore = reads.all();
     final Subexpression<?> index = this.visit(position);
     final ParserRuleContext indexed = this.translation.stack().peekParserContext();
-    final TypedExpression list =
-        given instanceof PathExpression ? this.inParentheses(given, given.getClass()) : given;
     final Resolution indexing = this.resolved(ExpressionConstruct.INDEX_IN_VALUE,
-        List.of(sequence, index), List.of(list, index.value()),
+        List.of(sequence, index), List.of(this.wholeSequence(given), index.value()),
         at -> at == 0 ? indexed : position, TypeMismatchException::cannotConvert);
     return this.subexpression(this.elementAt(ExpressionConstruct.INDEX_IN_VALUE, indexing,
         indexing.getArguments().sequenceTypeAt(0), reads.all() > readsBefore));
@@ -945,6 +941,20 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
     return this.translation.efxContext().isEmpty() ? this.readsWithoutContext
         : this.readsInContexts.computeIfAbsent(this.translation.efxContext().peek(),
             context -> new Reads());
+  }
+
+  /**
+   * Gives the sequence an index selects from. A path is put in parentheses, so that the index
+   * selects from the whole sequence it selects, rather than among the children of each parent,
+   * which a predicate on its last step would select from. The path keeps the class it is written
+   * with, which a type error names: {@code BT-00-Text[at TRUE]} names {@code 'text'}.
+   *
+   * @param sequence the field, the node or the value the index is written after
+   * @return the path in parentheses, or the value as it is
+   */
+  private TypedExpression wholeSequence(final TypedExpression sequence) {
+    return sequence instanceof PathExpression ? this.inParentheses(sequence, sequence.getClass())
+        : sequence;
   }
 
   private <T extends TypedExpression> T inParentheses(final TypedExpression expression,
