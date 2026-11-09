@@ -27,8 +27,8 @@ import eu.europa.ted.efx.model.constructs.Parameters;
 /**
  * A part of a statement or a declaration that takes an expression of a given type: the condition
  * of a rule, such as {@code WHEN}; a part of a template, such as its hyperlink or a part of a
- * label; the expression of {@code COMPUTE}; the value of a variable or the body of a function; the
- * source of an iterator; and the left side of {@code ::}, the one part of it that is checked.
+ * label; the expression of {@code COMPUTE}; the value of a variable or the body of a function; and
+ * the source of an iterator.
  *
  * <p>A clause only checks its expression: what it belongs to translates the expression, converted
  * to the parameter of the clause. A type error calls the clause by its name and its expression by

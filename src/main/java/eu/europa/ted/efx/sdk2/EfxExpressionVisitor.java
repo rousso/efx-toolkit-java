@@ -128,13 +128,6 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    */
   private static final String INDEX_VARIABLE = Translation.RESERVED_PREFIX + "index";
 
-  /**
-   * The left side of {@code ::}, which must name a context: the one part of a context override
-   * that is checked, since its right side is a reference read from that context.
-   */
-  private static final Clause CONTEXT_OVERRIDE =
-      Clause.of(Construct.operatorName("::"), parameter("left operand", ParameterType.PATH));
-
   private final Translation translation;
   private final Origin<TypedExpression> none;
   private final IteratorDeclarations iteratorDeclarations = new IteratorDeclarations();
@@ -704,14 +697,16 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
 
   private Context contextBefore(final ExpressionContext left) {
     final Subexpression<?> operand = this.visit(left);
-    return operand.context().orElseThrow(() -> this.unreadable(CONTEXT_OVERRIDE,
-        List.of(operand), List.of(operand.expression()), 0, left));
+    return operand.context().orElseThrow(() -> this.unreadable(
+        ExpressionConstruct.CONTEXT_OVERRIDE, List.of(operand), List.of(operand.expression()), 0,
+        left));
   }
 
   /**
    * Joins the path to the context of a context override with the path of the reference from that
-   * context. The joined reference may give several values if either path may select several
-   * nodes. A context variable holds one node, so its own path never does.
+   * context, which the override composes. The joined reference may give several values if either
+   * path may select several nodes, so the override is given the reference as it continues from
+   * the context. A context variable holds one node, so its own path never does.
    *
    * @param context the path to the context, from the context the override is written in
    * @param reference the path of the reference, from the context of the override
@@ -719,7 +714,9 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    */
   private PathExpression joinReference(final PathExpression context,
       final PathExpression reference) {
-    return continuing(context, this.translation.script().joinPaths(context, reference));
+    return PathExpression.class.cast(ExpressionConstruct.CONTEXT_OVERRIDE
+        .resolve(List.of(context, continuing(context, reference))).orElseThrow()
+        .compose(this.translation.script()));
   }
 
   // #endregion Steps after a reference ---------------------------------------

@@ -28,6 +28,7 @@ import java.util.List;
 import eu.europa.ted.efx.interfaces.ScriptGenerator;
 import eu.europa.ted.efx.model.constructs.Composable;
 import eu.europa.ted.efx.model.constructs.Composer;
+import eu.europa.ted.efx.model.constructs.Construct;
 import eu.europa.ted.efx.model.constructs.Overload;
 import eu.europa.ted.efx.model.constructs.ParameterType;
 import eu.europa.ted.efx.model.expressions.PathExpression;
@@ -42,8 +43,9 @@ import eu.europa.ted.efx.model.types.EfxTypeLattice;
 /**
  * A construct that the grammar writes inside an expression, rather than one the catalogue holds:
  * the parentheses, the conditional and the list; an iteration and a quantifier; a predicate, an
- * index and a lookup in a dictionary. Like a built-in, it has an {@link Overload} for each way it
- * can be written: a signature, and the composer that translates what the signature takes.
+ * index, a lookup in a dictionary and a context override. Like a built-in, it has an
+ * {@link Overload} for each way it can be written: a signature, and the composer that translates
+ * what the signature takes.
  *
  * <p>The visitor translates the parts of the construct first, in the scope or the context the
  * construct sets up, such as the variables of an iteration or the element a predicate reads; the
@@ -52,7 +54,8 @@ import eu.europa.ted.efx.model.types.EfxTypeLattice;
  * for each use, with them.</p>
  *
  * <p>A construct that gives a reference, such as a predicate, says only that it gives one,
- * {@code PATH}: the reference it gives is of the class of the reference it takes.</p>
+ * {@code PATH}: the reference it gives is of the class of the reference it takes, the one on the
+ * right for a context override.</p>
  *
  * <p>A type error calls it by its name and its arguments by the names of its parameters, numbered
  * among the items of a list.</p>
@@ -121,6 +124,16 @@ class ExpressionConstruct implements Composable {
           .returning(T),
           (script, sequence, position) -> script.composeIndexer(sequence, position,
               boundClassOf(T, sequence))));
+
+  /**
+   * A context override, {@code ::}: a field or a node read from the context its left side names.
+   * The visitor gives it the path to that context and the path of the field or node from there,
+   * typed as it continues from the context; the override joins them.
+   */
+  static final ExpressionConstruct CONTEXT_OVERRIDE =
+      new ExpressionConstruct(Construct.operatorName("::"),
+          overload(signature(parameter("left operand", PATH), parameter("right operand", PATH))
+              .returning(PATH), ScriptGenerator::joinPaths));
 
   private final String name;
   private final List<Overload> overloads;

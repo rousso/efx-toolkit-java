@@ -28,6 +28,7 @@ import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.expressions.iteration.IteratorListExpression;
 import eu.europa.ted.efx.model.expressions.scalar.BooleanExpression;
 import eu.europa.ted.efx.model.expressions.scalar.DateExpression;
+import eu.europa.ted.efx.model.expressions.scalar.NodePath;
 import eu.europa.ted.efx.model.expressions.scalar.NumericExpression;
 import eu.europa.ted.efx.model.expressions.scalar.StringExpression;
 import eu.europa.ted.efx.model.expressions.scalar.StringPath;
@@ -123,6 +124,12 @@ class ExpressionConstructTest {
   void testPredicate_OnANode_ComposesThePredicateOnANode() {
     assertEquals("composeNodeReferenceWithPredicate",
         composerOfPredicateOn(value(NodeSequencePath.class)));
+  }
+
+  @Test
+  void testContextOverride_GivesAPathOfTheClassOfItsRightOperand() {
+    assertComposed(StringSequencePath.class, ExpressionConstruct.CONTEXT_OVERRIDE,
+        value(NodePath.class), value(StringSequencePath.class));
   }
 
   /**
