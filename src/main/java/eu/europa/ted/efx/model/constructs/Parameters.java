@@ -48,7 +48,7 @@ public class Parameters<P extends Parameter> extends LinkedList<P> {
    * primitive, or not the path required, before a sequence where a single value is required, and
    * then by position.
    */
-  private static final Comparator<Rejection> REPORTING_ORDER =
+  private static final Comparator<Rejection> ARGUMENT_ORDER =
       Comparator
           .comparing((Rejection rejection) -> rejection.getKind() == Rejection.Kind.CARDINALITY)
           .thenComparingInt(Rejection::getPosition);
@@ -168,8 +168,8 @@ public class Parameters<P extends Parameter> extends LinkedList<P> {
   }
 
   /**
-   * Gives the argument of a call that the parameter list {@link #takes} that it reports when it
-   * does not {@link #match} them.
+   * Gives the rejection that the parameter list reports when it does not {@link #match} the
+   * arguments of a call that it {@link #takes}.
    *
    * <p>Every argument is checked before one is reported, and a wrong primitive or path is reported
    * before a wrong cardinality: the first argument of another primitive than its parameter's, or
@@ -178,8 +178,9 @@ public class Parameters<P extends Parameter> extends LinkedList<P> {
    * whichever of its arguments is the sequence.</p>
    *
    * @param arguments the translated arguments of the call, as many as the list takes
-   * @return the argument to report: the one at the first position of a {@code T} it cannot bind,
-   *         or the one the reporting order puts first; nothing if the list matches the arguments
+   * @return the rejection to report: of the argument at the first position of a {@code T} it
+   *         cannot bind, or of the one the argument order puts first; nothing if the list matches
+   *         the arguments
    * @throws IllegalArgumentException if the parameter list does not take that many arguments
    */
   public Optional<Rejection> rejectionOf(final List<? extends TypedExpression> arguments) {
@@ -190,7 +191,7 @@ public class Parameters<P extends Parameter> extends LinkedList<P> {
       return Optional.of(
           new Rejection(this, position, this.typeAt(position), arguments.get(position)));
     }
-    return bound.get().rejectionsOf(this, arguments).min(REPORTING_ORDER);
+    return bound.get().rejectionsOf(this, arguments).min(ARGUMENT_ORDER);
   }
 
   private void requireTaken(final List<? extends TypedExpression> arguments) {

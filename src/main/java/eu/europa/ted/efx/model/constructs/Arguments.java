@@ -19,8 +19,8 @@ import eu.europa.ted.efx.model.expressions.sequence.SequenceExpression;
  * a function or a template declared in EFX. The arguments of a resolved call are made by
  * {@link Parameters#match}: each is converted to its parameter, with {@code T} bound. The
  * overload of a {@link Composable} reads them as the expression classes its signature gives them,
- * and what a clause belongs to with the typed accessors. A template block passes its arguments
- * down to the blocks it holds.</p>
+ * and what a clause belongs to reads them with the typed accessors. A template block passes its
+ * arguments down to the blocks it holds.</p>
  *
  * @param <P> the kind of parameter: declared by a signature, or parsed with a function or a
  *        template declared in EFX

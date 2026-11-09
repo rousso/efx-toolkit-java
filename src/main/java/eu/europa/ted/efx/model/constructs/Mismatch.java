@@ -34,9 +34,10 @@ import eu.europa.ted.efx.model.expressions.TypedExpression;
 public final class Mismatch {
 
   /**
-   * The order in which the rejections explain a mismatch: see {@link #getRejection}.
+   * The order in which the rejections of the parameter lists explain a mismatch: see
+   * {@link #getRejection}.
    */
-  private static final Comparator<Rejection> REPORTING_ORDER = Comparator
+  private static final Comparator<Rejection> LIST_ORDER = Comparator
       .comparing((Rejection rejection) -> rejection.getKind() != Rejection.Kind.CARDINALITY)
       .thenComparing(Comparator.comparingInt(Rejection::getPosition).reversed())
       .thenComparing(Rejection::getKind);
@@ -54,7 +55,7 @@ public final class Mismatch {
     this.construct = construct;
     this.arguments = List.copyOf(arguments);
     this.rejections = List.copyOf(rejections);
-    this.rejection = rejections.stream().min(REPORTING_ORDER).orElseThrow(
+    this.rejection = rejections.stream().min(LIST_ORDER).orElseThrow(
         () -> new IllegalArgumentException("A mismatch of " + construct.describe()
             + " needs a rejection"));
   }
