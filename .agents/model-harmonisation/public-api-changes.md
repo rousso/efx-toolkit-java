@@ -173,3 +173,7 @@ H21 renames the package `model.signatures` to `model.constructs`. Measured with 
 | `model.signatures.Signature.Variadic` | `model.constructs.Signature.Variadic` |
 | `model.signatures.Signature.Variadic.Builder` | `model.constructs.Signature.Variadic.Builder` |
 | `model.signatures.Spelling` | `model.constructs.Spelling` |
+
+## `Parameter.Impl` (H24)
+
+H24 renames `model.constructs.BuiltInParameter<E>` to `model.constructs.Parameter.Impl<E>`, nested in the interface it implements; its members are unchanged (`parameter(String, ParameterType<E>)`, `getName`, `getType`, `toString`). The class is not on develop, so the CHANGELOG does not list it.

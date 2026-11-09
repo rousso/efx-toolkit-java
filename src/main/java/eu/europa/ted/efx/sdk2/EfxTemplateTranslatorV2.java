@@ -13,7 +13,7 @@
  */
 package eu.europa.ted.efx.sdk2;
 
-import static eu.europa.ted.efx.model.constructs.BuiltInParameter.parameter;
+import static eu.europa.ted.efx.model.constructs.Parameter.Impl.parameter;
 import static eu.europa.ted.efx.model.constructs.ParameterType.INDICATOR;
 import static eu.europa.ted.efx.model.constructs.ParameterType.NUMBER;
 import static eu.europa.ted.efx.model.constructs.ParameterType.TEXT;

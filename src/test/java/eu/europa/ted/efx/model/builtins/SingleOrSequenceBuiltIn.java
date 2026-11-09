@@ -13,8 +13,8 @@
  */
 package eu.europa.ted.efx.model.builtins;
 
-import static eu.europa.ted.efx.model.constructs.BuiltInParameter.parameter;
 import static eu.europa.ted.efx.model.constructs.Overload.overload;
+import static eu.europa.ted.efx.model.constructs.Parameter.Impl.parameter;
 import static eu.europa.ted.efx.model.constructs.ParameterType.T;
 import static eu.europa.ted.efx.model.constructs.ParameterType.T_SEQUENCE;
 import static eu.europa.ted.efx.model.constructs.Signature.signature;

@@ -13,15 +13,15 @@
  */
 package eu.europa.ted.efx.sdk2;
 
-import static eu.europa.ted.efx.model.constructs.BuiltInParameter.parameter;
+import static eu.europa.ted.efx.model.constructs.Parameter.Impl.parameter;
 import static eu.europa.ted.efx.model.constructs.ParameterType.T;
 import static eu.europa.ted.efx.model.constructs.ParameterType.T_SEQUENCE;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
-import eu.europa.ted.efx.model.constructs.BuiltInParameter;
 import eu.europa.ted.efx.model.constructs.Construct;
+import eu.europa.ted.efx.model.constructs.Parameter;
 import eu.europa.ted.efx.model.constructs.Parameters;
 
 /**
@@ -40,7 +40,7 @@ final class Clause implements Construct {
   private final String name;
   private final List<Parameters<?>> parameterLists;
 
-  private Clause(final String name, final BuiltInParameter<?>... parameters) {
+  private Clause(final String name, final Parameter.Impl<?>... parameters) {
     this.name = name;
     this.parameterLists = List.of(parameters).stream()
         .<Parameters<?>>map(parameter -> Parameters.of(List.of(parameter)))
@@ -52,7 +52,7 @@ final class Clause implements Construct {
    * @param parameter its parameter, such as {@code condition: INDICATOR}
    * @return the clause
    */
-  static Clause of(final String name, final BuiltInParameter<?> parameter) {
+  static Clause of(final String name, final Parameter.Impl<?> parameter) {
     return new Clause(name, parameter);
   }
 

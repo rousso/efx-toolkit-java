@@ -13,7 +13,7 @@
  */
 package eu.europa.ted.efx.sdk2;
 
-import static eu.europa.ted.efx.model.constructs.BuiltInParameter.parameter;
+import static eu.europa.ted.efx.model.constructs.Parameter.Impl.parameter;
 
 import java.util.ArrayList;
 import java.util.IdentityHashMap;

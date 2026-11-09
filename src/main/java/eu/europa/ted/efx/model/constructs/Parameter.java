@@ -13,9 +13,12 @@
  */
 package eu.europa.ted.efx.model.constructs;
 
+import eu.europa.ted.efx.model.expressions.TypedExpression;
+
 /**
  * A parameter: a name, and the type an argument given for it must have. A function or template
- * declared in EFX has the parameters parsed with it; a built-in has those its signatures declare.
+ * declared in EFX has the parameters parsed with it; a built-in, an expression construct or a
+ * clause has those its signature declares, each a {@link Impl}.
  */
 public interface Parameter {
 
@@ -28,4 +31,50 @@ public interface Parameter {
    * @return the type an argument given for this parameter must have
    */
   ParameterType<?> getType();
+
+  /**
+   * A parameter that a signature declares in code: a name and a {@link ParameterType}, which may
+   * mention {@code T}. The names of the parameters of a built-in function are those of the
+   * autocomplete catalogue, so that the catalogue can be derived from the signatures.
+   *
+   * @param <E> the expression class an argument given for it is converted to
+   */
+  final class Impl<E extends TypedExpression> implements Parameter {
+
+    private final String name;
+    private final ParameterType<E> type;
+
+    private Impl(final String name, final ParameterType<E> type) {
+      this.name = name;
+      this.type = type;
+    }
+
+    /**
+     * Declares a parameter.
+     *
+     * @param <E> the expression class of its type
+     * @param name the name of the parameter
+     * @param type the type of the parameter
+     * @return the parameter
+     */
+    public static <E extends TypedExpression> Impl<E> parameter(final String name,
+        final ParameterType<E> type) {
+      return new Impl<>(name, type);
+    }
+
+    @Override
+    public String getName() {
+      return this.name;
+    }
+
+    @Override
+    public ParameterType<E> getType() {
+      return this.type;
+    }
+
+    @Override
+    public String toString() {
+      return this.name + ": " + this.type;
+    }
+  }
 }

@@ -76,7 +76,7 @@ public class Signature {
    * @return a builder for the signature
    */
   public static <A extends TypedExpression> Unary.Builder<A> signature(
-      final BuiltInParameter<A> parameter) {
+      final Parameter.Impl<A> parameter) {
     return new Unary.Builder<>(parameter);
   }
 
@@ -90,7 +90,7 @@ public class Signature {
    * @return a builder for the signature
    */
   public static <A extends TypedExpression, B extends TypedExpression> Binary.Builder<A, B>
-      signature(final BuiltInParameter<A> first, final BuiltInParameter<B> second) {
+      signature(final Parameter.Impl<A> first, final Parameter.Impl<B> second) {
     return new Binary.Builder<>(first, second);
   }
 
@@ -106,8 +106,8 @@ public class Signature {
    * @return a builder for the signature
    */
   public static <A extends TypedExpression, B extends TypedExpression, C extends TypedExpression>
-      Ternary.Builder<A, B, C> signature(final BuiltInParameter<A> first,
-          final BuiltInParameter<B> second, final BuiltInParameter<C> third) {
+      Ternary.Builder<A, B, C> signature(final Parameter.Impl<A> first,
+          final Parameter.Impl<B> second, final Parameter.Impl<C> third) {
     return new Ternary.Builder<>(first, second, third);
   }
 
@@ -198,7 +198,7 @@ public class Signature {
        * @return a builder for the signature with that tail
        */
       public <V extends TypedExpression> Variadic.Builder<V> variadic(
-          final BuiltInParameter<V> tail) {
+          final Parameter.Impl<V> tail) {
         return new Variadic.Builder<>(tail);
       }
 
@@ -224,9 +224,9 @@ public class Signature {
   public static final class Unary<A extends TypedExpression, R extends TypedExpression>
       extends Signature {
 
-    private final BuiltInParameter<A> parameter;
+    private final Parameter.Impl<A> parameter;
 
-    private Unary(final BuiltInParameter<A> parameter, final ParameterType<R> result) {
+    private Unary(final Parameter.Impl<A> parameter, final ParameterType<R> result) {
       super(new Parameters<>(List.of(parameter), null), result);
       this.parameter = parameter;
     }
@@ -234,7 +234,7 @@ public class Signature {
     /**
      * @return the parameter
      */
-    public BuiltInParameter<A> getParameter() {
+    public Parameter.Impl<A> getParameter() {
       return this.parameter;
     }
 
@@ -245,9 +245,9 @@ public class Signature {
      */
     public static final class Builder<A extends TypedExpression> {
 
-      private final BuiltInParameter<A> parameter;
+      private final Parameter.Impl<A> parameter;
 
-      private Builder(final BuiltInParameter<A> parameter) {
+      private Builder(final Parameter.Impl<A> parameter) {
         this.parameter = parameter;
       }
 
@@ -274,10 +274,10 @@ public class Signature {
   public static final class Binary<A extends TypedExpression, B extends TypedExpression,
       R extends TypedExpression> extends Signature {
 
-    private final BuiltInParameter<A> first;
-    private final BuiltInParameter<B> second;
+    private final Parameter.Impl<A> first;
+    private final Parameter.Impl<B> second;
 
-    private Binary(final BuiltInParameter<A> first, final BuiltInParameter<B> second,
+    private Binary(final Parameter.Impl<A> first, final Parameter.Impl<B> second,
         final ParameterType<R> result) {
       super(new Parameters<>(List.of(first, second), null), result);
       this.first = first;
@@ -287,14 +287,14 @@ public class Signature {
     /**
      * @return the first parameter
      */
-    public BuiltInParameter<A> getFirst() {
+    public Parameter.Impl<A> getFirst() {
       return this.first;
     }
 
     /**
      * @return the second parameter
      */
-    public BuiltInParameter<B> getSecond() {
+    public Parameter.Impl<B> getSecond() {
       return this.second;
     }
 
@@ -306,10 +306,10 @@ public class Signature {
      */
     public static final class Builder<A extends TypedExpression, B extends TypedExpression> {
 
-      private final BuiltInParameter<A> first;
-      private final BuiltInParameter<B> second;
+      private final Parameter.Impl<A> first;
+      private final Parameter.Impl<B> second;
 
-      private Builder(final BuiltInParameter<A> first, final BuiltInParameter<B> second) {
+      private Builder(final Parameter.Impl<A> first, final Parameter.Impl<B> second) {
         this.first = first;
         this.second = second;
       }
@@ -338,12 +338,12 @@ public class Signature {
   public static final class Ternary<A extends TypedExpression, B extends TypedExpression,
       C extends TypedExpression, R extends TypedExpression> extends Signature {
 
-    private final BuiltInParameter<A> first;
-    private final BuiltInParameter<B> second;
-    private final BuiltInParameter<C> third;
+    private final Parameter.Impl<A> first;
+    private final Parameter.Impl<B> second;
+    private final Parameter.Impl<C> third;
 
-    private Ternary(final BuiltInParameter<A> first, final BuiltInParameter<B> second,
-        final BuiltInParameter<C> third, final ParameterType<R> result) {
+    private Ternary(final Parameter.Impl<A> first, final Parameter.Impl<B> second,
+        final Parameter.Impl<C> third, final ParameterType<R> result) {
       super(new Parameters<>(List.of(first, second, third), null), result);
       this.first = first;
       this.second = second;
@@ -353,21 +353,21 @@ public class Signature {
     /**
      * @return the first parameter
      */
-    public BuiltInParameter<A> getFirst() {
+    public Parameter.Impl<A> getFirst() {
       return this.first;
     }
 
     /**
      * @return the second parameter
      */
-    public BuiltInParameter<B> getSecond() {
+    public Parameter.Impl<B> getSecond() {
       return this.second;
     }
 
     /**
      * @return the third parameter
      */
-    public BuiltInParameter<C> getThird() {
+    public Parameter.Impl<C> getThird() {
       return this.third;
     }
 
@@ -381,12 +381,12 @@ public class Signature {
     public static final class Builder<A extends TypedExpression, B extends TypedExpression,
         C extends TypedExpression> {
 
-      private final BuiltInParameter<A> first;
-      private final BuiltInParameter<B> second;
-      private final BuiltInParameter<C> third;
+      private final Parameter.Impl<A> first;
+      private final Parameter.Impl<B> second;
+      private final Parameter.Impl<C> third;
 
-      private Builder(final BuiltInParameter<A> first, final BuiltInParameter<B> second,
-          final BuiltInParameter<C> third) {
+      private Builder(final Parameter.Impl<A> first, final Parameter.Impl<B> second,
+          final Parameter.Impl<C> third) {
         this.first = first;
         this.second = second;
         this.third = third;
@@ -416,9 +416,9 @@ public class Signature {
   public static final class Variadic<V extends TypedExpression, R extends TypedExpression>
       extends Signature {
 
-    private final BuiltInParameter<V> tail;
+    private final Parameter.Impl<V> tail;
 
-    private Variadic(final BuiltInParameter<V> tail, final ParameterType<R> result) {
+    private Variadic(final Parameter.Impl<V> tail, final ParameterType<R> result) {
       super(new Parameters<>(List.of(), tail), result);
       this.tail = tail;
     }
@@ -426,7 +426,7 @@ public class Signature {
     /**
      * @return the parameter every argument of the tail matches
      */
-    public BuiltInParameter<V> getTail() {
+    public Parameter.Impl<V> getTail() {
       return this.tail;
     }
 
@@ -437,9 +437,9 @@ public class Signature {
      */
     public static final class Builder<V extends TypedExpression> {
 
-      private final BuiltInParameter<V> tail;
+      private final Parameter.Impl<V> tail;
 
-      private Builder(final BuiltInParameter<V> tail) {
+      private Builder(final Parameter.Impl<V> tail) {
         this.tail = tail;
       }
 

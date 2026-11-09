@@ -13,7 +13,7 @@
  */
 package eu.europa.ted.efx.model.constructs;
 
-import static eu.europa.ted.efx.model.constructs.BuiltInParameter.parameter;
+import static eu.europa.ted.efx.model.constructs.Parameter.Impl.parameter;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -205,7 +205,7 @@ public class Parameters<P extends Parameter> extends LinkedList<P> {
    * @param primitive the value primitive {@code T} is bound to
    * @return the parameter list with every parameter type bound
    */
-  Parameters<BuiltInParameter<?>> bind(final Class<? extends EfxDataType.Primitive> primitive) {
+  Parameters<Parameter.Impl<?>> bind(final Class<? extends EfxDataType.Primitive> primitive) {
     return new Parameters<>(
         this.stream().map(parameter -> bound(parameter, primitive)).collect(Collectors.toList()),
         this.variadic == null ? null : bound(this.variadic, primitive));
@@ -279,7 +279,7 @@ public class Parameters<P extends Parameter> extends LinkedList<P> {
     return Stream.concat(this.stream(), this.getVariadic().stream());
   }
 
-  private static BuiltInParameter<?> bound(final Parameter parameter,
+  private static Parameter.Impl<?> bound(final Parameter parameter,
       final Class<? extends EfxDataType.Primitive> primitive) {
     return parameter(parameter.getName(), parameter.getType().bind(primitive));
   }
