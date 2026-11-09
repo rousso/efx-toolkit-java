@@ -747,7 +747,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    * node, as each element the path selects, and keeps the elements for which it holds.
    *
    * @param path the path of the field or the node
-   * @param origin the field or the node, which gives the predicate on what it is
+   * @param origin the field or the node
    * @param condition the condition of the predicate
    * @return the elements the predicate keeps, with the origin of the field or node
    * @throws TypeMismatchException if the condition is not an indicator
@@ -756,9 +756,9 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
       final ExpressionContext condition) {
     origin.pushElementContext();
     final Subexpression<?> test = this.visit(condition);
-    final PathExpression selected = PathExpression.class.cast(this.resolved(origin.predicate(),
-        List.of(new Subexpression<>(path, origin), test), List.of(path, test.value()),
-        position -> condition, TypeMismatchException::cannotConvert)
+    final PathExpression selected = PathExpression.class.cast(this.resolved(
+        ExpressionConstruct.PREDICATE, List.of(new Subexpression<>(path, origin), test),
+        List.of(path, test.value()), position -> condition, TypeMismatchException::cannotConvert)
         .compose(this.translation.script()));
     this.readsInContexts.remove(this.translation.efxContext().pop());
     return new Subexpression<>(selected, origin);
@@ -766,9 +766,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
 
   /**
    * A predicate after a value, which is rejected: a value has no elements that the condition could
-   * be read from. The condition is translated only so that the error names its type. The
-   * predicates on a field and on a node take the same parameters and are named alike, so the
-   * error is that of either.
+   * be read from. The condition is translated only so that the error names its type.
    *
    * @param sequence the value
    * @param condition the condition of the predicate
@@ -777,7 +775,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
   TypeMismatchException predicateOnValue(final Subexpression<?> sequence,
       final ExpressionContext condition) {
     final Subexpression<?> test = this.visit(condition);
-    return this.unreadable(ExpressionConstruct.PREDICATE_ON_FIELD, List.of(sequence, test),
+    return this.unreadable(ExpressionConstruct.PREDICATE, List.of(sequence, test),
         List.of(sequence.expression(), test.value()), 0,
         this.translation.stack().peekParserContext());
   }

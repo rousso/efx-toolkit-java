@@ -251,11 +251,6 @@ abstract class Origin<E extends TypedExpression> {
      * or the node, as each element it selects.
      */
     abstract void pushElementContext();
-
-    /**
-     * @return the predicate on what the path is, a field or a node
-     */
-    abstract ExpressionConstruct predicate();
   }
 
   /**
@@ -305,11 +300,6 @@ abstract class Origin<E extends TypedExpression> {
     }
 
     @Override
-    ExpressionConstruct predicate() {
-      return ExpressionConstruct.PREDICATE_ON_FIELD;
-    }
-
-    @Override
     Optional<TypeMismatchException> sequenceError(final Diagnosis diagnosis) {
       if (FieldTypes.TEXT_MULTILINGUAL.getName()
           .equals(this.translator.translation().symbols().getTypeOfField(this.fieldId))) {
@@ -343,11 +333,6 @@ abstract class Origin<E extends TypedExpression> {
     @Override
     void pushElementContext() {
       this.translator.translation().efxContext().pushNodeContext(this.nodeId);
-    }
-
-    @Override
-    ExpressionConstruct predicate() {
-      return ExpressionConstruct.PREDICATE_ON_NODE;
     }
   }
 

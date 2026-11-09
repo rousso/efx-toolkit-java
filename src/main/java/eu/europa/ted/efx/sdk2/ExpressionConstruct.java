@@ -86,13 +86,21 @@ class ExpressionConstruct implements Composable {
       overload(signature().variadic(parameter("item", T)).returning(T_SEQUENCE),
           (script, items) -> script.composeList(items, boundClassOf(T_SEQUENCE, items.get(0)))));
 
-  /** A predicate after a field, which gives the elements of the field that satisfy it. */
-  static final ExpressionConstruct PREDICATE_ON_FIELD =
-      predicate(ScriptGenerator::composeFieldReferenceWithPredicate);
+  /**
+   * A predicate after a field or a node, which gives the elements that satisfy it. A number for
+   * its condition is a position written as a predicate, so its errors suggest the index.
+   */
+  static final ExpressionConstruct PREDICATE = new ExpressionConstruct("Predicate",
+      overload(signature(parameter("sequence", PATH), parameter("condition", INDICATOR))
+          .returning(PATH), ExpressionConstruct::predicateOn)) {
 
-  /** A predicate after a node, which gives the elements of the node that satisfy it. */
-  static final ExpressionConstruct PREDICATE_ON_NODE =
-      predicate(ScriptGenerator::composeNodeReferenceWithPredicate);
+    @Override
+    public List<String> suggestionsFor(final List<? extends TypedExpression> arguments) {
+      return arguments.get(1).is(EfxDataType.Number.class)
+          ? List.of("To select by position, write [at n].")
+          : List.of();
+    }
+  };
 
   /**
    * An index after a field or a node: the element at a position of the whole sequence. The
@@ -178,28 +186,6 @@ class ExpressionConstruct implements Composable {
             (script, key) -> script.composeDictionaryLookup(dictionary, key, type)));
   }
 
-  /**
-   * Gives a predicate. A number for its condition is a position written as a predicate, so its
-   * errors suggest the index.
-   *
-   * @param composer the composer of the predicate on what it follows, a field or a node
-   * @return the predicate
-   */
-  private static ExpressionConstruct predicate(
-      final Composer.Binary<PathExpression, BooleanExpression, PathExpression> composer) {
-    return new ExpressionConstruct("Predicate",
-        overload(signature(parameter("sequence", PATH), parameter("condition", INDICATOR))
-            .returning(PATH), composer)) {
-
-      @Override
-      public List<String> suggestionsFor(final List<? extends TypedExpression> arguments) {
-        return arguments.get(1).is(EfxDataType.Number.class)
-            ? List.of("To select by position, write [at n].")
-            : List.of();
-      }
-    };
-  }
-
   private static ExpressionConstruct quantifier(final String token,
       final Composer.Unary<BooleanExpression, BooleanExpression> composer) {
     return new ExpressionConstruct("Quantifier '" + token + "'",
@@ -252,5 +238,16 @@ class ExpressionConstruct implements Composable {
       final TypedExpression whenFalse, final Class<E> type) {
     return script.composeConditionalExpression(condition, type.cast(whenTrue),
         type.cast(whenFalse), type);
+  }
+
+  /**
+   * Composes a predicate with the method the script generator has for what the path selects: a
+   * node or a field.
+   */
+  private static PathExpression predicateOn(final ScriptGenerator script,
+      final PathExpression sequence, final BooleanExpression condition) {
+    return sequence.is(EfxDataType.Node.class)
+        ? script.composeNodeReferenceWithPredicate(sequence, condition)
+        : script.composeFieldReferenceWithPredicate(sequence, condition);
   }
 }
