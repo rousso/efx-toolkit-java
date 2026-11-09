@@ -48,9 +48,9 @@ import eu.europa.ted.efx.interfaces.TranslatorOptions;
 import eu.europa.ted.efx.interfaces.TemplateSection;
 import eu.europa.ted.efx.interfaces.TranslatorContext;
 import eu.europa.ted.efx.model.Context;
+import eu.europa.ted.efx.model.constructs.Arguments;
 import eu.europa.ted.efx.model.constructs.Construct;
 import eu.europa.ted.efx.model.constructs.ParameterType;
-import eu.europa.ted.efx.model.constructs.ParsedArguments;
 import eu.europa.ted.efx.util.EfxProfilerReportGenerator;
 import eu.europa.ted.efx.util.TranslatorTimings;
 import eu.europa.ted.efx.model.Context.FieldContext;
@@ -1133,7 +1133,7 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
    * @throws eu.europa.ted.efx.exceptions.TypeMismatchException if the part does not convert to
    *         that class
    */
-  private ParsedArguments<?> labelPart(final ParserRuleContext labelBlock, final Clause part) {
+  private Arguments<?> labelPart(final ParserRuleContext labelBlock, final Clause part) {
     return this.expressions.valueOf(this.translation.stack().pop(TypedExpression.class), part,
         labelBlock);
   }

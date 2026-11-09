@@ -27,9 +27,9 @@ import eu.europa.ted.efx.model.expressions.TypedExpression;
 public final class Resolution {
 
   private final Overload overload;
-  private final ParsedArguments<?> arguments;
+  private final Arguments<?> arguments;
 
-  Resolution(final Overload overload, final ParsedArguments<?> arguments) {
+  Resolution(final Overload overload, final Arguments<?> arguments) {
     this.overload = overload;
     this.arguments = arguments;
   }
@@ -44,7 +44,7 @@ public final class Resolution {
   /**
    * @return the arguments, converted to the parameters of the overload that takes them
    */
-  public ParsedArguments<?> getArguments() {
+  public Arguments<?> getArguments() {
     return this.arguments;
   }
 

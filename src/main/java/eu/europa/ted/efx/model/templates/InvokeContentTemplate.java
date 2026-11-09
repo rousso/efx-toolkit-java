@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
 import eu.europa.ted.efx.interfaces.Argument;
 import eu.europa.ted.efx.interfaces.MarkupGenerator;
 import eu.europa.ted.efx.interfaces.TranslatorContext;
-import eu.europa.ted.efx.model.constructs.ParsedArguments;
+import eu.europa.ted.efx.model.constructs.Arguments;
 import eu.europa.ted.efx.model.identifiers.ParsedParameter;
 
 /**
@@ -30,9 +30,9 @@ import eu.europa.ted.efx.model.identifiers.ParsedParameter;
 public class InvokeContentTemplate extends ContentTemplate {
 
   private final String templateName;
-  private final ParsedArguments<ParsedParameter> arguments;
+  private final Arguments<ParsedParameter> arguments;
 
-  public InvokeContentTemplate(String templateName, ParsedArguments<ParsedParameter> arguments) {
+  public InvokeContentTemplate(String templateName, Arguments<ParsedParameter> arguments) {
     this.templateName = templateName;
     this.arguments = arguments;
   }

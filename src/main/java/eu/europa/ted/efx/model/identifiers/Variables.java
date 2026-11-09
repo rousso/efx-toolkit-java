@@ -4,7 +4,7 @@ import java.util.LinkedList;
 import java.util.stream.Collectors;
 
 import eu.europa.ted.efx.model.ParsedEntity;
-import eu.europa.ted.efx.model.constructs.ParsedArguments;
+import eu.europa.ted.efx.model.constructs.Arguments;
 
 public class Variables extends LinkedList<Variable> implements ParsedEntity {
 
@@ -14,8 +14,8 @@ public class Variables extends LinkedList<Variable> implements ParsedEntity {
      *
      * @return the variables as arguments, in order
      */
-    public ParsedArguments<ParsedParameter> toArguments() {
-        return new ParsedArguments<>(
+    public Arguments<ParsedParameter> toArguments() {
+        return new Arguments<>(
                 this.stream().map(ParsedParameter::new).collect(Collectors.toList()),
                 this.stream().map(variable -> variable.initializationExpression)
                         .collect(Collectors.toList()));

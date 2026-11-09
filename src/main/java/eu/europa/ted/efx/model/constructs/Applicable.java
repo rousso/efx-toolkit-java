@@ -41,10 +41,10 @@ final class Applicable<C> {
 
   private final C candidate;
   private final Parameters<?> parameters;
-  private final ParsedArguments<?> arguments;
+  private final Arguments<?> arguments;
 
   private Applicable(final C candidate, final Parameters<?> parameters,
-      final ParsedArguments<?> arguments) {
+      final Arguments<?> arguments) {
     this.candidate = candidate;
     this.parameters = parameters;
     this.arguments = arguments;
@@ -98,7 +98,7 @@ final class Applicable<C> {
   /**
    * @return the arguments, converted to the parameters of the candidate
    */
-  ParsedArguments<?> getArguments() {
+  Arguments<?> getArguments() {
     return this.arguments;
   }
 

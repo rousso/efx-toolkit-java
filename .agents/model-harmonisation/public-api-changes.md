@@ -177,3 +177,7 @@ H21 renames the package `model.signatures` to `model.constructs`. Measured with 
 ## `Parameter.Impl` (H24)
 
 H24 renames `model.constructs.BuiltInParameter<E>` to `model.constructs.Parameter.Impl<E>`, nested in the interface it implements; its members are unchanged (`parameter(String, ParameterType<E>)`, `getName`, `getType`, `toString`). The class is not on develop, so the CHANGELOG does not list it.
+
+## `Argument` and `Arguments` (H25)
+
+H25 renames `model.constructs.ParsedArgument<P>` to `model.constructs.Argument<P>` and `model.constructs.ParsedArguments<P>` to `model.constructs.Arguments<P>`. `Arguments` loses `toSet()`, whose only caller was `ContentBlock`; the other members are unchanged. Both classes were on develop, in `model.variables`, so the CHANGELOG's breaking-change line for them gives the new names. `interfaces.Argument`, the markup generator's, keeps its name; no file imports both. Of `ContentBlock`'s protected members, which `javap -public` does not list, `getOwnArguments()` gives `Arguments<ParsedParameter>` in place of `Set<ParsedArgument<ParsedParameter>>` and `getAllArguments()` is removed; the CHANGELOG says so.

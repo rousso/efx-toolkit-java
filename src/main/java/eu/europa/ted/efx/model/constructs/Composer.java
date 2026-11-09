@@ -22,7 +22,7 @@ import eu.europa.ted.efx.model.expressions.sequence.SequenceExpression;
 
 /**
  * Translates a call of an {@link Overload}: it calls the {@link ScriptGenerator} method of the
- * overload with the converted {@link ParsedArguments}.
+ * overload with the converted {@link Arguments}.
  *
  * <p>An overload of a built-in or of an expression construct writes its composer in the shape of
  * its {@link Signature}, one of the five nested here: {@link Nullary}, {@link Unary},
@@ -49,7 +49,7 @@ public interface Composer {
    * @param arguments the converted arguments of the call
    * @return the translated call
    */
-  TypedExpression compose(ScriptGenerator script, ParsedArguments<?> arguments);
+  TypedExpression compose(ScriptGenerator script, Arguments<?> arguments);
 
   /**
    * Composes a generic function of one sequence, such as {@code sort}.

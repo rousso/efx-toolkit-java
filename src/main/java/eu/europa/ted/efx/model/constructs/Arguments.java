@@ -1,10 +1,8 @@
 package eu.europa.ted.efx.model.constructs;
 
-import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -17,16 +15,17 @@ import eu.europa.ted.efx.model.expressions.sequence.SequenceExpression;
 /**
  * The arguments of a call, in order, each with the parameter it is given for.
  *
- * <p>Every argument is parsed from EFX, those of a built-in as much as those of a function or a
- * template declared in EFX, so one list serves them all. The arguments of a resolved call are
- * made by {@link Parameters#match}: each is converted to its parameter, with {@code T} bound. The
+ * <p>One list serves every construct: a built-in, an expression construct or a clause as much as
+ * a function or a template declared in EFX. The arguments of a resolved call are made by
+ * {@link Parameters#match}: each is converted to its parameter, with {@code T} bound. The
  * overload of a {@link Composable} reads them as the expression classes its signature gives them,
  * and what a clause belongs to with the typed accessors. A template block passes its arguments
  * down to the blocks it holds.</p>
  *
- * @param <P> the kind of parameter: declared in the catalogue, or parsed with a declaration
+ * @param <P> the kind of parameter: declared by a signature, or parsed with a function or a
+ *        template declared in EFX
  */
-public class ParsedArguments<P extends Parameter> extends LinkedList<ParsedArgument<P>> {
+public class Arguments<P extends Parameter> extends LinkedList<Argument<P>> {
 
     /**
      * Pairs each parameter with the value at its position.
@@ -34,9 +33,9 @@ public class ParsedArguments<P extends Parameter> extends LinkedList<ParsedArgum
      * @param parameters the parameter of each position, in order
      * @param values the value of each position, one for each parameter
      */
-    public ParsedArguments(List<? extends P> parameters, List<? extends TypedExpression> values) {
+    public Arguments(List<? extends P> parameters, List<? extends TypedExpression> values) {
         super(IntStream.range(0, parameters.size())
-                .mapToObj(position -> new ParsedArgument<P>(parameters.get(position),
+                .mapToObj(position -> new Argument<P>(parameters.get(position),
                         values.get(position)))
                 .collect(Collectors.toList()));
     }
@@ -46,16 +45,6 @@ public class ParsedArguments<P extends Parameter> extends LinkedList<ParsedArgum
      */
     public List<TypedExpression> getArgumentValues() {
         return this.stream().map(argument -> argument.value).collect(Collectors.toList());
-    }
-
-    /**
-     * Converts the argument list to a set of arguments.
-     * Uses a LinkedHashSet to maintain argument order.
-     *
-     * @return a Set of Argument objects
-     */
-    public Set<ParsedArgument<P>> toSet() {
-        return this.stream().collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
     /**
@@ -145,7 +134,7 @@ public class ParsedArguments<P extends Parameter> extends LinkedList<ParsedArgum
         if (obj == null || getClass() != obj.getClass()) {
             return false;
         }
-        ParsedArguments<?> other = (ParsedArguments<?>) obj;
+        Arguments<?> other = (Arguments<?>) obj;
         return Objects.equals(this.getArgumentValues(), other.getArgumentValues());
     }
 

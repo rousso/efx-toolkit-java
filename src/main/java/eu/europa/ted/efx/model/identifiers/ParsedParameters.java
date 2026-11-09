@@ -2,8 +2,8 @@ package eu.europa.ted.efx.model.identifiers;
 
 
 import eu.europa.ted.efx.model.ParsedEntity;
+import eu.europa.ted.efx.model.constructs.Arguments;
 import eu.europa.ted.efx.model.constructs.Parameters;
-import eu.europa.ted.efx.model.constructs.ParsedArguments;
 import eu.europa.ted.efx.model.types.EfxDataType;
 
 import java.util.LinkedHashMap;
@@ -51,8 +51,8 @@ public class ParsedParameters extends Parameters<ParsedParameter> implements Par
      *
      * @return the parameters, each with its reference expression
      */
-    public ParsedArguments<ParsedParameter> toArguments() {
-        return new ParsedArguments<>(this,
+    public Arguments<ParsedParameter> toArguments() {
+        return new Arguments<>(this,
                 this.stream().map(parameter -> parameter.referenceExpression)
                         .collect(Collectors.toList()));
     }

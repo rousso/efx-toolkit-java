@@ -72,7 +72,7 @@ public interface Construct {
    * @throws TranslatorConfigurationException if more than one parameter list takes the arguments
    *         and none of them is more specific than all the others, a defect of the construct
    */
-  default Optional<ParsedArguments<?>> match(final List<? extends TypedExpression> arguments) {
+  default Optional<Arguments<?>> match(final List<? extends TypedExpression> arguments) {
     return Applicable.mostSpecific(this, this.getParameterLists(), parameters -> parameters,
         arguments).map(Applicable::getArguments);
   }

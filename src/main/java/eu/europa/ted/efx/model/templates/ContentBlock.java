@@ -14,8 +14,7 @@ import eu.europa.ted.efx.interfaces.MarkupGenerator;
 import eu.europa.ted.efx.interfaces.Parameter;
 import eu.europa.ted.efx.interfaces.TranslatorContext;
 import eu.europa.ted.efx.model.Context;
-import eu.europa.ted.efx.model.constructs.ParsedArgument;
-import eu.europa.ted.efx.model.constructs.ParsedArguments;
+import eu.europa.ted.efx.model.constructs.Arguments;
 import eu.europa.ted.efx.model.identifiers.ParsedParameter;
 import eu.europa.ted.efx.model.identifiers.ParsedParameters;
 import eu.europa.ted.efx.model.identifiers.Variables;
@@ -34,7 +33,7 @@ public class ContentBlock {
   protected final Context context;
   protected final Queue<ContentBlock> children = new LinkedList<>();
   protected final ParsedParameters parameters;
-  protected final ParsedArguments<ParsedParameter> arguments;
+  protected final Arguments<ParsedParameter> arguments;
 
   private ContentBlock(String id) {
     this.parent = null;
@@ -49,7 +48,7 @@ public class ContentBlock {
 
   public ContentBlock(final ContentBlock parent, final String id, final int number,
       final List<ContentTemplate> contentTemplates, Context contextPath, ParsedParameters parameters,
-      ParsedArguments<ParsedParameter> arguments) {
+      Arguments<ParsedParameter> arguments) {
     this.parent = parent;
     this.id = id;
     this.indentationLevel = parent.indentationLevel + 1;
@@ -193,28 +192,23 @@ public class ContentBlock {
     return this.parent.getContext();
   }
 
-  protected Set<ParsedArgument<ParsedParameter>> getOwnArguments() {
-    return this.arguments.toSet();
+  protected Arguments<ParsedParameter> getOwnArguments() {
+    return this.arguments;
   }
 
   protected Set<ParsedParameter> getOwnParameters() {
     return this.parameters.toSet();
   }
 
+  /**
+   * @return the parameters of the arguments of this block and of the blocks that hold it, those of
+   *         the outermost block first
+   */
   protected Set<ParsedParameter> getAllParameters() {
-    return this.getAllArguments().stream()
-        .map(argument -> argument.parameter)
-        .collect(Collectors.toCollection(LinkedHashSet::new));
-  }
-
-  protected Set<ParsedArgument<ParsedParameter>> getAllArguments() {
-    if (this.parent == null) {
-      return new LinkedHashSet<>(this.getOwnArguments());
-    }
-    final Set<ParsedArgument<ParsedParameter>> merged = new LinkedHashSet<>();
-    merged.addAll(this.parent.getAllArguments());
-    merged.addAll(this.getOwnArguments());
-    return merged;
+    final Set<ParsedParameter> all =
+        this.parent == null ? new LinkedHashSet<>() : this.parent.getAllParameters();
+    this.arguments.forEach(argument -> all.add(argument.parameter));
+    return all;
   }
 
   // #region Render -----------------------------------------------------------
@@ -257,10 +251,10 @@ public class ContentBlock {
   public Markup renderInvocation(MarkupGenerator markupGenerator, TranslatorContext translatorContext) {
     Set<Argument> args = new LinkedHashSet<>();
     if (this.parent != null) {
-      args.addAll(this.parent.getAllArguments().stream()
-          .map(a -> new Argument.Impl(a.parameter.name,
-              markupGenerator.getEfxDataTypeEquivalent(a.parameter.dataType),
-              a.parameter.referenceExpression))
+      args.addAll(this.parent.getAllParameters().stream()
+          .map(parameter -> new Argument.Impl(parameter.name,
+              markupGenerator.getEfxDataTypeEquivalent(parameter.dataType),
+              parameter.referenceExpression))
           .collect(Collectors.toCollection(LinkedHashSet::new)));
     }
     args.addAll(this.getOwnArguments().stream()

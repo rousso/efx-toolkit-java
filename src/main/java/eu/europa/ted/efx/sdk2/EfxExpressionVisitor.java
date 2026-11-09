@@ -50,10 +50,10 @@ import eu.europa.ted.efx.model.builtins.PatternMatch;
 import eu.europa.ted.efx.model.builtins.SequenceFunctions;
 import eu.europa.ted.efx.model.builtins.StringFunctions;
 import eu.europa.ted.efx.model.builtins.TemplateFunctions;
+import eu.europa.ted.efx.model.constructs.Arguments;
 import eu.europa.ted.efx.model.constructs.Construct;
 import eu.europa.ted.efx.model.constructs.Mismatch;
 import eu.europa.ted.efx.model.constructs.ParameterType;
-import eu.europa.ted.efx.model.constructs.ParsedArguments;
 import eu.europa.ted.efx.model.constructs.Rejection;
 import eu.europa.ted.efx.model.constructs.Resolution;
 import eu.europa.ted.efx.model.constructs.Spelling;
@@ -190,12 +190,12 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    * @param expression the expression
    * @param clause the clause
    * @return the value, converted to the parameter of the clause, to be read with the accessor of
-   *         that parameter's type, such as {@link ParsedArguments#booleanAt}
+   *         that parameter's type, such as {@link Arguments#booleanAt}
    * @throws TypeMismatchException if the value does not fit: a sequence where a single value is
    *         required, or a node, is reported by the reference the expression is written as where
    *         it explains the mistake, and any other value cannot be converted
    */
-  ParsedArguments<?> valueOf(final ExpressionContext expression, final Clause clause) {
+  Arguments<?> valueOf(final ExpressionContext expression, final Clause clause) {
     return this.checked(clause, List.of(this.visit(expression)), position -> expression);
   }
 
@@ -209,7 +209,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    * @return the value, converted to the parameter of the clause
    * @throws TypeMismatchException if the value does not convert to what the clause takes
    */
-  ParsedArguments<?> valueOf(final TypedExpression value, final Clause clause,
+  Arguments<?> valueOf(final TypedExpression value, final Clause clause,
       final ParserRuleContext where) {
     return this.checked(clause, List.of(this.subexpression(value)), position -> where);
   }
@@ -1414,12 +1414,12 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    * @throws InvalidArgumentException if the number of arguments or the type of one does not match
    * @throws TypeMismatchException if an argument is a context variable that holds a node
    */
-  ParsedArguments<ParsedParameter> argumentsOf(final ParserRuleContext invocation,
+  Arguments<ParsedParameter> argumentsOf(final ParserRuleContext invocation,
       final Invocable template, final ArgumentListContext list) {
     final List<Subexpression<?>> subexpressions = this.argumentsOf(list);
     final List<TypedExpression> arguments =
         subexpressions.stream().map(Subexpression::value).collect(Collectors.toList());
-    return new ParsedArguments<>(template.parameters, template.match(arguments)
+    return new Arguments<>(template.parameters, template.match(arguments)
         .orElseThrow(() -> this.invocationError(invocation, template, subexpressions, arguments))
         .getArgumentValues());
   }
@@ -2028,7 +2028,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    * @return the value of the part, converted to the parameter of the clause
    * @throws TypeMismatchException if the part does not fit
    */
-  private ParsedArguments<?> checked(final Clause clause, final List<Subexpression<?>> parts,
+  private Arguments<?> checked(final Clause clause, final List<Subexpression<?>> parts,
       final IntFunction<ParserRuleContext> where) {
     final List<TypedExpression> arguments =
         parts.stream().map(Subexpression::value).collect(Collectors.toList());

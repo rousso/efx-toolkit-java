@@ -30,14 +30,16 @@ import eu.europa.ted.efx.model.types.EfxDataType;
 
 /**
  * A parameter list: fixed parameters, in order, and an optional variadic tail. Arguments are
- * matched against it: those of a built-in against the list of a {@link Signature}, those of a
- * function or template declared in EFX against the list of its declaration.
+ * matched against it: those of a built-in, an expression construct or a clause against the list
+ * of a {@link Signature}, those of a function or template declared in EFX against the list of its
+ * declaration.
  *
  * <p>A variadic tail takes one or more arguments after the fixed parameters. Parameters that
  * mention {@code T} are generic: they are bound to the value primitive of the argument at the
  * first position of {@code T} before the arguments are checked against them.</p>
  *
- * @param <P> the kind of parameter: declared in the catalogue, or parsed with a declaration
+ * @param <P> the kind of parameter: declared by a signature, or parsed with a function or a
+ *        template declared in EFX
  */
 public class Parameters<P extends Parameter> extends LinkedList<P> {
 
@@ -158,7 +160,7 @@ public class Parameters<P extends Parameter> extends LinkedList<P> {
    * @return the converted arguments, or nothing if the list {@link #rejectionOf rejects} one
    * @throws IllegalArgumentException if the parameter list does not take that many arguments
    */
-  public Optional<ParsedArguments<?>> match(final List<? extends TypedExpression> arguments) {
+  public Optional<Arguments<?>> match(final List<? extends TypedExpression> arguments) {
     this.requireTaken(arguments);
     return this.boundTo(arguments)
         .filter(bound -> bound.rejectionsOf(this, arguments).findAny().isEmpty())
@@ -199,8 +201,9 @@ public class Parameters<P extends Parameter> extends LinkedList<P> {
   }
 
   /**
-   * Gives these parameters with {@code T} bound. The bound list holds catalogue parameters; it is
-   * only reached for a list that mentions {@code T}, which the list of a declaration never does.
+   * Gives these parameters with {@code T} bound. The bound list holds parameters declared by a
+   * signature; it is only reached for a list that mentions {@code T}, which the list of a
+   * declaration never does.
    *
    * @param primitive the value primitive {@code T} is bound to
    * @return the parameter list with every parameter type bound
@@ -235,14 +238,14 @@ public class Parameters<P extends Parameter> extends LinkedList<P> {
             arguments.get(position)));
   }
 
-  private ParsedArguments<?> converted(final List<? extends TypedExpression> arguments) {
+  private Arguments<?> converted(final List<? extends TypedExpression> arguments) {
     List<P> parameters = new ArrayList<>();
     List<TypedExpression> values = new ArrayList<>();
     for (int position = 0; position < arguments.size(); position++) {
       parameters.add(this.parameterAt(position));
       values.add(this.typeAt(position).convert(arguments.get(position)));
     }
-    return new ParsedArguments<>(parameters, values);
+    return new Arguments<>(parameters, values);
   }
 
   private ParameterType<?> typeAt(final int position) {
