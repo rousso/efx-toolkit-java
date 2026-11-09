@@ -13,9 +13,9 @@
  */
 package eu.europa.ted.efx.model.builtins;
 
-import eu.europa.ted.efx.model.signatures.Composable;
-import eu.europa.ted.efx.model.signatures.Overload;
-import eu.europa.ted.efx.model.signatures.Spelling;
+import eu.europa.ted.efx.model.constructs.Composable;
+import eu.europa.ted.efx.model.constructs.Overload;
+import eu.europa.ted.efx.model.constructs.Spelling;
 
 /**
  * An EFX operator or built-in function: a construct of the catalogue, which translates its calls

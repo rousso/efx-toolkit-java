@@ -11,11 +11,11 @@
  * or implied. See the Licence for the specific language governing permissions and limitations under
  * the Licence.
  */
-package eu.europa.ted.efx.model.signatures;
+package eu.europa.ted.efx.model.constructs;
 
-import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
-import static eu.europa.ted.efx.model.signatures.Overload.overload;
-import static eu.europa.ted.efx.model.signatures.Signature.signature;
+import static eu.europa.ted.efx.model.constructs.BuiltInParameter.parameter;
+import static eu.europa.ted.efx.model.constructs.Overload.overload;
+import static eu.europa.ted.efx.model.constructs.Signature.signature;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;

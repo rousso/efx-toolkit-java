@@ -2,9 +2,9 @@ package eu.europa.ted.efx.model.identifiers;
 
 import java.util.Objects;
 
+import eu.europa.ted.efx.model.constructs.Parameter;
+import eu.europa.ted.efx.model.constructs.ParameterType;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
-import eu.europa.ted.efx.model.signatures.Parameter;
-import eu.europa.ted.efx.model.signatures.ParameterType;
 
 public class ParsedParameter extends Identifier implements Parameter {
 

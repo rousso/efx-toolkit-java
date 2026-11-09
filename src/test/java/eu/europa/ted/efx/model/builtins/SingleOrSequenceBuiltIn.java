@@ -13,15 +13,15 @@
  */
 package eu.europa.ted.efx.model.builtins;
 
-import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
-import static eu.europa.ted.efx.model.signatures.Overload.overload;
-import static eu.europa.ted.efx.model.signatures.ParameterType.T;
-import static eu.europa.ted.efx.model.signatures.ParameterType.T_SEQUENCE;
-import static eu.europa.ted.efx.model.signatures.Signature.signature;
+import static eu.europa.ted.efx.model.constructs.BuiltInParameter.parameter;
+import static eu.europa.ted.efx.model.constructs.Overload.overload;
+import static eu.europa.ted.efx.model.constructs.ParameterType.T;
+import static eu.europa.ted.efx.model.constructs.ParameterType.T_SEQUENCE;
+import static eu.europa.ted.efx.model.constructs.Signature.signature;
 
 import java.util.List;
 
-import eu.europa.ted.efx.model.signatures.Overload;
+import eu.europa.ted.efx.model.constructs.Overload;
 
 /**
  * A built-in with a pair of overloads, {@code (T) -> T} and {@code (T*) -> T*}: both apply to a

@@ -3,8 +3,8 @@ package eu.europa.ted.efx.autocomplete;
 import java.util.Arrays;
 import java.util.Optional;
 
+import eu.europa.ted.efx.model.constructs.ParameterType;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
-import eu.europa.ted.efx.model.signatures.ParameterType;
 import eu.europa.ted.efx.model.types.EfxDataType.BooleanScalar;
 import eu.europa.ted.efx.model.types.EfxDataType.BooleanSequence;
 import eu.europa.ted.efx.model.types.EfxDataType.DateScalar;

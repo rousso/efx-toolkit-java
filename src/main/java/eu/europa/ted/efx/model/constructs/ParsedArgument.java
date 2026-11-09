@@ -1,4 +1,4 @@
-package eu.europa.ted.efx.model.signatures;
+package eu.europa.ted.efx.model.constructs;
 
 import java.util.Objects;
 

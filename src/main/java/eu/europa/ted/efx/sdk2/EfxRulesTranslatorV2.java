@@ -13,8 +13,8 @@
  */
 package eu.europa.ted.efx.sdk2;
 
-import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
-import static eu.europa.ted.efx.model.signatures.ParameterType.INDICATOR;
+import static eu.europa.ted.efx.model.constructs.BuiltInParameter.parameter;
+import static eu.europa.ted.efx.model.constructs.ParameterType.INDICATOR;
 
 import java.util.ArrayList;
 import java.io.IOException;

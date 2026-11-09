@@ -25,14 +25,14 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import eu.europa.ted.efx.EfxTranslatorOptions;
 import eu.europa.ted.efx.interfaces.ScriptGenerator;
+import eu.europa.ted.efx.model.constructs.Overload;
+import eu.europa.ted.efx.model.constructs.ParameterType;
+import eu.europa.ted.efx.model.constructs.Parameters;
+import eu.europa.ted.efx.model.constructs.Signature;
 import eu.europa.ted.efx.model.expressions.Expression;
 import eu.europa.ted.efx.model.expressions.PathExpression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.expressions.scalar.StringPath;
-import eu.europa.ted.efx.model.signatures.Overload;
-import eu.europa.ted.efx.model.signatures.ParameterType;
-import eu.europa.ted.efx.model.signatures.Parameters;
-import eu.europa.ted.efx.model.signatures.Signature;
 import eu.europa.ted.efx.xpath.XPathScriptGenerator;
 
 /**

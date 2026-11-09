@@ -13,10 +13,10 @@
  */
 package eu.europa.ted.efx.sdk2;
 
-import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
-import static eu.europa.ted.efx.model.signatures.ParameterType.INDICATOR;
-import static eu.europa.ted.efx.model.signatures.ParameterType.NUMBER;
-import static eu.europa.ted.efx.model.signatures.ParameterType.TEXT;
+import static eu.europa.ted.efx.model.constructs.BuiltInParameter.parameter;
+import static eu.europa.ted.efx.model.constructs.ParameterType.INDICATOR;
+import static eu.europa.ted.efx.model.constructs.ParameterType.NUMBER;
+import static eu.europa.ted.efx.model.constructs.ParameterType.TEXT;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -48,9 +48,9 @@ import eu.europa.ted.efx.interfaces.TranslatorOptions;
 import eu.europa.ted.efx.interfaces.TemplateSection;
 import eu.europa.ted.efx.interfaces.TranslatorContext;
 import eu.europa.ted.efx.model.Context;
-import eu.europa.ted.efx.model.signatures.Construct;
-import eu.europa.ted.efx.model.signatures.ParameterType;
-import eu.europa.ted.efx.model.signatures.ParsedArguments;
+import eu.europa.ted.efx.model.constructs.Construct;
+import eu.europa.ted.efx.model.constructs.ParameterType;
+import eu.europa.ted.efx.model.constructs.ParsedArguments;
 import eu.europa.ted.efx.util.EfxProfilerReportGenerator;
 import eu.europa.ted.efx.util.TranslatorTimings;
 import eu.europa.ted.efx.model.Context.FieldContext;

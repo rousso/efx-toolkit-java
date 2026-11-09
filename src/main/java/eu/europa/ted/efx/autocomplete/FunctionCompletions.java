@@ -20,9 +20,9 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import eu.europa.ted.efx.model.builtins.BuiltIn;
-import eu.europa.ted.efx.model.signatures.Parameter;
-import eu.europa.ted.efx.model.signatures.ParameterType;
-import eu.europa.ted.efx.model.signatures.Signature;
+import eu.europa.ted.efx.model.constructs.Parameter;
+import eu.europa.ted.efx.model.constructs.ParameterType;
+import eu.europa.ted.efx.model.constructs.Signature;
 
 /**
  * The completion items of a built-in function: the mapping from the signature catalogue to the

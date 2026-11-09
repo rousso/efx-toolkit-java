@@ -13,29 +13,29 @@
  */
 package eu.europa.ted.efx.sdk2;
 
-import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
-import static eu.europa.ted.efx.model.signatures.Overload.overload;
-import static eu.europa.ted.efx.model.signatures.ParameterType.INDICATOR;
-import static eu.europa.ted.efx.model.signatures.ParameterType.NUMBER;
-import static eu.europa.ted.efx.model.signatures.ParameterType.PATH;
-import static eu.europa.ted.efx.model.signatures.ParameterType.T;
-import static eu.europa.ted.efx.model.signatures.ParameterType.T_SEQUENCE;
-import static eu.europa.ted.efx.model.signatures.ParameterType.TEXT;
-import static eu.europa.ted.efx.model.signatures.Signature.signature;
+import static eu.europa.ted.efx.model.constructs.BuiltInParameter.parameter;
+import static eu.europa.ted.efx.model.constructs.Overload.overload;
+import static eu.europa.ted.efx.model.constructs.ParameterType.INDICATOR;
+import static eu.europa.ted.efx.model.constructs.ParameterType.NUMBER;
+import static eu.europa.ted.efx.model.constructs.ParameterType.PATH;
+import static eu.europa.ted.efx.model.constructs.ParameterType.T;
+import static eu.europa.ted.efx.model.constructs.ParameterType.T_SEQUENCE;
+import static eu.europa.ted.efx.model.constructs.ParameterType.TEXT;
+import static eu.europa.ted.efx.model.constructs.Signature.signature;
 
 import java.util.List;
 
 import eu.europa.ted.efx.interfaces.ScriptGenerator;
+import eu.europa.ted.efx.model.constructs.Composable;
+import eu.europa.ted.efx.model.constructs.Composer;
+import eu.europa.ted.efx.model.constructs.Overload;
+import eu.europa.ted.efx.model.constructs.ParameterType;
 import eu.europa.ted.efx.model.expressions.PathExpression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.expressions.iteration.IteratorListExpression;
 import eu.europa.ted.efx.model.expressions.scalar.BooleanExpression;
 import eu.europa.ted.efx.model.expressions.scalar.ScalarPath;
 import eu.europa.ted.efx.model.identifiers.Dictionary;
-import eu.europa.ted.efx.model.signatures.Composable;
-import eu.europa.ted.efx.model.signatures.Composer;
-import eu.europa.ted.efx.model.signatures.Overload;
-import eu.europa.ted.efx.model.signatures.ParameterType;
 import eu.europa.ted.efx.model.types.EfxDataType;
 import eu.europa.ted.efx.model.types.EfxTypeLattice;
 

@@ -13,16 +13,16 @@
  */
 package eu.europa.ted.efx.sdk2;
 
-import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
-import static eu.europa.ted.efx.model.signatures.ParameterType.T;
-import static eu.europa.ted.efx.model.signatures.ParameterType.T_SEQUENCE;
+import static eu.europa.ted.efx.model.constructs.BuiltInParameter.parameter;
+import static eu.europa.ted.efx.model.constructs.ParameterType.T;
+import static eu.europa.ted.efx.model.constructs.ParameterType.T_SEQUENCE;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
-import eu.europa.ted.efx.model.signatures.BuiltInParameter;
-import eu.europa.ted.efx.model.signatures.Construct;
-import eu.europa.ted.efx.model.signatures.Parameters;
+import eu.europa.ted.efx.model.constructs.BuiltInParameter;
+import eu.europa.ted.efx.model.constructs.Construct;
+import eu.europa.ted.efx.model.constructs.Parameters;
 
 /**
  * A part of a statement or a declaration that takes an expression of a given type: the condition

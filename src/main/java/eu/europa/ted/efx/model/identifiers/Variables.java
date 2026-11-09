@@ -4,7 +4,7 @@ import java.util.LinkedList;
 import java.util.stream.Collectors;
 
 import eu.europa.ted.efx.model.ParsedEntity;
-import eu.europa.ted.efx.model.signatures.ParsedArguments;
+import eu.europa.ted.efx.model.constructs.ParsedArguments;
 
 public class Variables extends LinkedList<Variable> implements ParsedEntity {
 

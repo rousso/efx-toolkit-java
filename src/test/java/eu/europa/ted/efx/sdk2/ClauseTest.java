@@ -13,8 +13,8 @@
  */
 package eu.europa.ted.efx.sdk2;
 
-import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
-import static eu.europa.ted.efx.model.signatures.ParameterType.TEXT_SEQUENCE;
+import static eu.europa.ted.efx.model.constructs.BuiltInParameter.parameter;
+import static eu.europa.ted.efx.model.constructs.ParameterType.TEXT_SEQUENCE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.List;

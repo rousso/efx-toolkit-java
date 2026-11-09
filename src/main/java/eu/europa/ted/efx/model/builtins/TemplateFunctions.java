@@ -13,23 +13,23 @@
  */
 package eu.europa.ted.efx.model.builtins;
 
-import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
-import static eu.europa.ted.efx.model.signatures.Overload.overload;
-import static eu.europa.ted.efx.model.signatures.ParameterType.DATE;
-import static eu.europa.ted.efx.model.signatures.ParameterType.MULTILINGUAL_FIELD;
-import static eu.europa.ted.efx.model.signatures.ParameterType.NUMBER;
-import static eu.europa.ted.efx.model.signatures.ParameterType.TEXT;
-import static eu.europa.ted.efx.model.signatures.ParameterType.TIME;
-import static eu.europa.ted.efx.model.signatures.Signature.signature;
+import static eu.europa.ted.efx.model.constructs.BuiltInParameter.parameter;
+import static eu.europa.ted.efx.model.constructs.Overload.overload;
+import static eu.europa.ted.efx.model.constructs.ParameterType.DATE;
+import static eu.europa.ted.efx.model.constructs.ParameterType.MULTILINGUAL_FIELD;
+import static eu.europa.ted.efx.model.constructs.ParameterType.NUMBER;
+import static eu.europa.ted.efx.model.constructs.ParameterType.TEXT;
+import static eu.europa.ted.efx.model.constructs.ParameterType.TIME;
+import static eu.europa.ted.efx.model.constructs.Signature.signature;
 
 import java.util.List;
 
 import eu.europa.ted.efx.interfaces.ScriptGenerator;
+import eu.europa.ted.efx.model.constructs.Composer;
+import eu.europa.ted.efx.model.constructs.Overload;
 import eu.europa.ted.efx.model.expressions.scalar.DateExpression;
 import eu.europa.ted.efx.model.expressions.scalar.StringExpression;
 import eu.europa.ted.efx.model.expressions.scalar.TimeExpression;
-import eu.europa.ted.efx.model.signatures.Composer;
-import eu.europa.ted.efx.model.signatures.Overload;
 
 /**
  * The functions that may only be used in a template: formatting, and the preferred language of a

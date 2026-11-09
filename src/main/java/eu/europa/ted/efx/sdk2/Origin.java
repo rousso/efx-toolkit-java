@@ -24,10 +24,10 @@ import eu.europa.ted.efx.exceptions.TypeMismatchException;
 import eu.europa.ted.efx.model.Context;
 import eu.europa.ted.efx.model.Context.FieldContext;
 import eu.europa.ted.efx.model.Context.NodeContext;
+import eu.europa.ted.efx.model.constructs.Rejection;
+import eu.europa.ted.efx.model.constructs.Spelling;
 import eu.europa.ted.efx.model.expressions.PathExpression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
-import eu.europa.ted.efx.model.signatures.Rejection;
-import eu.europa.ted.efx.model.signatures.Spelling;
 import eu.europa.ted.efx.model.types.FieldTypes;
 import eu.europa.ted.efx.sdk2.EfxParser.ExpressionContext;
 

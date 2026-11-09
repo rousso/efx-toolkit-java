@@ -2,8 +2,8 @@ package eu.europa.ted.efx.model.identifiers;
 
 import java.util.List;
 
-import eu.europa.ted.efx.model.signatures.Construct;
-import eu.europa.ted.efx.model.signatures.Parameters;
+import eu.europa.ted.efx.model.constructs.Construct;
+import eu.europa.ted.efx.model.constructs.Parameters;
 import eu.europa.ted.efx.model.types.EfxDataType;
 
 /**

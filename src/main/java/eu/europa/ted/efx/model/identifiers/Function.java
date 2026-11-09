@@ -15,13 +15,13 @@ package eu.europa.ted.efx.model.identifiers;
 
 import java.util.List;
 
+import eu.europa.ted.efx.model.constructs.Composable;
+import eu.europa.ted.efx.model.constructs.Composer;
+import eu.europa.ted.efx.model.constructs.Construct;
+import eu.europa.ted.efx.model.constructs.Overload;
+import eu.europa.ted.efx.model.constructs.ParameterType;
+import eu.europa.ted.efx.model.constructs.Signature;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
-import eu.europa.ted.efx.model.signatures.Composable;
-import eu.europa.ted.efx.model.signatures.Composer;
-import eu.europa.ted.efx.model.signatures.Construct;
-import eu.europa.ted.efx.model.signatures.Overload;
-import eu.europa.ted.efx.model.signatures.ParameterType;
-import eu.europa.ted.efx.model.signatures.Signature;
 
 /**
  * A user-defined function declared in EFX source code.

@@ -128,3 +128,48 @@ H19 makes `ParameterType` generic, `ParameterType<E extends TypedExpression>`: `
 ## Composables and clauses (H20)
 
 H20 moves `Overload` and `Composer` from `model.builtins` to `model.signatures`; `Overload.negated()` is public, and the added `Overload.of(Signature, Composer)` declares the overload of a signature without a shape. It adds the interface `model.signatures.Composable extends Construct` (`getOverloads`, `getParameterLists` by default from them, `resolve`) and the class `model.signatures.Spelling` (`function`, `operator`, `describe`, `roleOf`). `Construct.resolve` is replaced by `Construct.match`, which gives an `Optional<ParsedArguments<?>>`; `Composable.resolve` gives an `Optional<Resolution>`. `Resolution` holds the overload that takes the call (`getOverload`, `getArguments`, `compose(ScriptGenerator)`); `getParameters` is removed. `BuiltIn` extends `Composable`, gains `getSpelling()`, and loses `compose(Resolution, ScriptGenerator)`. `Mismatch` gains `diagnose(Spelling)`. `Signature` gains `of(Parameters<?>, ParameterType<?>)`, and `getParameters()` gives a `Parameters<?>`; `Parameters` gains `of(List)`. `Function` implements `Composable`: its public constructor takes the class of its declared type after its parameters, a protected one also takes its composer, and its `dataType` is the declared type. `DynamicFunction` keeps its constructor. In `sdk2`, which has no public API here, `AsWritten` is removed, `GrammarConstruct` is renamed `ExpressionConstruct` and `Clause` is added. Of these classes only `Function` is on develop: the CHANGELOG entry on `Invocable` says what changes in it.
+
+## The constructs package (H21)
+
+H21 renames the package `model.signatures` to `model.constructs`. Measured with `javap` on 22e1270 and on H21: the same public types, of which 38 change package and nothing else, their members included; with the package name replaced, the two listings are identical. The package is not on develop, so the CHANGELOG names the new package and lists no breaking change.
+
+| Was | Is |
+| --- | --- |
+| `model.signatures.BuiltInParameter` | `model.constructs.BuiltInParameter` |
+| `model.signatures.Composable` | `model.constructs.Composable` |
+| `model.signatures.Composer` | `model.constructs.Composer` |
+| `model.signatures.Composer.Binary` | `model.constructs.Composer.Binary` |
+| `model.signatures.Composer.Nullary` | `model.constructs.Composer.Nullary` |
+| `model.signatures.Composer.SequenceFunction` | `model.constructs.Composer.SequenceFunction` |
+| `model.signatures.Composer.SequencePairFunction` | `model.constructs.Composer.SequencePairFunction` |
+| `model.signatures.Composer.SubsequenceFunction` | `model.constructs.Composer.SubsequenceFunction` |
+| `model.signatures.Composer.SubsequenceWithLengthFunction` | `model.constructs.Composer.SubsequenceWithLengthFunction` |
+| `model.signatures.Composer.Ternary` | `model.constructs.Composer.Ternary` |
+| `model.signatures.Composer.Unary` | `model.constructs.Composer.Unary` |
+| `model.signatures.Composer.Variadic` | `model.constructs.Composer.Variadic` |
+| `model.signatures.Construct` | `model.constructs.Construct` |
+| `model.signatures.Mismatch` | `model.constructs.Mismatch` |
+| `model.signatures.Overload` | `model.constructs.Overload` |
+| `model.signatures.Parameter` | `model.constructs.Parameter` |
+| `model.signatures.ParameterType` | `model.constructs.ParameterType` |
+| `model.signatures.ParameterType.Concrete` | `model.constructs.ParameterType.Concrete` |
+| `model.signatures.ParameterType.Generic` | `model.constructs.ParameterType.Generic` |
+| `model.signatures.ParameterType.Path` | `model.constructs.ParameterType.Path` |
+| `model.signatures.Parameters` | `model.constructs.Parameters` |
+| `model.signatures.ParsedArgument` | `model.constructs.ParsedArgument` |
+| `model.signatures.ParsedArguments` | `model.constructs.ParsedArguments` |
+| `model.signatures.Rejection` | `model.constructs.Rejection` |
+| `model.signatures.Rejection.Kind` | `model.constructs.Rejection.Kind` |
+| `model.signatures.Resolution` | `model.constructs.Resolution` |
+| `model.signatures.Signature` | `model.constructs.Signature` |
+| `model.signatures.Signature.Binary` | `model.constructs.Signature.Binary` |
+| `model.signatures.Signature.Binary.Builder` | `model.constructs.Signature.Binary.Builder` |
+| `model.signatures.Signature.Nullary` | `model.constructs.Signature.Nullary` |
+| `model.signatures.Signature.Nullary.Builder` | `model.constructs.Signature.Nullary.Builder` |
+| `model.signatures.Signature.Ternary` | `model.constructs.Signature.Ternary` |
+| `model.signatures.Signature.Ternary.Builder` | `model.constructs.Signature.Ternary.Builder` |
+| `model.signatures.Signature.Unary` | `model.constructs.Signature.Unary` |
+| `model.signatures.Signature.Unary.Builder` | `model.constructs.Signature.Unary.Builder` |
+| `model.signatures.Signature.Variadic` | `model.constructs.Signature.Variadic` |
+| `model.signatures.Signature.Variadic.Builder` | `model.constructs.Signature.Variadic.Builder` |
+| `model.signatures.Spelling` | `model.constructs.Spelling` |

@@ -2,8 +2,8 @@ package eu.europa.ted.efx.model.identifiers;
 
 
 import eu.europa.ted.efx.model.ParsedEntity;
-import eu.europa.ted.efx.model.signatures.Parameters;
-import eu.europa.ted.efx.model.signatures.ParsedArguments;
+import eu.europa.ted.efx.model.constructs.Parameters;
+import eu.europa.ted.efx.model.constructs.ParsedArguments;
 import eu.europa.ted.efx.model.types.EfxDataType;
 
 import java.util.LinkedHashMap;

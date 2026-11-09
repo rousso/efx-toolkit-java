@@ -26,6 +26,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import eu.europa.ted.efx.exceptions.TranslatorConfigurationException;
+import eu.europa.ted.efx.model.constructs.Overload;
+import eu.europa.ted.efx.model.constructs.Parameters;
 import eu.europa.ted.efx.model.expressions.Expression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.expressions.scalar.BooleanExpression;
@@ -59,8 +61,6 @@ import eu.europa.ted.efx.model.expressions.sequence.StringSequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.StringSequencePath;
 import eu.europa.ted.efx.model.expressions.sequence.TimeSequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.TimeSequencePath;
-import eu.europa.ted.efx.model.signatures.Overload;
-import eu.europa.ted.efx.model.signatures.Parameters;
 
 /**
  * Proves that the catalogue is unambiguous: for every built-in, every number of arguments it takes

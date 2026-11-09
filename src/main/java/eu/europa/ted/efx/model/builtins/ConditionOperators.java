@@ -13,19 +13,21 @@
  */
 package eu.europa.ted.efx.model.builtins;
 
-import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
-import static eu.europa.ted.efx.model.signatures.Overload.overload;
-import static eu.europa.ted.efx.model.signatures.ParameterType.INDICATOR;
-import static eu.europa.ted.efx.model.signatures.ParameterType.PATH;
-import static eu.europa.ted.efx.model.signatures.ParameterType.T;
-import static eu.europa.ted.efx.model.signatures.ParameterType.T_SEQUENCE;
-import static eu.europa.ted.efx.model.signatures.Signature.signature;
+import static eu.europa.ted.efx.model.constructs.BuiltInParameter.parameter;
+import static eu.europa.ted.efx.model.constructs.Overload.overload;
+import static eu.europa.ted.efx.model.constructs.ParameterType.INDICATOR;
+import static eu.europa.ted.efx.model.constructs.ParameterType.PATH;
+import static eu.europa.ted.efx.model.constructs.ParameterType.T;
+import static eu.europa.ted.efx.model.constructs.ParameterType.T_SEQUENCE;
+import static eu.europa.ted.efx.model.constructs.Signature.signature;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
 import eu.europa.ted.efx.interfaces.ScriptGenerator;
+import eu.europa.ted.efx.model.constructs.Composer;
+import eu.europa.ted.efx.model.constructs.Overload;
 import eu.europa.ted.efx.model.expressions.scalar.BooleanExpression;
 import eu.europa.ted.efx.model.expressions.scalar.DateExpression;
 import eu.europa.ted.efx.model.expressions.scalar.DurationExpression;
@@ -40,8 +42,6 @@ import eu.europa.ted.efx.model.expressions.sequence.NumericSequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.SequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.StringSequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.TimeSequenceExpression;
-import eu.europa.ted.efx.model.signatures.Composer;
-import eu.europa.ted.efx.model.signatures.Overload;
 
 /**
  * The condition operators: membership, emptiness, presence, uniqueness and duplicates, each with

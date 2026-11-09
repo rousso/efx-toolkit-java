@@ -14,11 +14,11 @@ import eu.europa.ted.efx.interfaces.MarkupGenerator;
 import eu.europa.ted.efx.interfaces.Parameter;
 import eu.europa.ted.efx.interfaces.TranslatorContext;
 import eu.europa.ted.efx.model.Context;
+import eu.europa.ted.efx.model.constructs.ParsedArgument;
+import eu.europa.ted.efx.model.constructs.ParsedArguments;
 import eu.europa.ted.efx.model.identifiers.ParsedParameter;
 import eu.europa.ted.efx.model.identifiers.ParsedParameters;
 import eu.europa.ted.efx.model.identifiers.Variables;
-import eu.europa.ted.efx.model.signatures.ParsedArgument;
-import eu.europa.ted.efx.model.signatures.ParsedArguments;
 
 public class ContentBlock {
   private final int number;

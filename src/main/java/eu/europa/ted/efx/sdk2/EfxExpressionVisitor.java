@@ -13,7 +13,7 @@
  */
 package eu.europa.ted.efx.sdk2;
 
-import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
+import static eu.europa.ted.efx.model.constructs.BuiltInParameter.parameter;
 
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
@@ -50,6 +50,13 @@ import eu.europa.ted.efx.model.builtins.PatternMatch;
 import eu.europa.ted.efx.model.builtins.SequenceFunctions;
 import eu.europa.ted.efx.model.builtins.StringFunctions;
 import eu.europa.ted.efx.model.builtins.TemplateFunctions;
+import eu.europa.ted.efx.model.constructs.Construct;
+import eu.europa.ted.efx.model.constructs.Mismatch;
+import eu.europa.ted.efx.model.constructs.ParameterType;
+import eu.europa.ted.efx.model.constructs.ParsedArguments;
+import eu.europa.ted.efx.model.constructs.Rejection;
+import eu.europa.ted.efx.model.constructs.Resolution;
+import eu.europa.ted.efx.model.constructs.Spelling;
 import eu.europa.ted.efx.model.expressions.Expression;
 import eu.europa.ted.efx.model.expressions.PathExpression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
@@ -77,13 +84,6 @@ import eu.europa.ted.efx.model.identifiers.Function;
 import eu.europa.ted.efx.model.identifiers.Invocable;
 import eu.europa.ted.efx.model.identifiers.ParsedParameter;
 import eu.europa.ted.efx.model.identifiers.Variable;
-import eu.europa.ted.efx.model.signatures.Construct;
-import eu.europa.ted.efx.model.signatures.Mismatch;
-import eu.europa.ted.efx.model.signatures.ParameterType;
-import eu.europa.ted.efx.model.signatures.ParsedArguments;
-import eu.europa.ted.efx.model.signatures.Rejection;
-import eu.europa.ted.efx.model.signatures.Resolution;
-import eu.europa.ted.efx.model.signatures.Spelling;
 import eu.europa.ted.efx.model.types.EfxDataType;
 import eu.europa.ted.efx.model.types.EfxTypeLattice;
 import eu.europa.ted.efx.model.types.EfxTypeTokenLookup;
