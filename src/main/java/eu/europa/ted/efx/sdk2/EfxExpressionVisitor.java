@@ -780,8 +780,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
   /**
    * An index after a field or a node: the element at a position in the whole sequence the path
    * selects, rather than at that position among the children of each parent, which a predicate on
-   * the last step of the path would select. So the path is put in parentheses. The position is
-   * read once, where the expression stands: see {@link #elementAt}.
+   * the last step of the path would select. So the index puts the path in parentheses. The
+   * position is read once, where the expression stands: see {@link #elementAt}.
    *
    * @param path the path of the field or the node
    * @param origin the field or the node
@@ -797,9 +797,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
     final Class<? extends SequencePath> elementsType =
         SequencePath.fromEfxDataType.get(EfxTypeLattice.toPrimitive(path.getDataType()));
     final Resolution indexing = this.resolved(ExpressionConstruct.INDEX_IN_PATH,
-        List.of(new Subexpression<>(path, origin), index),
-        List.of(this.inParentheses(path, elementsType), index.value()), at -> position,
-        TypeMismatchException::cannotConvert);
+        List.of(new Subexpression<>(path, origin), index), List.of(path, index.value()),
+        at -> position, TypeMismatchException::cannotConvert);
     return new Subexpression<>(
         PathExpression.class.cast(this.elementAt(ExpressionConstruct.INDEX_IN_PATH, indexing,
             elementsType, reads.ofContext() > readsBefore)),
@@ -1100,13 +1099,17 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
   }
 
   /**
-   * A list: its items are single values of the primitive of the first.
+   * A list: its items are single values of the primitive of the first. The first item is reported
+   * at the list when it gives {@code T} no primitive, and where it stands when it gives one but is
+   * not a single value, as any other item is.
    */
   @Override
   public Subexpression<?> visitList(final ListContext ctx) {
     final List<ExpressionContext> items = ctx.expression();
-    return this.subexpression(this.resolved(ExpressionConstruct.LIST, this.subexpressionsOf(ctx),
-        position -> position == 0 ? ctx : items.get(position))
+    final List<Subexpression<?>> parts = this.subexpressionsOf(ctx);
+    final boolean bindsT = ParameterType.T.boundBy(parts.get(0).value()).isPresent();
+    return this.subexpression(this.resolved(ExpressionConstruct.LIST, parts,
+        position -> position == 0 && !bindsT ? ctx : items.get(position))
         .compose(this.translation.script()));
   }
 
@@ -2040,8 +2043,9 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    * Resolves the parts of an expression construct, read as values, with {@link #resolved}: a part
    * that does not fit cannot be converted, and is reported where the construct places the error
    * of its position. The part that binds {@code T}, such as the then branch of a conditional or
-   * the first item of a list, is reported at the construct, as the argument that binds it is
-   * reported at the call of a built-in; any other part where it stands.
+   * the first item of a list, is reported at the construct when it gives {@code T} no primitive,
+   * as the argument that binds it is reported at the call of a built-in; any other part where it
+   * stands.
    *
    * @param construct the construct
    * @param parts its parts, in order

@@ -19,7 +19,9 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
@@ -35,6 +37,7 @@ import eu.europa.ted.efx.model.builtins.BuiltIns;
 import eu.europa.ted.efx.model.builtins.ComparisonOperators;
 import eu.europa.ted.efx.model.builtins.ConditionOperators;
 import eu.europa.ted.efx.model.builtins.NumericFunctions;
+import eu.europa.ted.efx.model.builtins.PathOrNodesBuiltIn;
 import eu.europa.ted.efx.model.builtins.PatternMatch;
 import eu.europa.ted.efx.model.builtins.SequenceFunctions;
 import eu.europa.ted.efx.model.builtins.SingleOrSequenceBuiltIn;
@@ -272,6 +275,24 @@ class ResolutionTest {
   void testSequenceOverload_IsChosenForASequence() {
     assertSame(SingleOrSequenceBuiltIn.INSTANCE.getOverloads().get(1),
         resolve(SingleOrSequenceBuiltIn.INSTANCE, TEXTS).getOverload());
+  }
+
+  @Test
+  void testMoreSpecificPathOverload_IsChosenInEitherOrder() {
+    final NodeSequencePath nodes = Expression.instantiate("$nodes", NodeSequencePath.class);
+    for (final PathOrNodesBuiltIn builtIn : PathOrNodesBuiltIn.values()) {
+      assertSame(builtIn.getNodesOverload(), resolve(builtIn, nodes).getOverload(),
+          builtIn.name());
+    }
+  }
+
+  @Test
+  void testArgumentsOfTwoEqualCalls_AreFoundInASet() {
+    final Arguments<?> first = resolve(NumericFunctions.COUNT, NUMBER).getArguments();
+    final Arguments<?> second = resolve(NumericFunctions.COUNT, NUMBER).getArguments();
+    final Set<Arguments<?>> found = new HashSet<>(List.of(first));
+    assertEquals(first, second);
+    assertTrue(found.contains(second));
   }
 
   @Test

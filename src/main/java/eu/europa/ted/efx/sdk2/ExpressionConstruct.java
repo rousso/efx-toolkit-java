@@ -36,6 +36,7 @@ import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.expressions.iteration.IteratorListExpression;
 import eu.europa.ted.efx.model.expressions.scalar.BooleanExpression;
 import eu.europa.ted.efx.model.expressions.scalar.ScalarPath;
+import eu.europa.ted.efx.model.expressions.sequence.SequencePath;
 import eu.europa.ted.efx.model.identifiers.Dictionary;
 import eu.europa.ted.efx.model.types.EfxDataType;
 import eu.europa.ted.efx.model.types.EfxTypeLattice;
@@ -106,13 +107,15 @@ class ExpressionConstruct implements Composable {
   };
 
   /**
-   * An index after a field or a node: the element at a position of the whole sequence. The
-   * visitor gives it the sequence in parentheses, so that it selects from the whole sequence.
+   * An index after a field or a node: the element at a position of the whole sequence. It puts
+   * the sequence in parentheses, so that it selects from the whole sequence; its argument is the
+   * path as written, which an error names.
    */
   static final ExpressionConstruct INDEX_IN_PATH = new ExpressionConstruct("Index",
       overload(signature(parameter("sequence", PATH), parameter("position", NUMBER))
           .returning(PATH),
-          (script, sequence, position) -> script.composeIndexer(sequence.asSequence(), position,
+          (script, sequence, position) -> script.composeIndexer(
+              inParentheses(script, sequence, sequenceClassOf(sequence)), position,
               elementClassOf(sequence))));
 
   /**
@@ -239,6 +242,13 @@ class ExpressionConstruct implements Composable {
    */
   private static Class<? extends ScalarPath> elementClassOf(final PathExpression sequence) {
     return ScalarPath.fromEfxDataType.get(EfxTypeLattice.toPrimitive(sequence.getDataType()));
+  }
+
+  /**
+   * Gives the class of the whole sequence a path selects: a path of a sequence of its primitive.
+   */
+  private static Class<? extends SequencePath> sequenceClassOf(final PathExpression path) {
+    return SequencePath.fromEfxDataType.get(EfxTypeLattice.toPrimitive(path.getDataType()));
   }
 
   private static <E extends TypedExpression> E inParentheses(final ScriptGenerator script,

@@ -140,6 +140,6 @@ public class Arguments<P extends Parameter> extends LinkedList<Argument<P>> {
 
     @Override
     public int hashCode() {
-        return 31 * super.hashCode() + Objects.hashCode(this.getArgumentValues());
+        return Objects.hashCode(this.getArgumentValues());
     }
 }

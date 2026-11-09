@@ -5254,6 +5254,22 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   }
 
   @Test
+  void testTypeErrorMessage_ListWithASequenceFirst_IsReportedAtTheItem() {
+    assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
+        "line 1:13 Type mismatch. List cannot take 'number*' and 'number'."
+            + " Its 1st item must be 'number'.",
+        "[[1, 2], 1]");
+  }
+
+  @Test
+  void testTypeErrorMessage_ListWithANodeFirst_IsReportedAtTheList() {
+    assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
+        "line 1:12 Type mismatch. List cannot take 'node' and 'number'."
+            + " Its 1st item must be a value.",
+        "[ND-SubNode, 1]");
+  }
+
+  @Test
   void testTypeErrorMessage_List() {
     assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
         "line 1:16 Type mismatch. List cannot take 'number' and 'text'."
@@ -5308,6 +5324,22 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
         "line 1:37 Type mismatch. Index cannot take 'text*' and 'text'."
             + " Its position must be 'number'.",
         "BT-00-Repeatable-Text[at 'x']");
+  }
+
+  @Test
+  void testTypeErrorMessage_IndexAfterASingleValuedField_NamesItsType() {
+    assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
+        "line 1:26 Type mismatch. Index cannot take 'text' and 'indicator'."
+            + " Its position must be 'number'.",
+        "BT-00-Text[at TRUE]");
+  }
+
+  @Test
+  void testTypeErrorMessage_IndexAfterANode_NamesItsType() {
+    assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
+        "line 1:26 Type mismatch. Index cannot take 'node' and 'indicator'."
+            + " Its position must be 'number'.",
+        "ND-SubNode[at TRUE] is present");
   }
 
   @Test
