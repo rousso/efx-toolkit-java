@@ -17,10 +17,10 @@ import java.util.List;
 
 import eu.europa.ted.efx.model.constructs.Composable;
 import eu.europa.ted.efx.model.constructs.Composer;
-import eu.europa.ted.efx.model.constructs.Construct;
 import eu.europa.ted.efx.model.constructs.Overload;
 import eu.europa.ted.efx.model.constructs.ParameterType;
 import eu.europa.ted.efx.model.constructs.Signature;
+import eu.europa.ted.efx.model.constructs.Spelling;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 
 /**
@@ -71,11 +71,11 @@ public class Function extends Invocable implements Composable {
     }
 
     /**
-     * @return the function as a call writes it, with its prefix: "Function '?greeting'"
+     * @return the function as a call writes it, with its prefix, as {@code ?greeting}
      */
     @Override
-    public String describe() {
-        return Construct.functionName("?" + this.name);
+    public Spelling getSpelling() {
+        return Spelling.function("?" + this.name);
     }
 
     @Override

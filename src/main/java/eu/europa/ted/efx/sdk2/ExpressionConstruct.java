@@ -28,9 +28,9 @@ import java.util.List;
 import eu.europa.ted.efx.interfaces.ScriptGenerator;
 import eu.europa.ted.efx.model.constructs.Composable;
 import eu.europa.ted.efx.model.constructs.Composer;
-import eu.europa.ted.efx.model.constructs.Construct;
 import eu.europa.ted.efx.model.constructs.Overload;
 import eu.europa.ted.efx.model.constructs.ParameterType;
+import eu.europa.ted.efx.model.constructs.Spelling;
 import eu.europa.ted.efx.model.expressions.PathExpression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.expressions.iteration.IteratorListExpression;
@@ -134,7 +134,7 @@ class ExpressionConstruct implements Composable {
    * typed as it continues from the context; the override joins them.
    */
   static final ExpressionConstruct CONTEXT_OVERRIDE =
-      new ExpressionConstruct(Construct.operatorName("::"),
+      new ExpressionConstruct(Spelling.operator("::").describe(),
           overload(signature(parameter("left operand", PATH), parameter("right operand", PATH))
               .returning(PATH), ScriptGenerator::joinPaths));
 

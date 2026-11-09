@@ -14,31 +14,56 @@
 package eu.europa.ted.efx.model.constructs;
 
 /**
- * How an expression writes a function or an operator: as a function, with the token before its
- * arguments in parentheses, or as an operator, with the token beside its operands. A type error
- * names what was written by its spelling.
+ * How EFX writes a function, a template or an operator: a function with the token before its
+ * arguments in parentheses, a template with its name after {@code invoke}, an operator with the
+ * token beside its operands. A type error names what was written, and each of its arguments, by
+ * its spelling.
  *
  * <p>A built-in is usually spelled by its own name, but a call may spell it otherwise:
  * {@code string} is a spelling of the function {@code text}, and {@code :preferredLanguage} spells
  * the function {@code preferred-language} as an operator after a field. A step that only a field
- * has, such as {@code :rawValue}, is spelled as an operator after the field.</p>
+ * has, such as {@code :rawValue}, is spelled as an operator after the field. A function declared
+ * in EFX is spelled with its prefix, as {@code ?greeting}.</p>
  */
 public final class Spelling {
 
-  private final String token;
-  private final boolean function;
+  /**
+   * What is written: a function or a template, whose arguments are numbered, or an operator,
+   * whose operands are named by their side.
+   */
+  private enum Kind {
+    FUNCTION("Function"), TEMPLATE("Template"), OPERATOR("Operator");
 
-  private Spelling(final String token, final boolean function) {
+    private final String noun;
+
+    Kind(final String noun) {
+      this.noun = noun;
+    }
+  }
+
+  private final String token;
+  private final Kind kind;
+
+  private Spelling(final String token, final Kind kind) {
     this.token = token;
-    this.function = function;
+    this.kind = kind;
   }
 
   /**
-   * @param token the function as written, such as {@code substring} or {@code string}
+   * @param token the function as written, such as {@code substring}, {@code string} or
+   *        {@code ?greeting}
    * @return the spelling of a function
    */
   public static Spelling function(final String token) {
-    return new Spelling(token, true);
+    return new Spelling(token, Kind.FUNCTION);
+  }
+
+  /**
+   * @param name the name of the template, as {@code invoke} writes it
+   * @return the spelling of a template
+   */
+  public static Spelling template(final String name) {
+    return new Spelling(name, Kind.TEMPLATE);
   }
 
   /**
@@ -46,27 +71,31 @@ public final class Spelling {
    * @return the spelling of an operator
    */
   public static Spelling operator(final String token) {
-    return new Spelling(token, false);
+    return new Spelling(token, Kind.OPERATOR);
   }
 
   /**
-   * @return how a type error names what was written: "Function 'string'" or
-   *         "Operator ':preferredLanguage'"
+   * @return how a type error names what was written: "Function 'string'",
+   *         "Template 'greeting'" or "Operator ':preferredLanguage'"
    */
   public String describe() {
-    return this.function ? Construct.functionName(this.token)
-        : Construct.operatorName(this.token);
+    return this.kind.noun + " '" + this.token + "'";
   }
 
   /**
    * @param position the position of an argument
    * @param count the number of arguments
-   * @return how a type error names the argument at that position: the arguments of a function by
-   *         their position, such as "2nd argument"; the operands of an operator, "operand", or
-   *         "left operand" and "right operand"
+   * @return how a type error names the argument at that position: the arguments of a function or
+   *         a template by their position, "argument", or "1st argument", "2nd argument" and so
+   *         on; the operands of an operator, "operand", or "left operand" and "right operand"
    */
   public String roleOf(final int position, final int count) {
-    return this.function ? Construct.argumentRole(position, count)
-        : Construct.operandRole(position, count);
+    if (this.kind != Kind.OPERATOR) {
+      return Parameters.numbered("argument", position, count);
+    }
+    if (count == 1) {
+      return "operand";
+    }
+    return position == 0 ? "left operand" : "right operand";
   }
 }

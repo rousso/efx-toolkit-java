@@ -185,3 +185,7 @@ H25 renames `model.constructs.ParsedArgument<P>` to `model.constructs.Argument<P
 ## `ParsedParameter.getParameterType()` (H27)
 
 H27 removes `model.identifiers.ParsedParameter.getParameterType()`, which gave the class of the parameter's reference expression: only `getType()` used it, and no consumer does. `getType()` gives the `ParameterType` of that class, as before. The method was on develop, so the CHANGELOG's line on `ParsedParameter` says so.
+
+## Spelling names every call (H30)
+
+H30 removes the static methods `functionName`, `operatorName`, `argumentRole` and `operandRole` from `model.constructs.Construct`, which repeated what `model.constructs.Spelling` says; `Spelling` now holds that code, and gains `template(String)`, for "Template 'greeting'". `model.identifiers.Invocable` gains the abstract `getSpelling()` and implements `describe()` and `roleOf` from it; `Function` and `Template` implement `getSpelling()` instead of `describe()`, as `?name` and as the template's name. `Construct` and `Spelling` are not on develop; `Invocable`, `Function` and `Template` are, so the CHANGELOG's line on `Invocable` names `getSpelling()` instead of `describe()`.

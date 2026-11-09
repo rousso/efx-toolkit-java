@@ -49,8 +49,8 @@ import eu.europa.ted.efx.interfaces.TemplateSection;
 import eu.europa.ted.efx.interfaces.TranslatorContext;
 import eu.europa.ted.efx.model.Context;
 import eu.europa.ted.efx.model.constructs.Arguments;
-import eu.europa.ted.efx.model.constructs.Construct;
 import eu.europa.ted.efx.model.constructs.ParameterType;
+import eu.europa.ted.efx.model.constructs.Spelling;
 import eu.europa.ted.efx.util.EfxProfilerReportGenerator;
 import eu.europa.ted.efx.util.TranslatorTimings;
 import eu.europa.ted.efx.model.Context.FieldContext;
@@ -337,8 +337,8 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
   public void exitFunctionDeclaration(FunctionDeclarationContext ctx) {
     var type = EfxExpressionVisitor.typeOf(ctx.typeDeclaration());
     var expression = this.expressions.valueOf(ctx.expression(),
-        Clause.of(Construct.functionName(ctx.typeDeclaration().getText() + ":?"
-            + ctx.functionName.getText()), parameter("value", ParameterType.of(type))))
+        Clause.of(Spelling.function(ctx.typeDeclaration().getText() + ":?"
+            + ctx.functionName.getText()).describe(), parameter("value", ParameterType.of(type))))
         .at(0, TypedExpression.class);
     var parameters = this.translation.stack().pop(ParsedParameters.class);
     var function = new Function(ctx.functionName.getText(), parameters, type, expression);

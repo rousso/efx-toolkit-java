@@ -4,6 +4,7 @@ import java.util.List;
 
 import eu.europa.ted.efx.model.constructs.Construct;
 import eu.europa.ted.efx.model.constructs.Parameters;
+import eu.europa.ted.efx.model.constructs.Spelling;
 import eu.europa.ted.efx.model.types.EfxDataType;
 
 /**
@@ -33,12 +34,25 @@ public abstract class Invocable extends Identifier implements Construct {
     }
 
     /**
-     * @return the arguments of a call by their position, as a function's: "argument", or
-     *         "1st argument", "2nd argument" and so on
+     * @return how a call writes it, by which a type error names it and its arguments
+     */
+    public abstract Spelling getSpelling();
+
+    /**
+     * @return how its spelling names it: "Function '?greeting'" or "Template 'greeting'"
+     */
+    @Override
+    public String describe() {
+        return this.getSpelling().describe();
+    }
+
+    /**
+     * @return the arguments of a call by their position: "argument", or "1st argument",
+     *         "2nd argument" and so on
      */
     @Override
     public String roleOf(int position, int count) {
-        return Construct.argumentRole(position, count);
+        return this.getSpelling().roleOf(position, count);
     }
 
     @Override
