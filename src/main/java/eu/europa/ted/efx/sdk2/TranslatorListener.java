@@ -47,8 +47,7 @@ import eu.europa.ted.efx.sdk2.EfxParser.StandardExpressionBlockContext;
 abstract class TranslatorListener extends EfxBaseListener {
 
   /** An expression block, as a type error names it. */
-  static final GrammarConstruct EXPRESSION_BLOCK =
-      GrammarConstruct.ofValueAsGiven("Expression block", "expression");
+  static final Clause EXPRESSION_BLOCK = Clause.ofValueAsGiven("Expression block", "expression");
 
   /**
    * Listens to the syntax errors of the lexer and the parser, instead of their own listeners, if it

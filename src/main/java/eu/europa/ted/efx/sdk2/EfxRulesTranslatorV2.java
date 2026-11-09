@@ -85,16 +85,13 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
   private static final Logger logger = LoggerFactory.getLogger(EfxRulesTranslatorV2.class);
 
   /** The clauses of a rule that take a condition, as a type error names them. */
-  private static final GrammarConstruct WHEN =
-      GrammarConstruct.of("'WHEN'", parameter("condition", INDICATOR));
-  private static final GrammarConstruct ASSERT =
-      GrammarConstruct.of("'ASSERT'", parameter("condition", INDICATOR));
-  private static final GrammarConstruct REPORT =
-      GrammarConstruct.of("'REPORT'", parameter("condition", INDICATOR));
-  private static final GrammarConstruct OTHERWISE_ASSERT =
-      GrammarConstruct.of("'OTHERWISE ASSERT'", parameter("condition", INDICATOR));
-  private static final GrammarConstruct OTHERWISE_REPORT =
-      GrammarConstruct.of("'OTHERWISE REPORT'", parameter("condition", INDICATOR));
+  private static final Clause WHEN = Clause.of("'WHEN'", parameter("condition", INDICATOR));
+  private static final Clause ASSERT = Clause.of("'ASSERT'", parameter("condition", INDICATOR));
+  private static final Clause REPORT = Clause.of("'REPORT'", parameter("condition", INDICATOR));
+  private static final Clause OTHERWISE_ASSERT =
+      Clause.of("'OTHERWISE ASSERT'", parameter("condition", INDICATOR));
+  private static final Clause OTHERWISE_REPORT =
+      Clause.of("'OTHERWISE REPORT'", parameter("condition", INDICATOR));
 
   /**
    * The ValidatorGenerator is used to generate validation output from the intermediate model.
@@ -277,16 +274,12 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
     FunctionInvocationContext invocation = ctx.functionInvocation();
     String funcName = invocation.functionName.getText();
     var func = this.translation.stack().getFunction(funcName);
-    List<? extends TypedExpression> args =
-        this.expressions.argumentsOf(invocation, func).getArgumentValues();
+    var call = this.expressions.invocationOf(invocation, func);
     if (!(func instanceof DynamicFunction)) {
       throw InvalidUsageException.notADynamicFunction(ctx, funcName);
     }
-    DynamicFunction apiFunc = (DynamicFunction) func;
-    var rawCall = this.translation.script().composeDynamicFunction(apiFunc.endpointName, funcName,
-        args);
-    this.translation.stack().push(new DynamicExpression(rawCall.getScript()));
-    this.translation.stack().push(apiFunc);
+    this.translation.stack().push(call.compose(this.translation.script()));
+    this.translation.stack().push(func);
   }
 
   @Override
@@ -692,19 +685,17 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
     String funcName = ctx.functionName.getText();
 
     // Compose the raw dynamic function call.
-    List<? extends TypedExpression> args =
-        this.expressions.argumentsOf(ctx, apiFunc).getArgumentValues();
+    var call = this.expressions.invocationOf(ctx, apiFunc);
     if (!this.ruleStack.contains(ValidationRule.class)) {
       throw InvalidUsageException.dynamicFunctionOutsideRule(ctx, funcName);
     }
-    var rawCall = this.translation.script().composeDynamicFunction(apiFunc.endpointName, funcName,
-        args);
 
     // Compose the variable's expressions: declaration, initialization, and success check ($var == 1).
     String varName = Translation.RESERVED_PREFIX + "apiResult" + (++this.apiCallCounter);
     var declaration = this.translation.script().composeVariableDeclaration(varName,
         DynamicExpression.class);
-    var initExpression = new DynamicExpression(rawCall.getScript());
+    var initExpression = TypedExpression.from(call.compose(this.translation.script()),
+        DynamicExpression.class);
     var varRef = this.translation.script().composeVariableReference(varName,
         NumericExpression.class);
     var one = this.translation.script().getNumericLiteralEquivalent("1");

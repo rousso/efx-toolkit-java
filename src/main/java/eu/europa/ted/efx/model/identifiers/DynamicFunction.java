@@ -14,6 +14,7 @@
 package eu.europa.ted.efx.model.identifiers;
 
 import eu.europa.ted.efx.model.expressions.Expression;
+import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.expressions.scalar.DynamicExpression;
 import eu.europa.ted.efx.model.rules.RuleSeverity;
 
@@ -24,6 +25,7 @@ import eu.europa.ted.efx.model.rules.RuleSeverity;
  * It delegates to an external API endpoint at validation runtime. The endpoint
  * is identified by name and resolved by the consumer.
  * Dynamic functions return a tri-state result (1 = true, 0 = false, -1 = error).
+ * A call of it is translated as the call of the API, a value of its declared type, dynamic.
  */
 public class DynamicFunction extends Function {
 
@@ -33,7 +35,9 @@ public class DynamicFunction extends Function {
 
     public DynamicFunction(String name, ParsedParameters parameters, String endpointName,
         RuleSeverity errorSeverity, String errorLabel) {
-        super(name, parameters, Expression.empty(DynamicExpression.class));
+        super(name, parameters, DynamicExpression.class, Expression.empty(DynamicExpression.class),
+            (script, arguments) -> TypedExpression.from(script.composeDynamicFunction(endpointName,
+                name, arguments.getArgumentValues()), DynamicExpression.class));
         this.endpointName = endpointName;
         this.errorSeverity = errorSeverity;
         this.errorLabel = errorLabel;

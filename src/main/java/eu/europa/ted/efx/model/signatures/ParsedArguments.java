@@ -20,9 +20,9 @@ import eu.europa.ted.efx.model.expressions.sequence.SequenceExpression;
  * <p>Every argument is parsed from EFX, those of a built-in as much as those of a function or a
  * template declared in EFX, so one list serves them all. The arguments of a resolved call are
  * made by {@link Parameters#match}: each is converted to its parameter, with {@code T} bound. The
- * overload of a built-in reads them as the expression classes its signature gives them, and the
- * translation of a grammar construct with the typed accessors. A template block passes its
- * arguments down to the blocks it holds.</p>
+ * overload of a {@link Composable} reads them as the expression classes its signature gives them,
+ * and what a clause belongs to with the typed accessors. A template block passes its arguments
+ * down to the blocks it holds.</p>
  *
  * @param <P> the kind of parameter: declared in the catalogue, or parsed with a declaration
  */

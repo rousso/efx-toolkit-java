@@ -13,22 +13,61 @@
  */
 package eu.europa.ted.efx.model.identifiers;
 
+import java.util.List;
+
 import eu.europa.ted.efx.model.expressions.TypedExpression;
+import eu.europa.ted.efx.model.signatures.Composable;
+import eu.europa.ted.efx.model.signatures.Composer;
 import eu.europa.ted.efx.model.signatures.Construct;
+import eu.europa.ted.efx.model.signatures.Overload;
+import eu.europa.ted.efx.model.signatures.ParameterType;
+import eu.europa.ted.efx.model.signatures.Signature;
 
 /**
  * A user-defined function declared in EFX source code.
  *
- * Extends {@link Invocable} to add the function body expression, whose type determines
- * the function's return type.
+ * Extends {@link Invocable} to add the function body expression. Its declaration gives it its
+ * signature: the declared parameters, and the declared type of its value, which is the type of a
+ * call of it. The one overload of that signature translates a call of it.
  */
-public class Function extends Invocable {
+public class Function extends Invocable implements Composable {
 
     public final TypedExpression expression;
 
-    public Function(String name, ParsedParameters parameters, TypedExpression expression) {
-        super(name, expression.getDataType(), parameters);
+    private final Overload overload;
+
+    /**
+     * @param name the name of the function, without its prefix
+     * @param parameters the declared parameters
+     * @param type the class of the declared type of its value
+     * @param expression the body, converted to the declared type
+     */
+    public Function(String name, ParsedParameters parameters, Class<? extends TypedExpression> type,
+            TypedExpression expression) {
+        this(name, parameters, type, expression, (script, arguments) -> script
+            .composeFunctionInvocation(name, arguments.getArgumentValues(), type));
+    }
+
+    /**
+     * @param name the name of the function, without its prefix
+     * @param parameters the declared parameters
+     * @param type the class of the declared type of its value
+     * @param expression the body, converted to the declared type
+     * @param composer the composer that translates a call of the function
+     */
+    protected Function(String name, ParsedParameters parameters,
+            Class<? extends TypedExpression> type, TypedExpression expression, Composer composer) {
+        super(name, TypedExpression.getEfxDataType(type), parameters);
         this.expression = expression;
+        this.overload = Overload.of(Signature.of(parameters, ParameterType.of(type)), composer);
+    }
+
+    /**
+     * @return the one overload, of the declared signature
+     */
+    @Override
+    public List<Overload> getOverloads() {
+        return List.of(this.overload);
     }
 
     /**

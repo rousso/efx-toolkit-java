@@ -14,7 +14,6 @@
 package eu.europa.ted.efx.sdk2;
 
 import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
-import static eu.europa.ted.efx.model.signatures.Signature.signature;
 
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
@@ -84,6 +83,7 @@ import eu.europa.ted.efx.model.signatures.ParameterType;
 import eu.europa.ted.efx.model.signatures.ParsedArguments;
 import eu.europa.ted.efx.model.signatures.Rejection;
 import eu.europa.ted.efx.model.signatures.Resolution;
+import eu.europa.ted.efx.model.signatures.Spelling;
 import eu.europa.ted.efx.model.types.EfxDataType;
 import eu.europa.ted.efx.model.types.EfxTypeLattice;
 import eu.europa.ted.efx.model.types.EfxTypeTokenLookup;
@@ -127,6 +127,13 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    * declaration may give.
    */
   private static final String INDEX_VARIABLE = Translation.RESERVED_PREFIX + "index";
+
+  /**
+   * The left side of {@code ::}, which must name a context: the one part of a context override
+   * that is checked, since its right side is a reference read from that context.
+   */
+  private static final Clause CONTEXT_OVERRIDE =
+      Clause.of(Construct.operatorName("::"), parameter("left operand", ParameterType.PATH));
 
   private final Translation translation;
   private final Origin<TypedExpression> none;
@@ -182,38 +189,36 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
   // #region Readings of an expression ----------------------------------------
 
   /**
-   * Translates the expression that a construct takes as its one argument: the condition of a rule
-   * or of a template block, the value of a declaration, the expression of a template block. A
-   * single value where a sequence is required is promoted to one; a construct that takes a value
-   * of any type rejects only a node, which has no value.
+   * Translates the expression of a clause: the condition of a rule or of a template block, the
+   * value of a declaration, the expression of a template block. A single value where a sequence is
+   * required is promoted to one; a clause that takes a value of any type rejects only a node,
+   * which has no value.
    *
    * @param expression the expression
-   * @param construct the construct, which has one parameter
-   * @return the value as the construct's argument, converted to its parameter, to be read with
-   *         the accessor of that parameter's type, such as {@link ParsedArguments#booleanAt}
+   * @param clause the clause
+   * @return the value, converted to the parameter of the clause, to be read with the accessor of
+   *         that parameter's type, such as {@link ParsedArguments#booleanAt}
    * @throws TypeMismatchException if the value does not fit: a sequence where a single value is
    *         required, or a node, is reported by the reference the expression is written as where
    *         it explains the mistake, and any other value cannot be converted
    */
-  ParsedArguments<?> valueOf(final ExpressionContext expression, final Construct construct) {
-    return this.checked(construct, List.of(this.visit(expression)), position -> expression)
-        .getArguments();
+  ParsedArguments<?> valueOf(final ExpressionContext expression, final Clause clause) {
+    return this.checked(clause, List.of(this.visit(expression)), position -> expression);
   }
 
   /**
-   * Checks a value that a construct is given as it is, written as nothing the construct could
-   * name in its error, such as a part of a label block.
+   * Checks a value that a clause is given as it is, written as nothing the clause could name in
+   * its error, such as a part of a label block.
    *
    * @param value the value
-   * @param construct the construct, which has one parameter
+   * @param clause the clause
    * @param where where the error is reported
-   * @return the value as the construct's argument, converted to its parameter
-   * @throws TypeMismatchException if the value does not convert to what the construct takes
+   * @return the value, converted to the parameter of the clause
+   * @throws TypeMismatchException if the value does not convert to what the clause takes
    */
-  ParsedArguments<?> valueOf(final TypedExpression value, final Construct construct,
+  ParsedArguments<?> valueOf(final TypedExpression value, final Clause clause,
       final ParserRuleContext where) {
-    return this.checked(construct, List.of(this.subexpression(value)), position -> where)
-        .getArguments();
+    return this.checked(clause, List.of(this.subexpression(value)), position -> where);
   }
 
   /**
@@ -225,7 +230,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    */
   TypedExpression initialValueOf(final TypedVariableInitializerContext initializer) {
     return this.valueOf(initializer.expression(),
-        GrammarConstruct.of("Variable '" + initializer.typeDeclaration().getText() + ":$"
+        Clause.of("Variable '" + initializer.typeDeclaration().getText() + ":$"
             + initializer.variableName.getText() + "'",
             parameter("value", ParameterType.of(typeOf(initializer.typeDeclaration())))))
         .at(0, TypedExpression.class);
@@ -622,7 +627,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
   @Override
   public Subexpression<?> visitAttributeExpression(final AttributeExpressionContext ctx) {
     final String attribute = ctx.attributeName.getText();
-    return this.visit(ctx.expression()).readFromField(ctx, GrammarConstruct.step("/@" + attribute),
+    return this.visit(ctx.expression()).readFromField(ctx, Spelling.operator("/@" + attribute),
         (field, origin) -> new Subexpression<>(continuing(field,
             this.translation.script().composeFieldAttributeReference(field, attribute,
                 StringPath.class)),
@@ -632,7 +637,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
   @Override
   public Subexpression<?> visitRawValueExpression(final RawValueExpressionContext ctx) {
     return this.visit(ctx.expression()).readFromField(ctx,
-        GrammarConstruct.step(":" + ctx.RawValue().getText()),
+        Spelling.operator(":" + ctx.RawValue().getText()),
         (field, origin) -> new Subexpression<>(
             this.translation.script().composeFieldRawValueReference(field), origin.asValue()));
   }
@@ -640,15 +645,15 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
   @Override
   public Subexpression<?> visitPreferredLanguageExpression(
       final PreferredLanguageExpressionContext ctx) {
-    return this.preferredLanguage(ctx, ctx.expression(), AsWritten.operator(
-        ":" + ctx.PreferredLanguage().getText(), TemplateFunctions.PREFERRED_LANGUAGE));
+    return this.preferredLanguage(ctx, ctx.expression(), TemplateFunctions.PREFERRED_LANGUAGE,
+        Spelling.operator(":" + ctx.PreferredLanguage().getText()));
   }
 
   @Override
   public Subexpression<?> visitPreferredLanguageTextExpression(
       final PreferredLanguageTextExpressionContext ctx) {
-    return this.preferredLanguage(ctx, ctx.expression(), AsWritten.operator(
-        ":" + ctx.PreferredLanguageText().getText(), TemplateFunctions.PREFERRED_LANGUAGE_TEXT));
+    return this.preferredLanguage(ctx, ctx.expression(), TemplateFunctions.PREFERRED_LANGUAGE_TEXT,
+        Spelling.operator(":" + ctx.PreferredLanguageText().getText()));
   }
 
   /**
@@ -658,13 +663,14 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    *
    * @param call the postfix form or the call of the function
    * @param field the sub-expression, which must be a field
-   * @param builtIn the built-in, as the form writes it
+   * @param builtIn the built-in
+   * @param spelling the built-in as the form spells it
    * @return the result of the built-in
    */
   private Subexpression<?> preferredLanguage(final ParserRuleContext call,
-      final ExpressionContext field, final BuiltIn builtIn) {
-    return this.visit(field).readFromField(call, builtIn,
-        (path, origin) -> this.pathCall(call, builtIn, List.of(new Subexpression<>(path, origin))));
+      final ExpressionContext field, final BuiltIn builtIn, final Spelling spelling) {
+    return this.visit(field).readFromField(call, spelling, (path, origin) -> this.pathCall(call,
+        builtIn, spelling, List.of(new Subexpression<>(path, origin))));
   }
 
   /**
@@ -698,7 +704,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
 
   private Context contextBefore(final ExpressionContext left) {
     final Subexpression<?> operand = this.visit(left);
-    return operand.context().orElseThrow(() -> this.unreadable(GrammarConstruct.CONTEXT_OVERRIDE,
+    return operand.context().orElseThrow(() -> this.unreadable(CONTEXT_OVERRIDE,
         List.of(operand), List.of(operand.expression()), 0, left));
   }
 
@@ -741,7 +747,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    * node, as each element the path selects, and keeps the elements for which it holds.
    *
    * @param path the path of the field or the node
-   * @param origin the field or the node
+   * @param origin the field or the node, which gives the predicate on what it is
    * @param condition the condition of the predicate
    * @return the elements the predicate keeps, with the origin of the field or node
    * @throws TypeMismatchException if the condition is not an indicator
@@ -750,17 +756,19 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
       final ExpressionContext condition) {
     origin.pushElementContext();
     final Subexpression<?> test = this.visit(condition);
-    final PathExpression selected = origin.filter(path,
-        this.resolved(GrammarConstruct.PREDICATE, List.of(new Subexpression<>(path, origin), test),
-            List.of(path, test.value()), position -> condition,
-            TypeMismatchException::cannotConvert).getArguments().booleanAt(1));
+    final PathExpression selected = PathExpression.class.cast(this.resolved(origin.predicate(),
+        List.of(new Subexpression<>(path, origin), test), List.of(path, test.value()),
+        position -> condition, TypeMismatchException::cannotConvert)
+        .compose(this.translation.script()));
     this.readsInContexts.remove(this.translation.efxContext().pop());
     return new Subexpression<>(selected, origin);
   }
 
   /**
    * A predicate after a value, which is rejected: a value has no elements that the condition could
-   * be read from. The condition is translated only so that the error names its type.
+   * be read from. The condition is translated only so that the error names its type. The
+   * predicates on a field and on a node take the same parameters and are named alike, so the
+   * error is that of either.
    *
    * @param sequence the value
    * @param condition the condition of the predicate
@@ -769,7 +777,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
   TypeMismatchException predicateOnValue(final Subexpression<?> sequence,
       final ExpressionContext condition) {
     final Subexpression<?> test = this.visit(condition);
-    return this.unreadable(GrammarConstruct.PREDICATE, List.of(sequence, test),
+    return this.unreadable(ExpressionConstruct.PREDICATE_ON_FIELD, List.of(sequence, test),
         List.of(sequence.expression(), test.value()), 0,
         this.translation.stack().peekParserContext());
   }
@@ -777,9 +785,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
   /**
    * An index after a field or a node: the element at a position in the whole sequence the path
    * selects, rather than at that position among the children of each parent, which a predicate on
-   * the last step of the path would select. The position is read once, where the expression
-   * stands. It is bound before the element is selected if it reads the context, which the target
-   * language would read from each element instead.
+   * the last step of the path would select. So the path is put in parentheses. The position is
+   * read once, where the expression stands: see {@link #elementAt}.
    *
    * @param path the path of the field or the node
    * @param origin the field or the node
@@ -792,23 +799,25 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
     final Reads reads = this.readsInCurrentContext();
     final int readsBefore = reads.ofContext();
     final Subexpression<?> index = this.visit(position);
-    final NumericExpression number = this.resolved(GrammarConstruct.INDEX_IN_PATH,
-        List.of(new Subexpression<>(path, origin), index), List.of(path, index.value()),
-        at -> position, TypeMismatchException::cannotConvert).getArguments().numericAt(1);
-    final Class<? extends EfxDataType.Primitive> primitive =
-        EfxTypeLattice.toPrimitive(path.getDataType());
-    final Class<? extends SequencePath> elementsType = SequencePath.fromEfxDataType.get(primitive);
-    return new Subexpression<>(this.elementAt(this.inParentheses(path, elementsType), elementsType,
-        number, ScalarPath.fromEfxDataType.get(primitive), reads.ofContext() > readsBefore),
+    final Class<? extends SequencePath> elementsType =
+        SequencePath.fromEfxDataType.get(EfxTypeLattice.toPrimitive(path.getDataType()));
+    final Resolution indexing = this.resolved(ExpressionConstruct.INDEX_IN_PATH,
+        List.of(new Subexpression<>(path, origin), index),
+        List.of(this.inParentheses(path, elementsType), index.value()), at -> position,
+        TypeMismatchException::cannotConvert);
+    return new Subexpression<>(
+        PathExpression.class.cast(this.elementAt(ExpressionConstruct.INDEX_IN_PATH, indexing,
+            elementsType, reads.ofContext() > readsBefore)),
         origin);
   }
 
   /**
    * An index after a value: the value at a position in the sequence of its values. A single value
-   * is a sequence of one. The position is read once, where the expression stands. It is bound
-   * before the value is selected if it reads the context or the root, by a path or by a lookup in a
-   * dictionary: the target language would read it for each value, which has no element that a
-   * path or a lookup could start from.
+   * is a sequence of one, and a path is put in parentheses, so that the index selects from the
+   * whole sequence. The position is read once, where the expression stands: see
+   * {@link #elementAt}. Here the target language would read it for each value if it reads the
+   * context or the root, by a path or by a lookup in a dictionary, since a value has no element
+   * that a path or a lookup could start from.
    *
    * @param sequence the value
    * @param position the position the index selects
@@ -822,67 +831,44 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
     final int readsBefore = reads.all();
     final Subexpression<?> index = this.visit(position);
     final ParserRuleContext indexed = this.translation.stack().peekParserContext();
-    final Resolution indexing = this.resolved(GrammarConstruct.INDEX_IN_VALUE,
-        List.of(sequence, index), List.of(given, index.value()),
+    final TypedExpression list =
+        given instanceof PathExpression ? this.inParentheses(given, given.getClass()) : given;
+    final Resolution indexing = this.resolved(ExpressionConstruct.INDEX_IN_VALUE,
+        List.of(sequence, index), List.of(list, index.value()),
         at -> at == 0 ? indexed : position, TypeMismatchException::cannotConvert);
-    final Class<? extends SequenceExpression> listType =
-        indexing.getArguments().sequenceTypeAt(0);
-    final SequenceExpression list = given instanceof PathExpression
-        ? this.inParentheses(given, listType)
-        : TypedExpression.from(given, listType);
-    return this.subexpression(this.elementAt(list, listType,
-        indexing.getArguments().numericAt(1),
-        GrammarConstruct.INDEX_IN_VALUE.resultOf(indexing).asSubclass(ScalarExpression.class),
-        reads.all() > readsBefore));
+    return this.subexpression(this.elementAt(ExpressionConstruct.INDEX_IN_VALUE, indexing,
+        indexing.getArguments().sequenceTypeAt(0), reads.all() > readsBefore));
   }
 
   /**
-   * The element at a position in a sequence. The position is read once, where the expression
-   * stands: if the target language would read it again for each element, it is bound before the
-   * element is selected.
+   * The element an index selects. The position is read once, where the expression stands. If the
+   * target language would read it again for each element, it is bound first, and the element is
+   * selected at the bound position, in parentheses, so that a step, a predicate or an operator
+   * after it applies to the element: {@code (for $__index in position return sequence[$__index])}.
    *
-   * @param <T> the class of the element
-   * @param sequence the sequence
+   * @param index the index
+   * @param indexing the resolution of the index, with the sequence and the position
    * @param sequenceType the class of the sequence
-   * @param position the position, a single number
-   * @param type the class of the element
    * @param readForEachElement whether the target language would read the position for each element
    * @return the element at that position
    */
-  private <T extends ScalarExpression> T elementAt(final SequenceExpression sequence,
-      final Class<? extends SequenceExpression> sequenceType, final NumericExpression position,
-      final Class<T> type, final boolean readForEachElement) {
-    return readForEachElement
-        ? this.elementAtBoundPosition(sequence, sequenceType, position, type)
-        : this.translation.script().composeIndexer(sequence, position, type);
-  }
-
-  /**
-   * The element at a position that is bound before the element is selected, so that the target
-   * language reads it once rather than for each element of the sequence. The binding is in
-   * parentheses, so that a step, a predicate or an operator after it applies to the element:
-   * {@code (for $__index in position return sequence[$__index])}.
-   *
-   * @param <T> the class of the element
-   * @param sequence the sequence
-   * @param sequenceType the class of the sequence
-   * @param position the position, a single number
-   * @param type the class of the element
-   * @return the element at that position
-   */
-  private <T extends ScalarExpression> T elementAtBoundPosition(final SequenceExpression sequence,
-      final Class<? extends SequenceExpression> sequenceType, final NumericExpression position,
-      final Class<T> type) {
-    final IteratorListExpression binding = this.translation.script().composeIteratorList(
-        List.of(this.translation.script().composeIteratorExpression(
-            this.translation.script().composeVariableDeclaration(INDEX_VARIABLE,
-                NumericExpression.class),
-            TypedExpression.from(position, NumericSequenceExpression.class))));
-    final T element = this.translation.script().composeIndexer(sequence,
-        this.translation.script().composeVariableReference(INDEX_VARIABLE, NumericExpression.class),
-        type);
-    return this.inParentheses(
-        this.translation.script().composeForExpression(binding, element, sequenceType), type);
+  private TypedExpression elementAt(final ExpressionConstruct index, final Resolution indexing,
+      final Class<? extends SequenceExpression> sequenceType, final boolean readForEachElement) {
+    final ScriptGenerator script = this.translation.script();
+    if (!readForEachElement) {
+      return indexing.compose(script);
+    }
+    final IteratorListExpression binding = script.composeIteratorList(
+        List.of(script.composeIteratorExpression(
+            script.composeVariableDeclaration(INDEX_VARIABLE, NumericExpression.class),
+            TypedExpression.from(indexing.getArguments().numericAt(1),
+                NumericSequenceExpression.class))));
+    final ScalarExpression element = ScalarExpression.class.cast(index
+        .resolve(List.of(indexing.getArguments().at(0, TypedExpression.class),
+            script.composeVariableReference(INDEX_VARIABLE, NumericExpression.class)))
+        .orElseThrow().compose(script));
+    return this.inParentheses(script.composeForExpression(binding, element, sequenceType),
+        element.getClass());
   }
 
   /**
@@ -900,12 +886,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
     final Dictionary dictionary = this.translation.stack().getDictionary(name);
     this.readsInCurrentContext().countReadOfRoot();
     return new Subexpression<>(
-        this.translation.script().composeDictionaryLookup(dictionary.name,
-            this.valueOf(key, GrammarConstruct.of("Dictionary '" + reference.getText() + "'",
-                signature(parameter("key", ParameterType.TEXT))
-                    .returning(ParameterType.of(dictionary.type))))
-                .stringAt(0),
-            dictionary.type),
+        this.resolved(ExpressionConstruct.lookup(reference.getText(), dictionary),
+            List.of(this.visit(key)), position -> key).compose(this.translation.script()),
         new DictionaryOrigin(this, reference, dictionary.name));
   }
 
@@ -1068,7 +1050,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
   public Subexpression<?> visitPresenceCondition(final PresenceConditionContext ctx) {
     final BuiltIn operator =
         ctx.modifier == null ? ConditionOperators.IS_PRESENT : ConditionOperators.IS_NOT_PRESENT;
-    return this.pathCall(ctx, operator, this.subexpressionsOf(ctx));
+    return this.pathCall(ctx, operator, operator.getSpelling(), this.subexpressionsOf(ctx));
   }
 
   @Override
@@ -1104,31 +1086,22 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
   @Override
   public Subexpression<?> visitParenthesizedExpression(final ParenthesizedExpressionContext ctx) {
     final Subexpression<?> inner = this.visit(ctx.expression());
-    final Resolution content =
-        this.checked(GrammarConstruct.PARENTHESES, List.of(inner), position -> ctx);
     return new Subexpression<>(
-        this.inParentheses(content.getArguments().at(0, TypedExpression.class),
-            GrammarConstruct.PARENTHESES.resultOf(content)),
+        this.resolved(ExpressionConstruct.PARENTHESES, List.of(inner), position -> ctx)
+            .compose(this.translation.script()),
         inner.origin().asValue());
   }
 
   /**
    * A conditional: the condition is a boolean, and the two branches have one primitive. Two single
    * values give a single value; a sequence on either side gives a sequence, the other branch
-   * promoted to a sequence of one by the parameter list that takes them.
+   * promoted to a sequence of one by the overload that takes them.
    */
   @Override
   public Subexpression<?> visitConditionalExpression(final ConditionalExpressionContext ctx) {
-    final Resolution parts = this.checked(GrammarConstruct.CONDITIONAL,
-        this.subexpressionsOf(ctx), position -> position == 1 ? ctx : ctx.expression(position));
-    return this.subexpression(
-        this.conditional(parts.getArguments(), GrammarConstruct.CONDITIONAL.resultOf(parts)));
-  }
-
-  private <T extends TypedExpression> T conditional(final ParsedArguments<?> parts,
-      final Class<T> type) {
-    return this.translation.script().composeConditionalExpression(parts.booleanAt(0),
-        parts.at(1, type), parts.at(2, type), type);
+    return this.subexpression(this.resolved(ExpressionConstruct.CONDITIONAL,
+        this.subexpressionsOf(ctx), position -> position == 1 ? ctx : ctx.expression(position))
+        .compose(this.translation.script()));
   }
 
   /**
@@ -1137,50 +1110,47 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
   @Override
   public Subexpression<?> visitList(final ListContext ctx) {
     final List<ExpressionContext> items = ctx.expression();
-    final Resolution list = this.checked(GrammarConstruct.LIST, this.subexpressionsOf(ctx),
-        position -> position == 0 ? ctx : items.get(position));
-    return this.subexpression(this.translation.script().composeList(
-        list.getArguments().getArgumentValues().stream().map(ScalarExpression.class::cast)
-            .collect(Collectors.toList()),
-        GrammarConstruct.LIST.resultOf(list).asSubclass(SequenceExpression.class)));
+    return this.subexpression(this.resolved(ExpressionConstruct.LIST, this.subexpressionsOf(ctx),
+        position -> position == 0 ? ctx : items.get(position))
+        .compose(this.translation.script()));
   }
 
+  /**
+   * {@code every} or {@code some}: the condition is read for each iteration, in the scope of the
+   * variables of the iterators.
+   */
   @Override
   public Subexpression<?> visitQuantifiedExpression(final QuantifiedExpressionContext ctx) {
     this.translation.stack().pushStackFrame();
     final IteratorListExpression iterators = this.iteratorsOf(ctx.iteratorList());
-    final BooleanExpression condition = this.valueOf(ctx.expression(), GrammarConstruct
-        .quantifier((ctx.Every() != null ? ctx.Every() : ctx.Some()).getText())).booleanAt(0);
-    final BooleanExpression quantified = ctx.Every() != null
-        ? this.translation.script().composeAllSatisfy(iterators, condition)
-        : this.translation.script().composeAnySatisfies(iterators, condition);
+    final ExpressionConstruct quantifier = ctx.Every() != null
+        ? ExpressionConstruct.every(ctx.Every().getText(), iterators)
+        : ExpressionConstruct.some(ctx.Some().getText(), iterators);
+    final TypedExpression quantified = this.resolved(quantifier,
+        List.of(this.visit(ctx.expression())), position -> ctx.expression())
+        .compose(this.translation.script());
     this.translation.stack().popStackFrame();
     return this.subexpression(quantified);
   }
 
   /**
-   * An iteration: the body gives a sequence for each iteration, a single value being a sequence of
-   * one, and the iteration gives their concatenation.
+   * An iteration: the body is read for each iteration, in the scope of the variables of the
+   * iterators. It gives a sequence for each iteration, a single value being a sequence of one, and
+   * the iteration gives their concatenation; with {@code distinct}, the distinct values of it, as
+   * the built-in {@code distinct-values} gives them.
    */
   @Override
   public Subexpression<?> visitSequenceFromIteration(final SequenceFromIterationContext ctx) {
     this.translation.stack().pushStackFrame();
     final IteratorListExpression iterators = this.iteratorsOf(ctx.iteratorList());
-    final Resolution body = this.checked(GrammarConstruct.ITERATION,
-        List.of(this.visit(ctx.expression())), position -> ctx.expression());
-    final SequenceExpression iteration = this.iteration(iterators,
-        body.getArguments().sequenceAt(0), ctx.Distinct() != null,
-        GrammarConstruct.ITERATION.resultOf(body).asSubclass(SequenceExpression.class));
+    final Subexpression<?> iteration = this.subexpression(
+        this.resolved(ExpressionConstruct.iteration(iterators),
+            List.of(this.visit(ctx.expression())), position -> ctx.expression())
+            .compose(this.translation.script()));
     this.translation.stack().popStackFrame();
-    return this.subexpression(iteration);
-  }
-
-  private <T extends SequenceExpression> T iteration(final IteratorListExpression iterators,
-      final SequenceExpression body, final boolean distinct, final Class<T> sequenceType) {
-    final T result = this.translation.script().composeForExpression(iterators, body, sequenceType);
-    return distinct
-        ? this.translation.script().composeDistinctValuesFunction(result, sequenceType)
-        : result;
+    return ctx.Distinct() == null ? iteration
+        : this.builtIn(ctx, SequenceFunctions.DISTINCT_VALUES,
+            SequenceFunctions.DISTINCT_VALUES.getSpelling(), List.of(iteration), ReadAs.VALUES);
   }
 
   /**
@@ -1209,7 +1179,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
       final String name = ctx.variableName.getText();
       return this.iterator(name, ScalarExpression.fromEfxDataType.get(primitive),
           EfxExpressionVisitor.this.valueOf(ctx.expression(),
-              GrammarConstruct.of("Iterator '" + ctx.primitiveType().getText() + ":$" + name + "'",
+              Clause.of("Iterator '" + ctx.primitiveType().getText() + ":$" + name + "'",
                   parameter("sequence",
                       ParameterType.of(SequenceExpression.fromEfxDataType.get(primitive)))))
               .sequenceAt(0));
@@ -1406,86 +1376,81 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
   // #region Function invocation ----------------------------------------------
 
   /**
-   * An invocation of a declared function, typed by the declaration: a single value or a sequence
-   * of the primitive of its value.
+   * An invocation of a declared function, typed by the declaration: a value of the type it
+   * declares.
    */
   @Override
   public Subexpression<?> visitFunctionInvocation(final FunctionInvocationContext ctx) {
     final String name = ctx.functionName.getText();
-    final Function function = this.translation.stack()
-        .getFunction(name);
-    final ParsedArguments<?> arguments = this.invocationOf(ctx, function, ctx.argumentList());
-    final ParameterType<?> result = EfxTypeLattice.isSequence(function.dataType)
-        ? ParameterType.T_SEQUENCE
-        : ParameterType.T;
     return new Subexpression<>(
-        this.translation.script().composeFunctionInvocation(name, arguments.getArgumentValues(),
-            this.bindingOf(result, function.expression).getExpressionType()),
+        this.invocationOf(ctx, this.translation.stack().getFunction(name))
+            .compose(this.translation.script()),
         new IdentifierOrigin<>(this, ctx, name));
   }
 
   /**
-   * Translates the arguments of an invocation of a declared function.
+   * Resolves an invocation of a declared function: its arguments against the parameters it
+   * declares, as the arguments of a call of a built-in are resolved against its overloads.
    *
    * @param invocation the invocation
    * @param function the function invoked
-   * @return the arguments, each converted to the class of its parameter
+   * @return the resolution, which composes the invocation
    * @throws InvalidArgumentException if the number of arguments or the type of one does not match
+   * @throws TypeMismatchException if an argument is a context variable that holds a node
    */
-  ParsedArguments<?> argumentsOf(final FunctionInvocationContext invocation,
-      final Invocable function) {
-    return this.invocationOf(invocation, function, invocation.argumentList());
+  Resolution invocationOf(final FunctionInvocationContext invocation, final Function function) {
+    final List<Subexpression<?>> subexpressions = this.argumentsOf(invocation.argumentList());
+    final List<TypedExpression> arguments =
+        subexpressions.stream().map(Subexpression::value).collect(Collectors.toList());
+    return function.resolve(arguments).orElseThrow(
+        () -> this.invocationError(invocation, function, subexpressions, arguments));
   }
 
   /**
-   * Translates the arguments of an invocation of a declared template. The resolution pairs them
-   * with the template's parameters as parameters of any kind; they are paired again here with the
-   * declared parameters themselves, which the template model reads, rather than cast.
+   * Translates the arguments of an invocation of a declared template, checked against the
+   * parameters it declares. The check pairs them with the template's parameters as parameters of
+   * any kind; they are paired again here with the declared parameters themselves, which the
+   * template model reads, rather than cast.
    *
    * @param invocation the invocation
    * @param template the template invoked
    * @param list the arguments, or {@code null} if there are none
    * @return the arguments, each converted to the class of its parameter
    * @throws InvalidArgumentException if the number of arguments or the type of one does not match
+   * @throws TypeMismatchException if an argument is a context variable that holds a node
    */
   ParsedArguments<ParsedParameter> argumentsOf(final ParserRuleContext invocation,
       final Invocable template, final ArgumentListContext list) {
-    return new ParsedArguments<>(template.parameters,
-        this.invocationOf(invocation, template, list).getArgumentValues());
+    final List<Subexpression<?>> subexpressions = this.argumentsOf(list);
+    final List<TypedExpression> arguments =
+        subexpressions.stream().map(Subexpression::value).collect(Collectors.toList());
+    return new ParsedArguments<>(template.parameters, template.match(arguments)
+        .orElseThrow(() -> this.invocationError(invocation, template, subexpressions, arguments))
+        .getArgumentValues());
   }
 
   /**
-   * Checks the arguments of an invocation of a declared function or template against the declared
-   * parameters, as the arguments of a call of a built-in are checked against its overloads. The
-   * parameters reject an argument that does not fit them, a node included.
-   *
-   * <p>An argument that does not fit is reported as such, even a sequence where a single value is
-   * required. Only a context variable that holds a node is reported by itself, as it is wherever a
-   * value is read from it.</p>
-   *
-   * @param call the invocation
-   * @param declaration the function or template invoked
-   * @param list the arguments, or {@code null} if there are none
-   * @return the arguments, converted to the classes of the parameters
-   * @throws InvalidArgumentException if the number of arguments or the type of one does not match
-   * @throws TypeMismatchException if an argument is a context variable that holds a node
+   * @param list the arguments of an invocation, or {@code null} if there are none
+   * @return the arguments, translated in order
    */
-  private ParsedArguments<?> invocationOf(final ParserRuleContext call,
-      final Invocable declaration, final ArgumentListContext list) {
+  private List<Subexpression<?>> argumentsOf(final ArgumentListContext list) {
     final List<Subexpression<?>> subexpressions = new ArrayList<>();
     if (list != null) {
       for (final ArgumentContext argument : list.argument()) {
         subexpressions.add(this.visit(argument.expression()));
       }
     }
-    final List<TypedExpression> arguments =
-        subexpressions.stream().map(Subexpression::value).collect(Collectors.toList());
-    return declaration.resolve(arguments).map(Resolution::getArguments)
-        .orElseThrow(() -> this.invocationError(call, declaration, subexpressions, arguments));
+    return subexpressions;
   }
 
   /**
-   * Gives the error of an invocation whose arguments the declared parameters do not take.
+   * Gives the error of an invocation of a declared function or template whose arguments the
+   * declared parameters do not take. The parameters reject an argument that does not fit them, a
+   * node included.
+   *
+   * <p>An argument that does not fit is reported as such, even a sequence where a single value is
+   * required. Only a context variable that holds a node is reported by itself, as it is wherever a
+   * value is read from it.</p>
    *
    * @param call the invocation
    * @param declaration the function or template invoked
@@ -1810,15 +1775,15 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
   @Override
   public Subexpression<?> visitPreferredLanguageFunction(
       final PreferredLanguageFunctionContext ctx) {
-    return this.preferredLanguage(ctx, ctx.expression(), AsWritten.function(
-        ctx.PreferredLanguageFunction().getText(), TemplateFunctions.PREFERRED_LANGUAGE));
+    return this.preferredLanguage(ctx, ctx.expression(), TemplateFunctions.PREFERRED_LANGUAGE,
+        Spelling.function(ctx.PreferredLanguageFunction().getText()));
   }
 
   @Override
   public Subexpression<?> visitPreferredLanguageTextFunction(
       final PreferredLanguageTextFunctionContext ctx) {
-    return this.preferredLanguage(ctx, ctx.expression(), AsWritten.function(
-        ctx.PreferredLanguageTextFunction().getText(), TemplateFunctions.PREFERRED_LANGUAGE_TEXT));
+    return this.preferredLanguage(ctx, ctx.expression(), TemplateFunctions.PREFERRED_LANGUAGE_TEXT,
+        Spelling.function(ctx.PreferredLanguageTextFunction().getText()));
   }
 
   // Date, time and duration functions
@@ -1920,7 +1885,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
   /**
    * Translates a call of a built-in function with {@link #builtIn}: its sub-expressions are the
    * expressions of its grammar label, in order, read as values, and an argument of the wrong
-   * primitive cannot be converted. A type error names the function as the call writes it, which
+   * primitive cannot be converted. A type error names the function as the call spells it, which
    * may be another name of the built-in, as {@code string} is of {@code text}.
    *
    * @param call the call, which starts with the name of the function
@@ -1928,7 +1893,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    * @return the result of the call
    */
   private Subexpression<?> call(final ParserRuleContext call, final BuiltIn function) {
-    return this.builtIn(call, AsWritten.function(call.getStart().getText(), function),
+    return this.builtIn(call, function, Spelling.function(call.getStart().getText()),
         this.subexpressionsOf(call), ReadAs.VALUES);
   }
 
@@ -1942,7 +1907,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    * @return the result of the condition
    */
   private Subexpression<?> condition(final ParserRuleContext condition, final BuiltIn operator) {
-    return this.builtIn(condition, operator, this.subexpressionsOf(condition), ReadAs.VALUES);
+    return this.builtIn(condition, operator, operator.getSpelling(),
+        this.subexpressionsOf(condition), ReadAs.VALUES);
   }
 
   /**
@@ -1950,13 +1916,14 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    * an argument of the wrong primitive cannot be converted.
    *
    * @param call the call
-   * @param builtIn the built-in called, as the call writes it
+   * @param builtIn the built-in called
+   * @param spelling the built-in as the call spells it
    * @param subexpressions the sub-expressions of the call
    * @return the result of the call
    */
   private Subexpression<?> pathCall(final ParserRuleContext call, final BuiltIn builtIn,
-      final List<Subexpression<?>> subexpressions) {
-    return this.builtIn(call, builtIn, subexpressions, ReadAs.PATHS);
+      final Spelling spelling, final List<Subexpression<?>> subexpressions) {
+    return this.builtIn(call, builtIn, spelling, subexpressions, ReadAs.PATHS);
   }
 
   /**
@@ -1968,7 +1935,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    * @return the result of the operation
    */
   private Subexpression<?> operation(final ParserRuleContext operation, final BuiltIn operator) {
-    return this.builtIn(operation, operator, this.subexpressionsOf(operation), ReadAs.OPERANDS);
+    return this.builtIn(operation, operator, operator.getSpelling(),
+        this.subexpressionsOf(operation), ReadAs.OPERANDS);
   }
 
   private List<Subexpression<?>> subexpressionsOf(final ParserRuleContext call) {
@@ -1982,25 +1950,31 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
 
   /**
    * Checks the arguments its sub-expressions give a built-in, and translates the call with the
-   * built-in. A type error is reported at the call.
+   * built-in. A type error is reported at the call, and names the built-in as the call spells it.
    *
    * @param call the call
-   * @param builtIn the built-in called, as the call writes it
+   * @param builtIn the built-in called
+   * @param spelling the built-in as the call spells it
    * @param subexpressions the sub-expressions of the call
    * @param readAs how the call reads its sub-expressions, and the error of a mismatch that the
    *        origin of a sub-expression does not report
    * @return the result of the call
    */
   private Subexpression<?> builtIn(final ParserRuleContext call, final BuiltIn builtIn,
-      final List<Subexpression<?>> subexpressions, final ReadAs readAs) {
+      final Spelling spelling, final List<Subexpression<?>> subexpressions,
+      final ReadAs readAs) {
     final List<TypedExpression> arguments =
         subexpressions.stream().map(readAs::of).collect(Collectors.toList());
     if (builtIn.isTemplateOnly() && !this.translatesTemplateOnlyBuiltIns()) {
       throw InvalidUsageException.templateOnlyFunction(call, builtIn.getName());
     }
-    return this.subexpression(builtIn.compose(
-        this.resolved(builtIn, subexpressions, arguments, position -> call, readAs::errorAt),
-        this.translation.script()));
+    final Optional<Resolution> resolution = builtIn.resolve(arguments);
+    if (resolution.isEmpty()) {
+      final Mismatch mismatch = builtIn.mismatchOf(arguments);
+      throw this.errorOf(mismatch, mismatch.diagnose(spelling), subexpressions,
+          position -> call, readAs::errorAt);
+    }
+    return this.subexpression(resolution.get().compose(this.translation.script()));
   }
 
   /**
@@ -2050,44 +2024,71 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
   }
 
   /**
-   * Checks the parts of a construct that the grammar writes, read as values, with
-   * {@link #resolved}: a part that does not fit cannot be converted, and is reported where the
-   * construct places the error of its position. The part that binds {@code T}, such as the then
-   * branch of a conditional or the first item of a list, is reported at the construct, as the
-   * argument that binds it is reported at the call of a built-in; any other part where it stands.
+   * Checks the expression of a clause, read as a value: a value that does not fit cannot be
+   * converted, and is reported where the clause places the error.
+   *
+   * @param clause the clause
+   * @param parts its expression, the one part
+   * @param where where the error of the part is reported
+   * @return the value of the part, converted to the parameter of the clause
+   * @throws TypeMismatchException if the part does not fit
+   */
+  private ParsedArguments<?> checked(final Clause clause, final List<Subexpression<?>> parts,
+      final IntFunction<ParserRuleContext> where) {
+    final List<TypedExpression> arguments =
+        parts.stream().map(Subexpression::value).collect(Collectors.toList());
+    return clause.match(arguments).orElseThrow(() -> this.errorOf(clause.mismatchOf(arguments),
+        parts, where, TypeMismatchException::cannotConvert));
+  }
+
+  /**
+   * Resolves the parts of an expression construct, read as values, with {@link #resolved}: a part
+   * that does not fit cannot be converted, and is reported where the construct places the error
+   * of its position. The part that binds {@code T}, such as the then branch of a conditional or
+   * the first item of a list, is reported at the construct, as the argument that binds it is
+   * reported at the call of a built-in; any other part where it stands.
    *
    * @param construct the construct
    * @param parts its parts, in order
    * @param where where the error of the part at a position is reported
-   * @return the resolution, with the values of the parts converted to the parameters of the
-   *         construct
+   * @return the resolution, which composes the construct
    * @throws TypeMismatchException if a part does not fit
    */
-  private Resolution checked(final Construct construct, final List<Subexpression<?>> parts,
-      final IntFunction<ParserRuleContext> where) {
+  private Resolution resolved(final ExpressionConstruct construct,
+      final List<Subexpression<?>> parts, final IntFunction<ParserRuleContext> where) {
     return this.resolved(construct, parts,
         parts.stream().map(Subexpression::value).collect(Collectors.toList()), where,
         TypeMismatchException::cannotConvert);
   }
 
   /**
-   * Checks the arguments of a construct: the one way every operator, built-in, composite and
-   * clause is checked.
+   * Resolves the arguments of an expression construct: the overload that takes them, chosen as
+   * the overload of a built-in is.
    *
    * @param construct the construct
    * @param subexpressions its sub-expressions, in order
    * @param arguments what it reads from each sub-expression, in the same order
    * @param where where the error of the argument at a position is reported
    * @param typeError the error of a mismatch that the origin of the sub-expression does not report
-   * @return the resolution, with the arguments converted to the parameter list that takes them
-   * @throws TypeMismatchException if no parameter list takes the arguments
+   * @return the resolution, which composes the construct
+   * @throws TypeMismatchException if no overload takes the arguments
    */
-  private Resolution resolved(final Construct construct,
+  private Resolution resolved(final ExpressionConstruct construct,
       final List<Subexpression<?>> subexpressions, final List<TypedExpression> arguments,
       final IntFunction<ParserRuleContext> where,
       final BiFunction<ParserRuleContext, Diagnosis, TypeMismatchException> typeError) {
     return construct.resolve(arguments).orElseThrow(() -> this
         .errorOf(construct.mismatchOf(arguments), subexpressions, where, typeError));
+  }
+
+  /**
+   * Gives the error of a mismatch, as the construct names itself and its arguments: see
+   * {@link #errorOf(Mismatch, Diagnosis, List, IntFunction, BiFunction)}.
+   */
+  private TypeMismatchException errorOf(final Mismatch mismatch,
+      final List<Subexpression<?>> subexpressions, final IntFunction<ParserRuleContext> where,
+      final BiFunction<ParserRuleContext, Diagnosis, TypeMismatchException> typeError) {
+    return this.errorOf(mismatch, mismatch.diagnose(), subexpressions, where, typeError);
   }
 
   /**
@@ -2097,16 +2098,16 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    * the construct places it.
    *
    * @param mismatch the mismatch
+   * @param diagnosis what the error says
    * @param subexpressions the sub-expressions of the construct, in order
    * @param where where the error of the argument at a position is reported
    * @param typeError the error of a mismatch that the origin of the sub-expression does not report
    * @return the error
    */
-  private TypeMismatchException errorOf(final Mismatch mismatch,
+  private TypeMismatchException errorOf(final Mismatch mismatch, final Diagnosis diagnosis,
       final List<Subexpression<?>> subexpressions, final IntFunction<ParserRuleContext> where,
       final BiFunction<ParserRuleContext, Diagnosis, TypeMismatchException> typeError) {
     final Rejection rejection = mismatch.getRejection();
-    final Diagnosis diagnosis = mismatch.diagnose();
     return subexpressions.get(rejection.getPosition()).errorOf(rejection.getKind(), diagnosis)
         .orElseGet(() -> typeError.apply(where.apply(rejection.getPosition()), diagnosis));
   }
@@ -2156,18 +2157,6 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
   private static Class<? extends EfxDataType.Primitive> primitiveOf(
       final PrimitiveTypeContext primitive) {
     return EfxTypeTokenLookup.toJavaType(primitive.getText());
-  }
-
-  /**
-   * Gives the type a type variable is bound to by a translated expression. Each construct rejects
-   * a node, which binds no type variable, before it asks for the type of its values.
-   *
-   * @throws IllegalStateException if the expression is a node
-   */
-  private ParameterType<?> bindingOf(final ParameterType<?> typeVariable,
-      final TypedExpression expression) {
-    return typeVariable.boundBy(expression)
-        .orElseThrow(() -> new IllegalStateException("A node has no value: " + expression));
   }
 
   // #endregion Built-ins and sub-expressions ---------------------------------

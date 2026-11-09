@@ -13,8 +13,8 @@
  */
 package eu.europa.ted.efx.model.builtins;
 
-import static eu.europa.ted.efx.model.builtins.Overload.overload;
 import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
+import static eu.europa.ted.efx.model.signatures.Overload.overload;
 import static eu.europa.ted.efx.model.signatures.ParameterType.INDICATOR;
 import static eu.europa.ted.efx.model.signatures.ParameterType.PATH;
 import static eu.europa.ted.efx.model.signatures.ParameterType.T;
@@ -40,6 +40,8 @@ import eu.europa.ted.efx.model.expressions.sequence.NumericSequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.SequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.StringSequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.TimeSequenceExpression;
+import eu.europa.ted.efx.model.signatures.Composer;
+import eu.europa.ted.efx.model.signatures.Overload;
 
 /**
  * The condition operators: membership, emptiness, presence, uniqueness and duplicates, each with

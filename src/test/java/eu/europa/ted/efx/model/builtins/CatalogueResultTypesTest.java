@@ -29,7 +29,7 @@ import eu.europa.ted.efx.model.expressions.Expression;
 import eu.europa.ted.efx.model.expressions.PathExpression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.expressions.scalar.StringPath;
-import eu.europa.ted.efx.model.signatures.BuiltInParameter;
+import eu.europa.ted.efx.model.signatures.Overload;
 import eu.europa.ted.efx.model.signatures.ParameterType;
 import eu.europa.ted.efx.model.signatures.Parameters;
 import eu.europa.ted.efx.model.signatures.Signature;
@@ -70,7 +70,7 @@ class CatalogueResultTypesTest {
   }
 
   private static int arity(final Signature signature) {
-    Parameters<BuiltInParameter<?>> parameters = signature.getParameters();
+    Parameters<?> parameters = signature.getParameters();
     return parameters.size() + (parameters.getVariadic().isPresent() ? VARIADIC_TAIL : 0);
   }
 

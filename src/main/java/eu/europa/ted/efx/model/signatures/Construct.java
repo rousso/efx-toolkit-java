@@ -16,16 +16,18 @@ package eu.europa.ted.efx.model.signatures;
 import java.util.List;
 import java.util.Optional;
 
+import eu.europa.ted.efx.exceptions.TranslatorConfigurationException;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 
 /**
  * A construct as a type check sees it: the parameter lists its arguments are checked against, and
  * the words a type error uses for it and for each of its arguments.
  *
- * <p>Every construct is checked this way. A built-in of the catalogue also translates
- * itself; a function or a template declared in EFX has one parameter list, its declared
- * parameters; and the constructs the grammar writes, such as the conditional, a predicate or the
- * condition of a rule, are checked as constructs and translated where they are written.</p>
+ * <p>Every construct is checked this way. A {@link Composable} also translates its calls, with
+ * the overload that takes them: a built-in, a construct that the grammar writes inside an
+ * expression, or a function declared in EFX. Any other construct, such as a template or the condition of a
+ * rule, is only checked: its arguments are {@link #match matched} against its parameter lists,
+ * and what it is part of translates them.</p>
  */
 public interface Construct {
 
@@ -50,8 +52,8 @@ public interface Construct {
   List<Parameters<?>> getParameterLists();
 
   /**
-   * Says what to write instead of the arguments of a call that does not resolve, where the mistake
-   * suggests it.
+   * Says what to write instead of the arguments of a call that no parameter list takes, where the
+   * mistake suggests it.
    *
    * @param arguments the translated arguments of the call
    * @return each suggestion, a sentence; none by default
@@ -61,14 +63,18 @@ public interface Construct {
   }
 
   /**
-   * Checks the arguments of a call against the parameter lists of this construct.
+   * Checks the arguments of a call against the parameter lists of this construct, and converts
+   * them to the most specific of those that take them.
    *
    * @param arguments the translated arguments of the call
-   * @return the parameter list that takes them, with the converted arguments, or nothing if none
+   * @return the arguments, converted to the parameter list that takes them, or nothing if none
    *         does
+   * @throws TranslatorConfigurationException if more than one parameter list takes the arguments
+   *         and none of them is more specific than all the others, a defect of the construct
    */
-  default Optional<Resolution> resolve(final List<? extends TypedExpression> arguments) {
-    return Resolution.of(this, arguments);
+  default Optional<ParsedArguments<?>> match(final List<? extends TypedExpression> arguments) {
+    return Applicable.mostSpecific(this, this.getParameterLists(), parameters -> parameters,
+        arguments).map(Applicable::getArguments);
   }
 
   /**
@@ -83,8 +89,8 @@ public interface Construct {
   }
 
   /**
-   * Says why no parameter list of this construct takes the arguments of a call that does not
-   * {@link #resolve}, although one {@link #takes} their number.
+   * Says why no parameter list of this construct takes the arguments of a call that it does not
+   * {@link #match}, although one {@link #takes} their number.
    *
    * @param arguments the translated arguments of the call
    * @return the mismatch

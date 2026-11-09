@@ -13,8 +13,8 @@
  */
 package eu.europa.ted.efx.model.signatures;
 
-import static eu.europa.ted.efx.model.builtins.Overload.overload;
 import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
+import static eu.europa.ted.efx.model.signatures.Overload.overload;
 import static eu.europa.ted.efx.model.signatures.Signature.signature;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -29,7 +29,6 @@ import org.junit.jupiter.api.Test;
 import eu.europa.ted.efx.model.builtins.ArithmeticOperators;
 import eu.europa.ted.efx.model.builtins.BuiltIn;
 import eu.europa.ted.efx.model.builtins.ComparisonOperators;
-import eu.europa.ted.efx.model.builtins.Overload;
 import eu.europa.ted.efx.model.builtins.StringFunctions;
 import eu.europa.ted.efx.model.expressions.Expression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;

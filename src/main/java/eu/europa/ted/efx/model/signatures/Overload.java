@@ -11,22 +11,22 @@
  * or implied. See the Licence for the specific language governing permissions and limitations under
  * the Licence.
  */
-package eu.europa.ted.efx.model.builtins;
+package eu.europa.ted.efx.model.signatures;
 
 import eu.europa.ted.efx.interfaces.ScriptGenerator;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.expressions.scalar.BooleanExpression;
-import eu.europa.ted.efx.model.signatures.ParsedArguments;
-import eu.europa.ted.efx.model.signatures.Signature;
 
 /**
- * One overload of a {@link BuiltIn}: a {@link Signature} and the {@link Composer} that translates
- * a call matching it.
+ * One overload of a {@link Composable}: a {@link Signature} and the {@link Composer} that
+ * translates a call the signature takes.
  *
  * <p>An overload is declared with a signature and a composer of the same shape, so that the
  * composer takes the arguments as the signature types them: {@code overload(signature(
  * parameter("value", TEXT), parameter("start", NUMBER)).returning(TEXT), (script, value, start) ->
- * script.composeSubstringExtraction(value, start))}.</p>
+ * script.composeSubstringExtraction(value, start))}. The overload of a function declared in EFX
+ * has a signature without a shape, known only when its declaration is read: {@link #of} pairs it
+ * with a composer of the arguments as a list.</p>
  */
 public final class Overload {
 
@@ -36,6 +36,17 @@ public final class Overload {
   private Overload(final Signature signature, final Composer composer) {
     this.signature = signature;
     this.composer = composer;
+  }
+
+  /**
+   * Declares the overload of a function declared in EFX, whose signature has no shape.
+   *
+   * @param signature the signature the declaration gives the function
+   * @param composer the composer that translates a call of it, from the arguments as a list
+   * @return the overload
+   */
+  public static Overload of(final Signature signature, final Composer composer) {
+    return new Overload(signature, composer);
   }
 
   /**
@@ -147,7 +158,7 @@ public final class Overload {
    *
    * @return the negated overload
    */
-  Overload negated() {
+  public Overload negated() {
     return new Overload(this.signature, (script, arguments) -> script
         .composeLogicalNot(BooleanExpression.class.cast(this.compose(script, arguments))));
   }

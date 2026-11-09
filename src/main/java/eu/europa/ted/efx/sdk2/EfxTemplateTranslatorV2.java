@@ -127,31 +127,23 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
   private static final String ITEM_VARIABLE = Translation.RESERVED_PREFIX + "item";
 
   /** The condition of a conditional template block, as a type error names it. */
-  private static final GrammarConstruct WHEN =
-      GrammarConstruct.of("'when'", parameter("condition", INDICATOR));
+  private static final Clause WHEN = Clause.of("'when'", parameter("condition", INDICATOR));
 
   /** The key of a dictionary declaration, as a type error names it. */
-  private static final GrammarConstruct BY =
-      GrammarConstruct.of("'by'", parameter("key", TEXT));
+  private static final Clause BY = Clause.of("'by'", parameter("key", TEXT));
 
   /** The URL of a hyperlink, as a type error names it. */
-  private static final GrammarConstruct HYPERLINK =
-      GrammarConstruct.of("Hyperlink", parameter("URL", TEXT));
+  private static final Clause HYPERLINK = Clause.of("Hyperlink", parameter("URL", TEXT));
 
   /** A label block, as a type error names it with the one of its parts that is at fault. */
   private static final String LABEL_BLOCK = "Label block";
 
   /** The parts of a label block, each as a type error names it. */
-  private static final GrammarConstruct ASSET_TYPE =
-      GrammarConstruct.of(LABEL_BLOCK, parameter("asset type", TEXT));
-  private static final GrammarConstruct LABEL_TYPE =
-      GrammarConstruct.of(LABEL_BLOCK, parameter("label type", TEXT));
-  private static final GrammarConstruct ASSET_ID =
-      GrammarConstruct.of(LABEL_BLOCK, parameter("asset id", TEXT));
-  private static final GrammarConstruct PLURALISER =
-      GrammarConstruct.of(LABEL_BLOCK, parameter("pluraliser", NUMBER));
-  private static final GrammarConstruct LABEL_KEY =
-      GrammarConstruct.of(LABEL_BLOCK, parameter("key", TEXT));
+  private static final Clause ASSET_TYPE = Clause.of(LABEL_BLOCK, parameter("asset type", TEXT));
+  private static final Clause LABEL_TYPE = Clause.of(LABEL_BLOCK, parameter("label type", TEXT));
+  private static final Clause ASSET_ID = Clause.of(LABEL_BLOCK, parameter("asset id", TEXT));
+  private static final Clause PLURALISER = Clause.of(LABEL_BLOCK, parameter("pluraliser", NUMBER));
+  private static final Clause LABEL_KEY = Clause.of(LABEL_BLOCK, parameter("key", TEXT));
 
   private static final String LABEL_TYPE_NAME = getLexerSymbol(EfxLexer.LABEL_TYPE_NAME);
   private static final String LABEL_TYPE_WHEN = getLexerSymbol(EfxLexer.LABEL_TYPE_WHEN_TRUE).replace("-true", "");
@@ -338,17 +330,18 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
   }
 
   /**
-   * Declares a function. Its body must give a value of the declared type.
+   * Declares a function. Its body must give a value of the declared type, which is the type of a
+   * call of it.
    */
   @Override
   public void exitFunctionDeclaration(FunctionDeclarationContext ctx) {
+    var type = EfxExpressionVisitor.typeOf(ctx.typeDeclaration());
     var expression = this.expressions.valueOf(ctx.expression(),
-        GrammarConstruct.of(Construct.functionName(ctx.typeDeclaration().getText() + ":?"
-            + ctx.functionName.getText()), parameter("value",
-                ParameterType.of(EfxExpressionVisitor.typeOf(ctx.typeDeclaration())))))
+        Clause.of(Construct.functionName(ctx.typeDeclaration().getText() + ":?"
+            + ctx.functionName.getText()), parameter("value", ParameterType.of(type))))
         .at(0, TypedExpression.class);
     var parameters = this.translation.stack().pop(ParsedParameters.class);
-    var function = new Function(ctx.functionName.getText(), parameters, expression);
+    var function = new Function(ctx.functionName.getText(), parameters, type, expression);
     this.translation.stack().declareFunction(function);
     this.viewTemplate.addFunction(function);
   }
@@ -1140,8 +1133,7 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
    * @throws eu.europa.ted.efx.exceptions.TypeMismatchException if the part does not convert to
    *         that class
    */
-  private ParsedArguments<?> labelPart(final ParserRuleContext labelBlock,
-      final GrammarConstruct part) {
+  private ParsedArguments<?> labelPart(final ParserRuleContext labelBlock, final Clause part) {
     return this.expressions.valueOf(this.translation.stack().pop(TypedExpression.class), part,
         labelBlock);
   }

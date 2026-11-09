@@ -28,21 +28,33 @@ import eu.europa.ted.efx.model.types.EfxDataType;
  * parameters mention {@code T} is generic, and is bound to the value primitive of the argument at
  * the first position of {@code T} before its arguments are checked.</p>
  *
- * <p>A signature is declared in one of five shapes, nested here: {@link Nullary}, {@link Unary},
- * {@link Binary} and {@link Ternary}, of no parameter up to three, and {@link Variadic}, of a
- * variadic tail alone. A shape is typed by the expression classes of its parameter types and of
- * its result type, so that what translates a call of it can be checked against it when the toolkit
- * is built. A signature with {@code T} bound has no shape: it is listed, never translated.</p>
+ * <p>The signature of a built-in or of an expression construct is declared in one of five
+ * shapes, nested here: {@link Nullary}, {@link Unary}, {@link Binary} and {@link Ternary}, of no
+ * parameter up to three, and {@link Variadic}, of a variadic tail alone. A shape is typed by the
+ * expression classes of its parameter types and of its result type, so that what translates a call
+ * of it can be checked against it when the toolkit is built. The signature of a function declared
+ * in EFX has no shape: its parameters are known only when its declaration is read. Nor has a
+ * signature with {@code T} bound: it is listed, never translated.</p>
  */
 public class Signature {
 
-  private final Parameters<BuiltInParameter<?>> parameters;
+  private final Parameters<?> parameters;
   private final ParameterType<?> result;
 
-  private Signature(final Parameters<BuiltInParameter<?>> parameters,
-      final ParameterType<?> result) {
+  private Signature(final Parameters<?> parameters, final ParameterType<?> result) {
     this.parameters = parameters;
     this.result = result;
+  }
+
+  /**
+   * Gives the signature of a function declared in EFX.
+   *
+   * @param parameters the parameters it declares
+   * @param result the type it declares for its value
+   * @return the signature
+   */
+  public static Signature of(final Parameters<?> parameters, final ParameterType<?> result) {
+    return new Signature(parameters, result);
   }
 
   /**
@@ -102,7 +114,7 @@ public class Signature {
   /**
    * @return the parameters, which arguments are matched against
    */
-  public Parameters<BuiltInParameter<?>> getParameters() {
+  public Parameters<?> getParameters() {
     return this.parameters;
   }
 

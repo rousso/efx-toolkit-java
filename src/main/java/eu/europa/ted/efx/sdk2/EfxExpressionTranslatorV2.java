@@ -66,8 +66,7 @@ public class EfxExpressionTranslatorV2 extends TranslatorListener
   private static final String END_EXPRESSION_BLOCK = "}";
 
   /** The expression after {@code COMPUTE}, as a type error names it. */
-  private static final GrammarConstruct COMPUTE =
-      GrammarConstruct.ofValueAsGiven("'COMPUTE'", "expression");
+  private static final Clause COMPUTE = Clause.ofValueAsGiven("'COMPUTE'", "expression");
 
   /**
    * Creates the visitor that translates the expression, for each translation.

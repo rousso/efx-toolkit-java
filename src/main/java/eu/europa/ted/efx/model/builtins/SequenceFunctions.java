@@ -13,8 +13,8 @@
  */
 package eu.europa.ted.efx.model.builtins;
 
-import static eu.europa.ted.efx.model.builtins.Overload.overload;
 import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
+import static eu.europa.ted.efx.model.signatures.Overload.overload;
 import static eu.europa.ted.efx.model.signatures.ParameterType.INDICATOR;
 import static eu.europa.ted.efx.model.signatures.ParameterType.NUMBER;
 import static eu.europa.ted.efx.model.signatures.ParameterType.T;
@@ -24,6 +24,8 @@ import static eu.europa.ted.efx.model.signatures.Signature.signature;
 import java.util.List;
 
 import eu.europa.ted.efx.interfaces.ScriptGenerator;
+import eu.europa.ted.efx.model.signatures.Composer;
+import eu.europa.ted.efx.model.signatures.Overload;
 
 /**
  * The functions on sequences of any value primitive.

@@ -18,7 +18,6 @@ import java.util.Optional;
 
 import org.antlr.v4.runtime.ParserRuleContext;
 
-import eu.europa.ted.efx.model.signatures.Construct;
 import eu.europa.ted.efx.exceptions.Diagnosis;
 import eu.europa.ted.efx.exceptions.InvalidIdentifierException;
 import eu.europa.ted.efx.exceptions.TypeMismatchException;
@@ -27,8 +26,8 @@ import eu.europa.ted.efx.model.Context.FieldContext;
 import eu.europa.ted.efx.model.Context.NodeContext;
 import eu.europa.ted.efx.model.expressions.PathExpression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
-import eu.europa.ted.efx.model.expressions.scalar.BooleanExpression;
 import eu.europa.ted.efx.model.signatures.Rejection;
+import eu.europa.ted.efx.model.signatures.Spelling;
 import eu.europa.ted.efx.model.types.FieldTypes;
 import eu.europa.ted.efx.sdk2.EfxParser.ExpressionContext;
 
@@ -128,15 +127,15 @@ abstract class Origin<E extends TypedExpression> {
    *
    * @param expression the translated sub-expression
    * @param step the step
-   * @param construct the step as a type error names it, such as "Operator ':rawValue'"
+   * @param spelling the step as written, such as the operator {@code :rawValue}
    * @param reader what the step reads from the field
    * @return what the step gives
    * @throws TypeMismatchException if the sub-expression is not a field
    */
   Subexpression<?> readFromField(final E expression, final ParserRuleContext step,
-      final Construct construct, final FieldReader reader) {
+      final Spelling spelling, final FieldReader reader) {
     throw TypeMismatchException.cannotConvert(step,
-        new Diagnosis(construct.describe(), construct.roleOf(0, 1), List.of(expression),
+        new Diagnosis(spelling.describe(), spelling.roleOf(0, 1), List.of(expression),
             List.of(FIELD_REFERENCE)));
   }
 
@@ -254,11 +253,9 @@ abstract class Origin<E extends TypedExpression> {
     abstract void pushElementContext();
 
     /**
-     * @param path the path
-     * @param predicate the condition its elements must meet
-     * @return the path to the elements that meet it
+     * @return the predicate on what the path is, a field or a node
      */
-    abstract PathExpression filter(PathExpression path, BooleanExpression predicate);
+    abstract ExpressionConstruct predicate();
   }
 
   /**
@@ -298,7 +295,7 @@ abstract class Origin<E extends TypedExpression> {
 
     @Override
     Subexpression<?> readFromField(final PathExpression path, final ParserRuleContext step,
-        final Construct construct, final FieldReader reader) {
+        final Spelling spelling, final FieldReader reader) {
       return reader.read(path, this);
     }
 
@@ -308,9 +305,8 @@ abstract class Origin<E extends TypedExpression> {
     }
 
     @Override
-    PathExpression filter(final PathExpression path, final BooleanExpression predicate) {
-      return this.translator.translation().script().composeFieldReferenceWithPredicate(path,
-          predicate);
+    ExpressionConstruct predicate() {
+      return ExpressionConstruct.PREDICATE_ON_FIELD;
     }
 
     @Override
@@ -350,9 +346,8 @@ abstract class Origin<E extends TypedExpression> {
     }
 
     @Override
-    PathExpression filter(final PathExpression path, final BooleanExpression predicate) {
-      return this.translator.translation().script().composeNodeReferenceWithPredicate(path,
-          predicate);
+    ExpressionConstruct predicate() {
+      return ExpressionConstruct.PREDICATE_ON_NODE;
     }
   }
 
@@ -496,7 +491,7 @@ abstract class Origin<E extends TypedExpression> {
 
     @Override
     Subexpression<?> readFromField(final TypedExpression expression, final ParserRuleContext step,
-        final Construct construct, final FieldReader reader) {
+        final Spelling spelling, final FieldReader reader) {
       throw InvalidIdentifierException.undeclaredIdentifier(this.reference, this.name);
     }
   }

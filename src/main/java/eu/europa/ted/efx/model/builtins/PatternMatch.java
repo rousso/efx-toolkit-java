@@ -13,14 +13,15 @@
  */
 package eu.europa.ted.efx.model.builtins;
 
-import static eu.europa.ted.efx.model.builtins.Overload.overload;
 import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
+import static eu.europa.ted.efx.model.signatures.Overload.overload;
 import static eu.europa.ted.efx.model.signatures.ParameterType.INDICATOR;
 import static eu.europa.ted.efx.model.signatures.ParameterType.TEXT;
 import static eu.europa.ted.efx.model.signatures.Signature.signature;
 
 import java.util.List;
 
+import eu.europa.ted.efx.model.signatures.Overload;
 import eu.europa.ted.efx.util.EfxRegexValidator;
 
 /**

@@ -13,14 +13,16 @@
  */
 package eu.europa.ted.efx.model.builtins;
 
-import static eu.europa.ted.efx.model.builtins.Overload.overload;
 import static eu.europa.ted.efx.model.signatures.BuiltInParameter.parameter;
+import static eu.europa.ted.efx.model.signatures.Overload.overload;
 import static eu.europa.ted.efx.model.signatures.ParameterType.DATE;
 import static eu.europa.ted.efx.model.signatures.ParameterType.DURATION;
 import static eu.europa.ted.efx.model.signatures.ParameterType.NUMBER;
 import static eu.europa.ted.efx.model.signatures.Signature.signature;
 
 import java.util.List;
+
+import eu.europa.ted.efx.model.signatures.Overload;
 
 /**
  * The arithmetic operators: on numbers, and on dates and durations.

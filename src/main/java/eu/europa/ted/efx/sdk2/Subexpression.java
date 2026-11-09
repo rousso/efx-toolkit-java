@@ -17,12 +17,12 @@ import java.util.Optional;
 
 import org.antlr.v4.runtime.ParserRuleContext;
 
-import eu.europa.ted.efx.model.signatures.Construct;
 import eu.europa.ted.efx.exceptions.Diagnosis;
 import eu.europa.ted.efx.exceptions.TypeMismatchException;
 import eu.europa.ted.efx.model.Context;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.signatures.Rejection;
+import eu.europa.ted.efx.model.signatures.Spelling;
 import eu.europa.ted.efx.sdk2.EfxParser.ExpressionContext;
 
 /**
@@ -108,13 +108,13 @@ final class Subexpression<E extends TypedExpression> {
    * sub-expression.
    *
    * @param step the step
-   * @param construct the step as a type error names it, such as "Operator ':rawValue'"
+   * @param spelling the step as written, such as the operator {@code :rawValue}
    * @param reader what the step reads from the field
    * @return what the step gives
    */
-  Subexpression<?> readFromField(final ParserRuleContext step, final Construct construct,
+  Subexpression<?> readFromField(final ParserRuleContext step, final Spelling spelling,
       final Origin.FieldReader reader) {
-    return this.origin.readFromField(this.expression, step, construct, reader);
+    return this.origin.readFromField(this.expression, step, spelling, reader);
   }
 
   /**

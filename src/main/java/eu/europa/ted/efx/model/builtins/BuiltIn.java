@@ -13,36 +13,26 @@
  */
 package eu.europa.ted.efx.model.builtins;
 
-import java.util.List;
-import java.util.stream.Collectors;
-
-import eu.europa.ted.efx.interfaces.ScriptGenerator;
-import eu.europa.ted.efx.model.expressions.TypedExpression;
-import eu.europa.ted.efx.model.signatures.Construct;
-import eu.europa.ted.efx.model.signatures.Parameters;
-import eu.europa.ted.efx.model.signatures.Resolution;
+import eu.europa.ted.efx.model.signatures.Composable;
+import eu.europa.ted.efx.model.signatures.Overload;
+import eu.europa.ted.efx.model.signatures.Spelling;
 
 /**
- * An EFX operator or built-in function: a construct that the catalogue translates itself. It has
- * a name and {@link Overload overloads}, each a signature with the composer that translates a call
- * the signature takes.
+ * An EFX operator or built-in function: a construct of the catalogue, which translates its calls
+ * itself. It has a name and {@link Overload overloads}, each a signature with the composer that
+ * translates a call the signature takes.
  *
  * <p>The name is the operator as written, such as {@code +} or {@code is not empty}, or the
  * function token, such as {@code substring}. The standard built-ins are the constants of the enums
  * of this package, gathered by {@link BuiltIns}; a {@link PatternMatch} is made for each use of
  * {@code like}.</p>
  */
-public interface BuiltIn extends Construct {
+public interface BuiltIn extends Composable {
 
   /**
    * @return the operator as written, or the function token
    */
   String getName();
-
-  /**
-   * @return the overloads, none of which applies to the same arguments as another
-   */
-  List<Overload> getOverloads();
 
   /**
    * Tells whether the built-in may only be used in a template.
@@ -64,12 +54,22 @@ public interface BuiltIn extends Construct {
   }
 
   /**
+   * Gives the built-in as a call spells it by its own name. A call may spell it otherwise, as
+   * {@code string} spells {@code text}; the error of such a call names it as the call spells it.
+   *
+   * @return the name of the built-in, spelled as a function or as an operator
+   */
+  default Spelling getSpelling() {
+    return this.isFunction() ? Spelling.function(this.getName())
+        : Spelling.operator(this.getName());
+  }
+
+  /**
    * @return "Function 'substring'" for a function, "Operator '+'" for an operator
    */
   @Override
   default String describe() {
-    return this.isFunction() ? Construct.functionName(this.getName())
-        : Construct.operatorName(this.getName());
+    return this.getSpelling().describe();
   }
 
   /**
@@ -78,36 +78,6 @@ public interface BuiltIn extends Construct {
    */
   @Override
   default String roleOf(final int position, final int count) {
-    return this.isFunction() ? Construct.argumentRole(position, count)
-        : Construct.operandRole(position, count);
-  }
-
-  /**
-   * @return the parameters of the signature of each overload
-   */
-  @Override
-  default List<Parameters<?>> getParameterLists() {
-    return this.getOverloads().stream()
-        .<Parameters<?>>map(overload -> overload.getSignature().getParameters())
-        .collect(Collectors.toUnmodifiableList());
-  }
-
-  /**
-   * Translates a call of this built-in with the overload whose signature takes its arguments.
-   *
-   * @param resolution the resolution of the call by this built-in
-   * @param script the script generator
-   * @return the translated call
-   * @throws IllegalArgumentException if no overload of this built-in has the parameter list that
-   *         resolved the call
-   */
-  default TypedExpression compose(final Resolution resolution, final ScriptGenerator script) {
-    return this.getOverloads().stream()
-        .filter(overload -> overload.getSignature().getParameters()
-            .equals(resolution.getParameters()))
-        .findFirst()
-        .orElseThrow(() -> new IllegalArgumentException(
-            "No overload of '" + this.getName() + "' takes " + resolution.getParameters()))
-        .compose(script, resolution.getArguments());
+    return this.getSpelling().roleOf(position, count);
   }
 }

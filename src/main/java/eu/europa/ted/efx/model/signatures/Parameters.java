@@ -67,6 +67,17 @@ public class Parameters<P extends Parameter> extends LinkedList<P> {
   }
 
   /**
+   * Gives a list of fixed parameters, without a variadic tail, such as the parameter of a clause.
+   *
+   * @param <P> the kind of parameter
+   * @param fixed the parameters, in order
+   * @return the parameter list
+   */
+  public static <P extends Parameter> Parameters<P> of(final List<? extends P> fixed) {
+    return new Parameters<>(fixed, null);
+  }
+
+  /**
    * @return the parameter of the variadic tail, if there is one
    */
   public Optional<P> getVariadic() {

@@ -13,100 +13,48 @@
  */
 package eu.europa.ted.efx.model.signatures;
 
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
-import eu.europa.ted.efx.exceptions.TranslatorConfigurationException;
-import eu.europa.ted.efx.interfaces.TypeChecker;
+import eu.europa.ted.efx.interfaces.ScriptGenerator;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 
 /**
- * The parameter list of a {@link Construct} that takes the arguments of a call, with the arguments
- * converted to its parameters.
+ * The overload of a {@link Composable} that takes the arguments of a call, with the arguments
+ * converted to its parameters: the most specific of those that take them, as
+ * {@link Composable#resolve} chooses it.
  *
- * <p>A parameter list takes the arguments when it {@link Parameters#match matches} them: it takes
- * their number and, once {@code T} is bound, every argument converts to its parameter. When more
- * than one takes them, the most specific one is chosen: the one whose converted arguments would
- * also convert to the parameters of every other, as {@code (T)} is more specific than
- * {@code (T*)} for a single value. A resolution with no single most specific parameter list raises
- * a {@link TranslatorConfigurationException}: the construct is ambiguous, which the catalogue's
- * unit tests prove no built-in is.</p>
- *
- * <p>A call that no parameter list takes has no resolution; its {@link Mismatch} says why. A
- * built-in translates a resolved call itself; any other construct is translated where it is
- * written, from the converted arguments.</p>
+ * <p>A call that no overload takes has no resolution; its {@link Mismatch} says why. A resolved
+ * call is translated by the overload that took it.</p>
  */
 public final class Resolution {
 
-  private final Parameters<?> parameters;
+  private final Overload overload;
   private final ParsedArguments<?> arguments;
 
-  private Resolution(final Parameters<?> parameters, final ParsedArguments<?> arguments) {
-    this.parameters = parameters;
+  Resolution(final Overload overload, final ParsedArguments<?> arguments) {
+    this.overload = overload;
     this.arguments = arguments;
   }
 
   /**
-   * Checks the arguments of a call of a construct against each of its parameter lists that takes
-   * their number, and chooses the most specific of those that take them.
-   *
-   * @param construct the construct called
-   * @param arguments the translated arguments of the call
-   * @return the resolution, or nothing if no parameter list takes the arguments
-   * @throws TranslatorConfigurationException if more than one parameter list takes the arguments
-   *         and none of them is more specific than all the others, a defect of the construct
+   * @return the overload that takes the arguments, as the construct declares it
    */
-  static Optional<Resolution> of(final Construct construct,
-      final List<? extends TypedExpression> arguments) {
-    final List<Resolution> applicable = construct.getParameterLists().stream()
-        .filter(parameters -> parameters.takes(arguments.size()))
-        .flatMap(parameters -> parameters.match(arguments)
-            .map(converted -> new Resolution(parameters, converted)).stream())
-        .collect(Collectors.toList());
-    if (applicable.isEmpty()) {
-      return Optional.empty();
-    }
-    final List<Resolution> mostSpecific = applicable.stream()
-        .filter(candidate -> applicable.stream().allMatch(candidate::isAsSpecificAs))
-        .collect(Collectors.toList());
-    if (mostSpecific.size() != 1) {
-      throw TranslatorConfigurationException.ambiguousOverloads(construct.describe(),
-          applicable.stream().map(resolution -> resolution.getParameters().toString())
-              .collect(Collectors.joining(", ", "[", "]")),
-          Mismatch.describe(arguments));
-    }
-    return Optional.of(mostSpecific.get(0));
+  public Overload getOverload() {
+    return this.overload;
   }
 
   /**
-   * @return the parameter list that takes the arguments, as the construct declares it
-   */
-  public Parameters<?> getParameters() {
-    return this.parameters;
-  }
-
-  /**
-   * @return the arguments, converted to the parameters of the parameter list that takes them
+   * @return the arguments, converted to the parameters of the overload that takes them
    */
   public ParsedArguments<?> getArguments() {
     return this.arguments;
   }
 
   /**
-   * Tells whether this resolution is at least as specific as another of the same arguments: each
-   * argument was converted to a class that converts to the class the other converted it to, as a
-   * single value converts to a sequence of one.
+   * Translates the call with the overload that takes it.
    *
-   * @param other a resolution of the same arguments by another parameter list
-   * @return {@code true} if every argument of this resolution would also convert to the parameter
-   *         of the other
+   * @param script the script generator of the target language
+   * @return the translated call
    */
-  private boolean isAsSpecificAs(final Resolution other) {
-    final ParsedArguments<?> mine = this.getArguments();
-    final ParsedArguments<?> theirs = other.getArguments();
-    return IntStream.range(0, mine.size()).allMatch(position -> TypeChecker.V2
-        .canConvert(mine.typeAt(position), theirs.typeAt(position)));
+  public TypedExpression compose(final ScriptGenerator script) {
+    return this.overload.compose(script, this.arguments);
   }
 }

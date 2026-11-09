@@ -11,7 +11,7 @@
  * or implied. See the Licence for the specific language governing permissions and limitations under
  * the Licence.
  */
-package eu.europa.ted.efx.model.builtins;
+package eu.europa.ted.efx.model.signatures;
 
 import java.util.List;
 
@@ -19,20 +19,18 @@ import eu.europa.ted.efx.interfaces.ScriptGenerator;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.expressions.scalar.NumericExpression;
 import eu.europa.ted.efx.model.expressions.sequence.SequenceExpression;
-import eu.europa.ted.efx.model.signatures.ParameterType;
-import eu.europa.ted.efx.model.signatures.ParsedArguments;
-import eu.europa.ted.efx.model.signatures.Signature;
 
 /**
  * Translates a call of an {@link Overload}: it calls the {@link ScriptGenerator} method of the
  * overload with the converted {@link ParsedArguments}.
  *
- * <p>A built-in writes its composer in the shape of its {@link Signature}, one of the five nested
- * here: {@link Nullary}, {@link Unary}, {@link Binary}, {@link Ternary} or {@link Variadic}. A
- * composer of a shape takes the converted arguments one by one, of the expression classes the
- * signature gives them, and returns the expression class of its result, so that the compiler
- * checks it against the signature. {@link Overload} pairs each shape with a signature of the same
- * shape, and makes it a composer of the arguments as a list.</p>
+ * <p>An overload of a built-in or of an expression construct writes its composer in the shape of
+ * its {@link Signature}, one of the five nested here: {@link Nullary}, {@link Unary},
+ * {@link Binary}, {@link Ternary} or {@link Variadic}. A composer of a shape takes the converted
+ * arguments one by one, of the expression classes the signature gives them, and returns the
+ * expression class of its result, so that the compiler checks it against the signature.
+ * {@link Overload} pairs each shape with a signature of the same shape, and makes it a composer of
+ * the arguments as a list, which is what the overload of a function declared in EFX writes.</p>
  *
  * <p>A generic method of {@link ScriptGenerator}, such as
  * {@link ScriptGenerator#composeUnionFunction}, also takes the sequence class {@code T*} is bound

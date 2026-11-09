@@ -28,7 +28,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import eu.europa.ted.efx.model.builtins.BuiltIn;
 import eu.europa.ted.efx.model.builtins.BuiltIns;
-import eu.europa.ted.efx.model.builtins.Overload;
 import eu.europa.ted.efx.model.expressions.Expression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 import eu.europa.ted.efx.model.expressions.scalar.BooleanExpression;
@@ -102,10 +101,10 @@ class TypeVariableBindingTest {
 
   private static void assertResolvesInEitherOrder(final BuiltIn builtIn, final Overload overload,
       final String first, final String second) {
-    assertSame(overload.getSignature().getParameters(),
-        builtIn.resolve(arguments(overload, first, second)).orElseThrow().getParameters());
-    assertSame(overload.getSignature().getParameters(),
-        builtIn.resolve(arguments(overload, second, first)).orElseThrow().getParameters());
+    assertSame(overload,
+        builtIn.resolve(arguments(overload, first, second)).orElseThrow().getOverload());
+    assertSame(overload,
+        builtIn.resolve(arguments(overload, second, first)).orElseThrow().getOverload());
   }
 
   private static void assertRejectedAtTheSecond(final BuiltIn builtIn, final Overload overload,
@@ -124,14 +123,14 @@ class TypeVariableBindingTest {
    */
   private static List<TypedExpression> arguments(final Overload overload, final String first,
       final String second) {
-    List<BuiltInParameter<?>> parameters = overload.getSignature().getParameters();
+    Parameters<?> parameters = overload.getSignature().getParameters();
     return List.of(
         VALUES.get(parameters.get(0).getType()).get(first),
         VALUES.get(parameters.get(1).getType()).get(second));
   }
 
   private static boolean takesTwoTypeVariables(final Overload overload) {
-    List<BuiltInParameter<?>> parameters = overload.getSignature().getParameters();
+    Parameters<?> parameters = overload.getSignature().getParameters();
     return parameters.size() == 2
         && parameters.stream().allMatch(parameter -> parameter.getType().isTypeVariable());
   }

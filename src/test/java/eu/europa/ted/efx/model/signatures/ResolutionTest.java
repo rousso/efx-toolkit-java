@@ -264,14 +264,14 @@ class ResolutionTest {
 
   @Test
   void testMoreSpecificOverload_IsChosenForASingleValue() {
-    assertEquals(SingleOrSequenceBuiltIn.INSTANCE.getOverloads().get(0).getSignature()
-        .getParameters(), resolve(SingleOrSequenceBuiltIn.INSTANCE, TEXT).getParameters());
+    assertSame(SingleOrSequenceBuiltIn.INSTANCE.getOverloads().get(0),
+        resolve(SingleOrSequenceBuiltIn.INSTANCE, TEXT).getOverload());
   }
 
   @Test
   void testSequenceOverload_IsChosenForASequence() {
-    assertEquals(SingleOrSequenceBuiltIn.INSTANCE.getOverloads().get(1).getSignature()
-        .getParameters(), resolve(SingleOrSequenceBuiltIn.INSTANCE, TEXTS).getParameters());
+    assertSame(SingleOrSequenceBuiltIn.INSTANCE.getOverloads().get(1),
+        resolve(SingleOrSequenceBuiltIn.INSTANCE, TEXTS).getOverload());
   }
 
   @Test
@@ -292,7 +292,7 @@ class ResolutionTest {
 
   private static TypedExpression compose(final BuiltIn builtIn,
       final TypedExpression... arguments) {
-    return builtIn.compose(resolve(builtIn, arguments), SCRIPT);
+    return resolve(builtIn, arguments).compose(SCRIPT);
   }
 
   private static Mismatch mismatch(final BuiltIn builtIn, final TypedExpression... arguments) {

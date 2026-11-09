@@ -91,9 +91,8 @@ class CatalogueRejectionTest {
         rejectedArity("upper-case()", StringFunctions.UPPER_CASE),
         // The result of a built-in function has the type the function declares
         rejected("count(['a']) like 'a'", PatternMatch.like("'a'"),
-            NumericFunctions.COUNT.compose(
-                NumericFunctions.COUNT.resolve(List.of(TEXTS)).orElseThrow(),
-                new XPathScriptGenerator(EfxTranslatorOptions.DEFAULT))),
+            NumericFunctions.COUNT.resolve(List.of(TEXTS)).orElseThrow()
+                .compose(new XPathScriptGenerator(EfxTranslatorOptions.DEFAULT))),
         // Each argument of a template-only function has the type its parameter declares
         rejected("format-number('x', '0.00')", TemplateFunctions.FORMAT_NUMBER, TEXT, OTHER_TEXT),
         // A template-only function takes the number of arguments it declares

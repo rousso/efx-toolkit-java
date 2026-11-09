@@ -138,6 +138,24 @@ public final class Mismatch {
    * @return the diagnosis of the mismatch
    */
   public Diagnosis diagnose() {
+    return this.diagnosis(this.construct.describe(),
+        this.construct.roleOf(this.getRejection().getPosition(), this.arguments.size()));
+  }
+
+  /**
+   * Says what the error of the mismatch says, as {@link #diagnose()} does, but naming the call and
+   * the argument at fault as the call spells the built-in, such as "Function 'string'" for a call
+   * of {@code text}.
+   *
+   * @param spelling the built-in as the call spells it
+   * @return the diagnosis of the mismatch
+   */
+  public Diagnosis diagnose(final Spelling spelling) {
+    return this.diagnosis(spelling.describe(),
+        spelling.roleOf(this.getRejection().getPosition(), this.arguments.size()));
+  }
+
+  private Diagnosis diagnosis(final String called, final String role) {
     final Rejection reported = this.getRejection();
     final List<String> requirements = this.rejections.stream()
         .filter(rejection -> rejection.getPosition() == reported.getPosition()
@@ -145,9 +163,8 @@ public final class Mismatch {
         .map(rejection -> rejection.getRequired().describe())
         .distinct()
         .collect(Collectors.toList());
-    return new Diagnosis(this.construct.describe(),
-        this.construct.roleOf(reported.getPosition(), this.arguments.size()), this.arguments,
-        requirements, this.construct.suggestionsFor(this.arguments));
+    return new Diagnosis(called, role, this.arguments, requirements,
+        this.construct.suggestionsFor(this.arguments));
   }
 
   @Override
