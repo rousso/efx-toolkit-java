@@ -181,3 +181,7 @@ H24 renames `model.constructs.BuiltInParameter<E>` to `model.constructs.Paramete
 ## `Argument` and `Arguments` (H25)
 
 H25 renames `model.constructs.ParsedArgument<P>` to `model.constructs.Argument<P>` and `model.constructs.ParsedArguments<P>` to `model.constructs.Arguments<P>`. `Arguments` loses `toSet()`, whose only caller was `ContentBlock`; the other members are unchanged. Both classes were on develop, in `model.variables`, so the CHANGELOG's breaking-change line for them gives the new names. `interfaces.Argument`, the markup generator's, keeps its name; no file imports both. Of `ContentBlock`'s protected members, which `javap -public` does not list, `getOwnArguments()` gives `Arguments<ParsedParameter>` in place of `Set<ParsedArgument<ParsedParameter>>` and `getAllArguments()` is removed; the CHANGELOG says so.
+
+## `ParsedParameter.getParameterType()` (H27)
+
+H27 removes `model.identifiers.ParsedParameter.getParameterType()`, which gave the class of the parameter's reference expression: only `getType()` used it, and no consumer does. `getType()` gives the `ParameterType` of that class, as before. The method was on develop, so the CHANGELOG's line on `ParsedParameter` says so.

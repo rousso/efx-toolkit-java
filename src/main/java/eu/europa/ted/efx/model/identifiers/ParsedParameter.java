@@ -19,10 +19,6 @@ public class ParsedParameter extends Identifier implements Parameter {
     this(variable.name, variable.referenceExpression);
   }
 
-  public Class<? extends TypedExpression> getParameterType() {
-    return referenceExpression.getClass();
-  }
-
   @Override
   public String getName() {
     return this.name;
@@ -33,7 +29,7 @@ public class ParsedParameter extends Identifier implements Parameter {
    */
   @Override
   public ParameterType<?> getType() {
-    return ParameterType.of(this.getParameterType());
+    return ParameterType.of(this.referenceExpression.getClass());
   }
 
   @Override
