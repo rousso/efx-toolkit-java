@@ -26,7 +26,7 @@ import eu.europa.ted.efx.model.constructs.Overload;
 /**
  * A built-in with a pair of overloads, {@code (T) -> T} and {@code (T*) -> T*}: both apply to a
  * single value, and the first, the more specific, is the one chosen; only the second applies to
- * a sequence. Kept to prove that the resolution and the catalogue's tests allow such a pair.
+ * a sequence. Kept to prove that the catalogue's tests allow such a pair.
  */
 public final class SingleOrSequenceBuiltIn implements BuiltIn {
 

@@ -13,6 +13,9 @@
  */
 package eu.europa.ted.efx.model.constructs;
 
+import static eu.europa.ted.efx.model.constructs.Overload.overload;
+import static eu.europa.ted.efx.model.constructs.Parameter.Impl.parameter;
+import static eu.europa.ted.efx.model.constructs.Signature.signature;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -37,11 +40,10 @@ import eu.europa.ted.efx.model.builtins.BuiltIns;
 import eu.europa.ted.efx.model.builtins.ComparisonOperators;
 import eu.europa.ted.efx.model.builtins.ConditionOperators;
 import eu.europa.ted.efx.model.builtins.NumericFunctions;
-import eu.europa.ted.efx.model.builtins.PathOrNodesBuiltIn;
 import eu.europa.ted.efx.model.builtins.PatternMatch;
 import eu.europa.ted.efx.model.builtins.SequenceFunctions;
-import eu.europa.ted.efx.model.builtins.SingleOrSequenceBuiltIn;
 import eu.europa.ted.efx.model.builtins.StringFunctions;
+import eu.europa.ted.efx.model.builtins.TwoOverloadsBuiltIn;
 import eu.europa.ted.efx.model.expressions.Expression;
 import eu.europa.ted.efx.model.expressions.PathExpression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
@@ -57,6 +59,7 @@ import eu.europa.ted.efx.model.expressions.scalar.NumericLiteral;
 import eu.europa.ted.efx.model.expressions.scalar.StringExpression;
 import eu.europa.ted.efx.model.expressions.scalar.StringLiteral;
 import eu.europa.ted.efx.model.expressions.scalar.StringPath;
+import eu.europa.ted.efx.model.expressions.sequence.MultilingualStringSequenceExpression;
 import eu.europa.ted.efx.model.expressions.sequence.MultilingualStringSequencePath;
 import eu.europa.ted.efx.model.expressions.sequence.NodeSequencePath;
 import eu.europa.ted.efx.model.expressions.sequence.StringSequenceExpression;
@@ -96,8 +99,20 @@ class ResolutionTest {
       Expression.instantiate("$texts", StringSequenceExpression.class);
   private static final NodePath NODE =
       Expression.instantiate("$node", NodePath.class);
+  private static final NodeSequencePath NODES =
+      Expression.instantiate("$nodes", NodeSequencePath.class);
+  private static final MultilingualStringSequenceExpression MULTILINGUAL_TEXTS =
+      Expression.instantiate("$multilingualTexts", MultilingualStringSequenceExpression.class);
   private static final DynamicExpression DYNAMIC =
       Expression.instantiate("$dynamic", DynamicExpression.class);
+
+  private static final Overload TAKES_T = taking(ParameterType.T);
+  private static final Overload TAKES_T_SEQUENCE = taking(ParameterType.T_SEQUENCE);
+  private static final Overload TAKES_PATH = taking(ParameterType.PATH);
+  private static final Overload TAKES_NODES = taking(ParameterType.NODES);
+  private static final Overload TAKES_MULTILINGUAL_FIELD =
+      taking(ParameterType.MULTILINGUAL_FIELD);
+  private static final Overload TAKES_TEXT_SEQUENCE = taking(ParameterType.TEXT_SEQUENCE);
 
   @Test
   void testDatePlusDuration_IsADateAddition() {
@@ -266,23 +281,61 @@ class ResolutionTest {
   }
 
   @Test
-  void testMoreSpecificOverload_IsChosenForASingleValue() {
-    assertSame(SingleOrSequenceBuiltIn.INSTANCE.getOverloads().get(0),
-        resolve(SingleOrSequenceBuiltIn.INSTANCE, TEXT).getOverload());
+  void testSingleValueOverload_IsChosenOverASequenceForASingleValue() {
+    assertChosenInEitherOrder(TAKES_T, TAKES_T_SEQUENCE,
+        Expression.instantiate("$value", StringExpression.class));
   }
 
   @Test
   void testSequenceOverload_IsChosenForASequence() {
-    assertSame(SingleOrSequenceBuiltIn.INSTANCE.getOverloads().get(1),
-        resolve(SingleOrSequenceBuiltIn.INSTANCE, TEXTS).getOverload());
+    assertChosenInEitherOrder(TAKES_T_SEQUENCE, TAKES_T, TEXTS);
   }
 
   @Test
-  void testMoreSpecificPathOverload_IsChosenInEitherOrder() {
-    final NodeSequencePath nodes = Expression.instantiate("$nodes", NodeSequencePath.class);
-    for (final PathOrNodesBuiltIn builtIn : PathOrNodesBuiltIn.values()) {
-      assertSame(builtIn.getNodesOverload(), resolve(builtIn, nodes).getOverload(),
-          builtIn.name());
+  void testNodesOverload_IsChosenOverAnyPathForNodes() {
+    assertChosenInEitherOrder(TAKES_NODES, TAKES_PATH, NODE, NODES);
+  }
+
+  @Test
+  void testAnyPathOverload_IsChosenForAFieldOverNodes() {
+    assertChosenInEitherOrder(TAKES_PATH, TAKES_NODES, TEXT_FIELD);
+  }
+
+  @Test
+  void testMultilingualFieldOverload_IsChosenOverAnyPath() {
+    assertChosenInEitherOrder(TAKES_MULTILINGUAL_FIELD, TAKES_PATH,
+        REPEATABLE_MULTILINGUAL_FIELD);
+  }
+
+  @Test
+  void testMultilingualFieldOverload_IsChosenOverATextSequenceForAMultilingualField() {
+    assertChosenInEitherOrder(TAKES_MULTILINGUAL_FIELD, TAKES_TEXT_SEQUENCE, MULTILINGUAL_FIELD,
+        REPEATABLE_MULTILINGUAL_FIELD);
+  }
+
+  @Test
+  void testTextSequenceOverload_IsChosenForTextsThatAreNotAMultilingualField() {
+    assertChosenInEitherOrder(TAKES_TEXT_SEQUENCE, TAKES_MULTILINGUAL_FIELD, REPEATABLE_TEXT_FIELD,
+        MULTILINGUAL_TEXTS);
+  }
+
+  @Test
+  void testNodes_MatchNeitherAMultilingualFieldNorATextSequence() {
+    for (final TwoOverloadsBuiltIn builtIn :
+        TwoOverloadsBuiltIn.inBothOrders(TAKES_MULTILINGUAL_FIELD, TAKES_TEXT_SEQUENCE)) {
+      assertTrue(builtIn.resolve(List.of(NODES)).isEmpty(), builtIn.getOverloads().toString());
+    }
+  }
+
+  @Test
+  void testAnyPathAndATextSequence_AreAmbiguousForARepeatableTextField() {
+    for (final TwoOverloadsBuiltIn builtIn :
+        TwoOverloadsBuiltIn.inBothOrders(TAKES_PATH, TAKES_TEXT_SEQUENCE)) {
+      final TranslatorConfigurationException exception = assertThrows(
+          TranslatorConfigurationException.class,
+          () -> builtIn.resolve(List.of(REPEATABLE_TEXT_FIELD)), builtIn.getOverloads().toString());
+      assertEquals(TranslatorConfigurationException.ErrorCode.AMBIGUOUS_OVERLOADS,
+          exception.getErrorCode());
     }
   }
 
@@ -299,6 +352,28 @@ class ResolutionTest {
   void testCatalogue_FindsABuiltInByName() {
     assertSame(ConditionOperators.IS_NOT_EMPTY, BuiltIns.INSTANCE.find("is not empty").orElseThrow());
     assertTrue(BuiltIns.INSTANCE.find("like").isEmpty());
+  }
+
+  /**
+   * Checks that a call of each argument alone chooses the expected of two overloads, whichever is
+   * declared first.
+   */
+  private static void assertChosenInEitherOrder(final Overload expected, final Overload other,
+      final TypedExpression... arguments) {
+    for (final TwoOverloadsBuiltIn builtIn : TwoOverloadsBuiltIn.inBothOrders(expected, other)) {
+      for (final TypedExpression argument : arguments) {
+        assertSame(expected, resolve(builtIn, argument).getOverload(),
+            builtIn.getOverloads() + " for " + argument.getClass().getSimpleName());
+      }
+    }
+  }
+
+  /**
+   * Declares an overload of one parameter of a type, which returns its argument.
+   */
+  private static <E extends TypedExpression> Overload taking(final ParameterType<E> type) {
+    return overload(signature(parameter("argument", type)).returning(type),
+        (script, argument) -> argument);
   }
 
   private static Resolution resolve(final BuiltIn builtIn, final TypedExpression... arguments) {

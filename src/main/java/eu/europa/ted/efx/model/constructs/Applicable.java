@@ -31,10 +31,10 @@ import eu.europa.ted.efx.model.expressions.TypedExpression;
  * take their number and, once {@code T} is bound, every argument converts to its parameter. When
  * more than one takes them, the most specific one is chosen: the one whose converted arguments
  * would also convert to the parameters of every other, as {@code (T)} is more specific than
- * {@code (T*)} for a single value, and a path parameter of a class is more specific than one of
- * its superclass, as {@code NODES} is than {@code PATH}. A call with no single most specific
- * candidate raises a {@link TranslatorConfigurationException}: the construct is ambiguous, which
- * the catalogue's unit tests prove no built-in is.</p>
+ * {@code (T*)} for a single value, a multilingual field than a sequence of texts, and a path
+ * parameter of a class than one of its superclass, as {@code NODES} is than {@code PATH}. A call
+ * with no single most specific candidate raises a {@link TranslatorConfigurationException}: the
+ * construct is ambiguous, which the catalogue's unit tests prove no built-in is.</p>
  *
  * @param <C> the kind of candidate: a parameter list or an overload
  */
@@ -124,16 +124,17 @@ final class Applicable<C> {
 
   /**
    * Tells whether an argument converted to one parameter type would also convert to another. A
-   * path parameter takes a path of its class, not a value, so a path converts to a path parameter
-   * of its class or of a superclass, and only by being one; a value converts as the type checker
-   * converts it.
+   * path parameter takes a path of its class, not a value, so only a path of its class or of a
+   * subclass converts to it. {@link ParameterType#PATH} takes any path and names no type of EFX,
+   * so what it takes converts only to it. Anything else converts as the type checker converts
+   * it, as a multilingual field converts to a sequence of texts.
    *
    * @param from the parameter type the argument was converted to, with {@code T} bound
    * @param to the other parameter type, with {@code T} bound
    * @return {@code true} if it would also convert to the other
    */
   private static boolean convertsTo(final ParameterType<?> from, final ParameterType<?> to) {
-    if (from instanceof ParameterType.Path || to instanceof ParameterType.Path) {
+    if (to instanceof ParameterType.Path || from == ParameterType.PATH) {
       return to.getExpressionType().isAssignableFrom(from.getExpressionType());
     }
     return TypeChecker.V2.canConvert(from.getExpressionType(), to.getExpressionType());
