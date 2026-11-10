@@ -948,7 +948,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    * selects from the whole sequence it selects, rather than among the children of each parent,
    * which a predicate on its last step would select from. The path keeps its type, which a type
    * error names: {@code BT-00-Text[at TRUE]} names {@code 'text'}. It takes the toolkit's own class
-   * for that type, which the script generator can build, whatever class the resolver gave it.
+   * for that type, as the element the index selects does: see
+   * {@link ExpressionConstruct#pathClassOf}.
    *
    * @param sequence the field, the node or the value the index is written after
    * @return the path in parentheses, or the value as it is

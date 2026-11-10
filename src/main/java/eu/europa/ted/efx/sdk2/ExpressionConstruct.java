@@ -257,8 +257,9 @@ class ExpressionConstruct implements Composable {
 
   /**
    * Gives the toolkit's own class of a path: a path of a single value, or of a sequence, of its
-   * primitive, as the path is. A symbol resolver may give a path of a subclass of its own, which
-   * the script generator cannot build around a script it composes.
+   * primitive, as the path is. An index takes it for the path it selects from, as it takes the
+   * toolkit's classes for that sequence and for the element it selects, rather than the class the
+   * symbol resolver gave the path, which may be a subclass of its own.
    *
    * @param path the path of a field or a node, as the symbol resolver gives it
    * @return the class the toolkit gives a path of the same type
