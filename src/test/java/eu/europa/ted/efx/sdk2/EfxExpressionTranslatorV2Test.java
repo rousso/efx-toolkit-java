@@ -19,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import eu.europa.ted.efx.EfxTestsBase;
+import eu.europa.ted.efx.exceptions.InvalidArgumentException;
 import eu.europa.ted.efx.exceptions.InvalidIdentifierException;
 import eu.europa.ted.efx.exceptions.InvalidUsageException;
 import eu.europa.ted.efx.exceptions.TypeMismatchException;
@@ -4692,6 +4693,14 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   void testParameterizedExpression_WithStringParameter() {
     testExpressionTranslation("'hello' = 'world'", "{ND-Root, text:$p1, text:$p2} ${$p1 == $p2}",
         "'hello'", "'world'");
+  }
+
+  @Test
+  void testParameterizedExpression_MissingArgument_Throws() {
+    InvalidArgumentException exception = assertThrows(InvalidArgumentException.class,
+        () -> translateExpression("{ND-Root, text:$p} ${$p}"));
+    assertEquals(InvalidArgumentException.ErrorCode.MISSING_ARGUMENT, exception.getErrorCode());
+    assertEquals("line 1:10 No argument passed for parameter 'p'.", exception.getMessage());
   }
 
   @Test

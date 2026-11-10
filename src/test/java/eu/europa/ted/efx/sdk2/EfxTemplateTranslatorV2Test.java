@@ -2823,6 +2823,17 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
     assertThrows(InvalidIndentationException.class, () -> translateTemplate(template));
   }
 
+  @Test
+  void testTemplateLine_InvalidIndentation_InconsistentSpaces() {
+    InvalidIndentationException exception = assertThrows(InvalidIndentationException.class,
+        () -> translateTemplate(
+            lines("{BT-00-Text} foo", "  {BT-00-Text} bar", "   {BT-00-Text} baz")));
+    assertEquals(InvalidIndentationException.ErrorCode.INCONSISTENT_INDENTATION_SPACES,
+        exception.getErrorCode());
+    assertEquals("line 3:0 Inconsistent indentation. Expected a multiple of 2 spaces.",
+        exception.getMessage());
+  }
+
   // #endregion InvalidIndentationException ------------------------------------
 
   // #region TypeMismatchException ---------------------------------------------
