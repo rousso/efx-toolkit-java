@@ -32,6 +32,7 @@ import java.util.Map;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
+import org.antlr.v4.runtime.BaseErrorListener;
 import org.xml.sax.InputSource;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -68,12 +69,17 @@ class EfxRulesTranslatorV2Test extends EfxTestsBase {
 
   @BeforeEach
   void setUp() throws InstantiationException {
-    translator = new EfxRulesTranslatorV2(
+    translator = translatorWith(ThrowingErrorListener.INSTANCE);
+  }
+
+  private static EfxRulesTranslatorV2 translatorWith(final BaseErrorListener errorListener)
+      throws InstantiationException {
+    return new EfxRulesTranslatorV2(
         new SchematronGenerator(),
         DependencyFactoryMock.INSTANCE.createSymbolResolver(SDK_VERSION, ""),
         DependencyFactoryMock.INSTANCE.createScriptGenerator(SDK_VERSION, "",
             new EfxTranslatorOptions("udf", DecimalFormat.EFX_DEFAULT)),
-        ThrowingErrorListener.INSTANCE);
+        errorListener);
   }
 
   //#region Private helper methods
@@ -134,6 +140,30 @@ class EfxRulesTranslatorV2Test extends EfxTestsBase {
 
     assertEquals(11, outputFiles.size(), "Should generate exactly 11 files");
     assertAllOutputs(testName, outputFiles);
+  }
+
+  // A listener that does not throw lets the parser recover from a file without a stage, and the
+  // translator still rejects the file.
+
+  @Test
+  void testEmptyRulesFile_IsRejectedBehindAListenerThatDoesNotThrow()
+      throws InstantiationException {
+    assertEmptyRulesFile("");
+  }
+
+  @Test
+  void testRulesFileWithoutAStage_IsRejectedBehindAListenerThatDoesNotThrow()
+      throws InstantiationException {
+    assertEmptyRulesFile("LET text : $testVar = \"test-value\";");
+  }
+
+  private static void assertEmptyRulesFile(final String rules) throws InstantiationException {
+    final EfxRulesTranslatorV2 lenient = translatorWith(new BaseErrorListener());
+    InvalidUsageException exception = assertThrows(InvalidUsageException.class,
+        () -> lenient.translateRules(rules));
+    assertEquals(InvalidUsageException.ErrorCode.EMPTY_RULES_FILE, exception.getErrorCode());
+    assertEquals("Rules file must contain at least one validation stage.",
+        exception.getMessage());
   }
 
   //#endregion STAGE tests
