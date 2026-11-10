@@ -52,6 +52,7 @@ The following sections describe the features of the 2.0.0 line. For the changes 
 - `TranslatorContext`: Interface providing translation context to `MarkupGenerator` methods.
 - `TypeChecker`: Interface for SDK-specific type validation.
 - `IncludedFileResolver`: Interface for resolving `#include` directives in EFX files.
+- `Reads`: the references resolved and the dictionaries looked up while a context is the current one, which an EFX-2 index needs to know whether it reads its position once. Each `Context` keeps its own, given by `reads()`, and `ContextStack.readsInCurrentContext()` gives those of the current context, or those made where no context is declared.
 - New typed exception hierarchy: `EfxCompilationException`, `InvalidArgumentException`, `InvalidIdentifierException`, `InvalidIndentationException`, `InvalidUsageException`, `SdkInconsistencyException`, `SymbolResolutionException`, `TranslatorConfigurationException`, `TypeMismatchException`.
 
 ### Bug fixes

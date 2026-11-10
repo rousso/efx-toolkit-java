@@ -39,6 +39,7 @@ import eu.europa.ted.efx.exceptions.TypeMismatchException;
 import eu.europa.ted.efx.interfaces.ScriptGenerator;
 import eu.europa.ted.efx.model.Context;
 import eu.europa.ted.efx.model.PrivacySetting;
+import eu.europa.ted.efx.model.Reads;
 import eu.europa.ted.efx.model.builtins.BuiltIn;
 import eu.europa.ted.efx.model.builtins.BuiltIns;
 import eu.europa.ted.efx.model.builtins.ConditionOperators;
@@ -136,21 +137,6 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    * context here.
    */
   private final Map<Variable, Context> contextsOfVariables = new IdentityHashMap<>();
-
-  /**
-   * The reads made in each context while it is the current one, so that an index can tell whether
-   * its position reads what the target language would read differently for each element. A
-   * reference is resolved only through {@link #relativePathOfField}, {@link #relativePathOfNode},
-   * {@link #absolutePathOfCurrentContext}, {@link #absolutePathOfField} and
-   * {@link #absolutePathOfNode}, and a dictionary is only looked up by {@link #lookUp}, which
-   * count the read in the current context.
-   */
-  private final Map<Context, Reads> readsInContexts = new IdentityHashMap<>();
-
-  /**
-   * The reads made where no context is declared.
-   */
-  private final Reads readsWithoutContext = new Reads();
 
   EfxExpressionVisitor(final Translation translation) {
     this.translation = translation;
@@ -756,7 +742,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
         ExpressionConstruct.PREDICATE, List.of(new Subexpression<>(path, origin), test),
         List.of(path, test.value()), position -> condition, TypeMismatchException::cannotConvert)
         .compose(this.translation.script()));
-    this.readsInContexts.remove(this.translation.efxContext().pop());
+    this.translation.efxContext().pop();
     return new Subexpression<>(selected, origin);
   }
 
@@ -790,7 +776,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    */
   Subexpression<?> positionInPath(final PathExpression path, final PathOrigin origin,
       final ExpressionContext position) {
-    final Reads reads = this.readsInCurrentContext();
+    final Reads reads = this.translation.efxContext().readsInCurrentContext();
     final int readsBefore = reads.ofContext();
     final Subexpression<?> index = this.visit(position);
     final Resolution indexing = this.resolved(ExpressionConstruct.INDEX_IN_PATH,
@@ -820,7 +806,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
   Subexpression<?> positionInValue(final Subexpression<?> sequence,
       final ExpressionContext position) {
     final TypedExpression given = sequence.value();
-    final Reads reads = this.readsInCurrentContext();
+    final Reads reads = this.translation.efxContext().readsInCurrentContext();
     final int readsBefore = reads.all();
     final Subexpression<?> index = this.visit(position);
     final ParserRuleContext indexed = this.translation.stack().peekParserContext();
@@ -877,7 +863,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
     final Dictionary dictionary = this.translation.stack().getDictionary(name)
         .orElseThrow(() -> InvalidIdentifierException.undeclaredIdentifier(
             this.translation.stack().peekParserContext(), Dictionary.describe(name)));
-    this.readsInCurrentContext().countReadOfRoot();
+    this.translation.efxContext().readsInCurrentContext().countReadOfRoot();
     return new Subexpression<>(
         this.resolved(ExpressionConstruct.lookup(reference.getText(), dictionary),
             List.of(this.visit(key)), position -> key).compose(this.translation.script()),
@@ -917,7 +903,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    * @return the path of the field from the root, whose read is counted
    */
   private PathExpression absolutePathOfField(final String fieldId) {
-    this.readsInCurrentContext().countReadOfRoot();
+    this.translation.efxContext().readsInCurrentContext().countReadOfRoot();
     return this.translation.symbols().getRelativePathOfField(fieldId, NO_CONTEXT);
   }
 
@@ -926,24 +912,21 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    * @return the path of the node from the root, whose read is counted
    */
   private PathExpression absolutePathOfNode(final String nodeId) {
-    this.readsInCurrentContext().countReadOfRoot();
+    this.translation.efxContext().readsInCurrentContext().countReadOfRoot();
     return this.translation.symbols().getRelativePathOfNode(nodeId, NO_CONTEXT);
   }
 
   /**
    * Counts a read of the current context: a reference is resolved from it.
+   *
+   * <p>A reference is resolved only through {@link #relativePathOfField},
+   * {@link #relativePathOfNode}, {@link #absolutePathOfCurrentContext}, {@link #absolutePathOfField}
+   * and {@link #absolutePathOfNode}, and a dictionary is only looked up by {@link #lookUp}, which
+   * count the read in the current context, so that an index can tell whether its position reads
+   * what the target language would read differently for each element: see {@link Reads}.</p>
    */
   private void countReadOfCurrentContext() {
-    this.readsInCurrentContext().countReadOfContext();
-  }
-
-  /**
-   * @return the reads made in the current context, or where no context is declared
-   */
-  private Reads readsInCurrentContext() {
-    return this.translation.efxContext().isEmpty() ? this.readsWithoutContext
-        : this.readsInContexts.computeIfAbsent(this.translation.efxContext().peek(),
-            context -> new Reads());
+    this.translation.efxContext().readsInCurrentContext().countReadOfContext();
   }
 
   /**
@@ -962,40 +945,6 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
         ? ExpressionConstruct.inParentheses(this.translation.script(), sequence,
             ExpressionConstruct.pathClassOf((PathExpression) sequence))
         : sequence;
-  }
-
-  /**
-   * The references resolved, and the dictionaries looked up, while a context is the current one:
-   * the reads of the context, and the reads of the root, which an absolute reference and a lookup
-   * start from. Where no context is declared, the root is the context that a relative reference
-   * reads.
-   */
-  private static final class Reads {
-
-    private int ofContext;
-    private int ofRoot;
-
-    void countReadOfContext() {
-      this.ofContext++;
-    }
-
-    void countReadOfRoot() {
-      this.ofRoot++;
-    }
-
-    /**
-     * @return how many references have been resolved from the context
-     */
-    int ofContext() {
-      return this.ofContext;
-    }
-
-    /**
-     * @return how many reads of the context and of the root have been made
-     */
-    int all() {
-      return this.ofContext + this.ofRoot;
-    }
   }
 
   // #endregion Brackets ------------------------------------------------------

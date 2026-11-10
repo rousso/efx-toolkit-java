@@ -217,3 +217,7 @@ H42 adds the static `model.identifiers.ParsedParameter.describe(String)`, as `Va
 ## `CallStack.getTypeOfIdentifier` removed (H43)
 
 H43 removes `model.CallStack.getTypeOfIdentifier(String)`, which is on develop. Nothing in the toolkit called it, there or here, and since H40 it named any name it did not find a function, because its fallback `getFunction` raised its own error first. The CHANGELOG lists the removal under breaking changes.
+
+## The read counts in `Context` (H44)
+
+H44 adds the public class `model.Reads`, with a package-private constructor, which the visitor kept as a private nested class: `countReadOfContext()`, `countReadOfRoot()`, `ofContext()` and `all()`. `model.Context` gains `reads()`, and `model.ContextStack` gains `readsInCurrentContext()`. Both classes are on develop; the additions break nothing, and EFX-1 calls none of them. The CHANGELOG lists `Reads` with the new classes.

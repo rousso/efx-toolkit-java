@@ -34,6 +34,11 @@ public class ContextStack extends Stack<Context> {
   private final Map<String, Context> variables = new HashMap<>();
 
   /**
+   * The reads made where no context is declared.
+   */
+  private final Reads readsWithoutContext = new Reads();
+
+  /**
    * Creates a new ContextStack.
    * 
    * @param symbols the SymbolMap is used to resolve fieldIds and nodeIds.
@@ -159,6 +164,14 @@ public class ContextStack extends Stack<Context> {
     }
 
     return this.peek().relativePath();
+  }
+
+  /**
+   * @return the reads made while the context at the top of the stack is the current one, or, if the
+   *         stack is empty, the reads made where no context is declared
+   */
+  public Reads readsInCurrentContext() {
+    return this.isEmpty() ? this.readsWithoutContext : this.peek().reads();
   }
 
   /**
