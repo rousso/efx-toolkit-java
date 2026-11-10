@@ -34,7 +34,6 @@ public class InvalidUsageException extends EfxCompilationException {
         UNSUPPORTED_REGEX_CONSTRUCT,
         CIRCULAR_INCLUDE,
         EMPTY_RULES_FILE,
-        NOT_A_DYNAMIC_FUNCTION,
         DYNAMIC_FUNCTION_OUTSIDE_RULE,
         INVALID_ENDPOINT_NAME,
         INVALID_FORMAT_OPTIONS,
@@ -51,7 +50,6 @@ public class InvalidUsageException extends EfxCompilationException {
     private static final String UNSUPPORTED_REGEX_CONSTRUCT = "Invalid regex pattern %s at position %d: %s";
     private static final String CIRCULAR_INCLUDE = "Circular #include detected: '%s'.";
     private static final String EMPTY_RULES_FILE = "Rules file must contain at least one validation stage.";
-    private static final String NOT_A_DYNAMIC_FUNCTION = "Function '%s' is not declared as a dynamic function. Only functions declared with CALL API can be used in a dynamic variable initializer.";
     private static final String DYNAMIC_FUNCTION_OUTSIDE_RULE = "%s can only be called inline within a rule expression (ASSERT/REPORT). Use 'LET dynamic : $var = ?%s(...)' to declare a dynamic variable at this scope.";
     private static final String INVALID_ENDPOINT_NAME = "Endpoint name '%s' is not valid. Endpoint names must start with a letter and contain only letters, digits, hyphens, and underscores.";
     private static final String INVALID_FORMAT_OPTIONS = "A number of decimals can only format a number, and short, medium or long only a date or a time.";
@@ -116,10 +114,6 @@ public class InvalidUsageException extends EfxCompilationException {
 
     public static InvalidUsageException emptyRulesFile() {
         return new InvalidUsageException(ErrorCode.EMPTY_RULES_FILE, EMPTY_RULES_FILE);
-    }
-
-    public static InvalidUsageException notADynamicFunction(ParserRuleContext ctx, String functionName) {
-        return new InvalidUsageException(ErrorCode.NOT_A_DYNAMIC_FUNCTION, ctx, NOT_A_DYNAMIC_FUNCTION, functionName);
     }
 
     /**

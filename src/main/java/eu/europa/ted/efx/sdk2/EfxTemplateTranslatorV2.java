@@ -92,7 +92,6 @@ import eu.europa.ted.efx.model.templates.LineBreakContentTemplateFragment;
 import eu.europa.ted.efx.model.templates.TextContentTemplateFragment;
 import eu.europa.ted.efx.model.templates.ContentBlock;
 import eu.europa.ted.efx.model.templates.ContentBlockStack;
-import eu.europa.ted.efx.model.templates.TemplateInvocation;
 import eu.europa.ted.efx.model.templates.ViewTemplate;
 import eu.europa.ted.efx.model.types.EfxDataType;
 import eu.europa.ted.efx.model.types.FieldTypes;
@@ -1499,9 +1498,6 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
     } else if (indentChange == 1) {
       if (this.blockStack.isEmpty()) {
           throw InvalidIndentationException.startIndentAtZero(ctx);
-      }
-      if (this.blockStack.peek() instanceof TemplateInvocation) {
-        throw InvalidIndentationException.noNestingOnInvocations(ctx);
       }
       this.blockStack.pushChild(outlineNumber, lineContext, variables, contentTemplates);
     } else if (indentLevel == 0) {

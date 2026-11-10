@@ -95,22 +95,6 @@ public class ContentBlock {
   }
 
   public ContentBlock addChild(final int number, final Context context, final Variables variables,
-      final TemplateDefinition template) {
-    // number < 0 means "autogenerate", number == 0 means "no number", number > 0
-    // means "use this number"
-    final int actualNumber = number >= 0 ? number
-        : this.children.stream()
-            .filter(ContentBlock.class::isInstance)
-            .map(ContentBlock::getNumber)
-            .max(Comparator.naturalOrder())
-            .orElse(0) + 1;
-
-    ContentBlock newBlock = new TemplateInvocation(this, template, actualNumber, context, variables);
-    this.children.add(newBlock);
-    return newBlock;
-  }
-
-  public ContentBlock addChild(final int number, final Context context, final Variables variables,
       final List<ContentTemplate> contentTemplates) {
     String newBlockId = String.format("%s%02d", this.id, this.children.size() + 1);
     return this.addChild(newBlockId, number, context, variables, contentTemplates);
@@ -123,11 +107,6 @@ public class ContentBlock {
   public ContentBlock addSibling(final int number, final Context context, final Variables variables,
       final List<ContentTemplate> contentTemplates) {
     return this.parent.addChild(number, context, variables, contentTemplates);
-  }
-
-  public ContentBlock addSibling(final int number, final Context context, final Variables variables,
-      final TemplateDefinition template) {
-    return this.parent.addChild(number, context, variables, template);
   }
 
   // #endregion Add Siblings

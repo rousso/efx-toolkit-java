@@ -278,9 +278,6 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
     String funcName = invocation.functionName.getText();
     var func = this.translation.stack().getFunction(funcName);
     var call = this.expressions.invocationOf(invocation, func);
-    if (!(func instanceof DynamicFunction)) {
-      throw InvalidUsageException.notADynamicFunction(ctx, funcName);
-    }
     this.translation.stack().push(call.compose(this.translation.script()));
     this.translation.stack().push(func);
   }
