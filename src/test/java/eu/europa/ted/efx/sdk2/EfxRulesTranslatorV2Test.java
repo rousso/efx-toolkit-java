@@ -200,9 +200,10 @@ class EfxRulesTranslatorV2Test extends EfxTestsBase {
     TypeMismatchException exception = assertThrows(TypeMismatchException.class,
         () -> translator.translateRules(rules));
     assertEquals(TypeMismatchException.ErrorCode.FIELD_MAY_REPEAT, exception.getErrorCode());
-    assertEquals("line 4:12 Type mismatch. 'ASSERT' cannot take 'indicator*'. Its condition must"
-        + " be 'indicator'. Field 'BT-00-Repeatable-Indicator' may return multiple values from"
-        + " context 'ND-Root': use a sequence expression or change the context.",
+    assertEquals("line 4:12 Type mismatch. Clause 'ASSERT' cannot take 'indicator*'."
+        + " Its condition must be 'indicator'. Field 'BT-00-Repeatable-Indicator' may return"
+        + " multiple values from context 'ND-Root': use a sequence expression or change the"
+        + " context.",
         exception.getMessage());
   }
 

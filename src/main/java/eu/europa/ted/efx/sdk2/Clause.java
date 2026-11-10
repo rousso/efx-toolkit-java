@@ -48,7 +48,8 @@ final class Clause implements Construct {
   }
 
   /**
-   * @param name the clause as a type error names it, such as "'WHEN'" or "Variable 'text:$x'"
+   * @param name the clause as a type error names it, such as "Clause 'WHEN'" or
+   *        "Variable 'text:$x'"
    * @param parameter its parameter, such as {@code condition: INDICATOR}
    * @return the clause
    */
@@ -57,11 +58,21 @@ final class Clause implements Construct {
   }
 
   /**
+   * Names a clause by the keyword that introduces it, as a type error does.
+   *
+   * @param keyword the keyword as written, such as {@code WHEN}, {@code when} or {@code by}
+   * @return the name of the clause, such as "Clause 'WHEN'"
+   */
+  static String describe(final String keyword) {
+    return "Clause '" + keyword + "'";
+  }
+
+  /**
    * Gives a clause that takes one value of any type and gives it on as it is: a single value stays
    * one, and a sequence stays a sequence. It has a parameter list for each, {@code (T)} and
    * {@code (T*)}, and a single value takes the first, the more specific.
    *
-   * @param name the clause as a type error names it, such as "'COMPUTE'"
+   * @param name the clause as a type error names it, such as "Clause 'COMPUTE'"
    * @param parameter the name of its parameter, such as "expression"
    * @return the clause
    */

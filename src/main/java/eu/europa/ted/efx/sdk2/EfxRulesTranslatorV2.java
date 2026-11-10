@@ -85,13 +85,16 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
   private static final Logger logger = LoggerFactory.getLogger(EfxRulesTranslatorV2.class);
 
   /** The clauses of a rule that take a condition, as a type error names them. */
-  private static final Clause WHEN = Clause.of("'WHEN'", parameter("condition", INDICATOR));
-  private static final Clause ASSERT = Clause.of("'ASSERT'", parameter("condition", INDICATOR));
-  private static final Clause REPORT = Clause.of("'REPORT'", parameter("condition", INDICATOR));
+  private static final Clause WHEN = Clause.of(Clause.describe("WHEN"),
+      parameter("condition", INDICATOR));
+  private static final Clause ASSERT = Clause.of(Clause.describe("ASSERT"),
+      parameter("condition", INDICATOR));
+  private static final Clause REPORT = Clause.of(Clause.describe("REPORT"),
+      parameter("condition", INDICATOR));
   private static final Clause OTHERWISE_ASSERT =
-      Clause.of("'OTHERWISE ASSERT'", parameter("condition", INDICATOR));
+      Clause.of(Clause.describe("OTHERWISE ASSERT"), parameter("condition", INDICATOR));
   private static final Clause OTHERWISE_REPORT =
-      Clause.of("'OTHERWISE REPORT'", parameter("condition", INDICATOR));
+      Clause.of(Clause.describe("OTHERWISE REPORT"), parameter("condition", INDICATOR));
 
   /**
    * The ValidatorGenerator is used to generate validation output from the intermediate model.

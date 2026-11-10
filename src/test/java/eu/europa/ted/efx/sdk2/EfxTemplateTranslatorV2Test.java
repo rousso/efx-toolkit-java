@@ -2998,7 +2998,8 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
   @Test
   void testTypeErrorMessage_When() {
     assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
-        "line 1:5 Type mismatch. 'when' cannot take 'number'. Its condition must be 'indicator'.",
+        "line 1:5 Type mismatch. Clause 'when' cannot take 'number'."
+            + " Its condition must be 'indicator'.",
         "when 1 display this is one;");
   }
 

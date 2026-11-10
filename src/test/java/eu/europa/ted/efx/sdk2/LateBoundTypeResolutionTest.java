@@ -549,9 +549,10 @@ class LateBoundTypeResolutionTest extends EfxTestsBase {
             "let $dic index BT-00-Number by BT-00-Repeatable-Text;",
             "display ${$dic['a']};")));
     assertEquals(ErrorCode.FIELD_MAY_REPEAT, ex.getErrorCode());
-    assertEquals("line 1:31 Type mismatch. 'by' cannot take 'text*'. Its key must be 'text'."
-        + " Field 'BT-00-Repeatable-Text' may return multiple values from context 'BT-00-Number':"
-        + " use a sequence expression or change the context.", ex.getMessage());
+    assertEquals("line 1:31 Type mismatch. Clause 'by' cannot take 'text*'."
+        + " Its key must be 'text'. Field 'BT-00-Repeatable-Text' may return multiple values from"
+        + " context 'BT-00-Number': use a sequence expression or change the context.",
+        ex.getMessage());
   }
 
   @Test
