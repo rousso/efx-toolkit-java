@@ -325,14 +325,19 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
     this.viewTemplate.addVariable(variable);
   }
 
+  /**
+   * Opens the scope of a function: its parameters are declared in a stack frame of its own.
+   */
   @Override
   public void enterFunctionDeclaration(FunctionDeclarationContext ctx) {
+    this.translation.stack().pushStackFrame();
     this.translation.stack().push(new ParsedParameters());
   }
 
   /**
    * Declares a function. Its body must give a value of the declared type, which is the type of a
-   * call of it.
+   * call of it. The function is declared before its scope closes, so it cannot take the name of
+   * one of its parameters.
    */
   @Override
   public void exitFunctionDeclaration(FunctionDeclarationContext ctx) {
@@ -344,6 +349,7 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
     var parameters = this.translation.stack().pop(ParsedParameters.class);
     var function = new Function(ctx.functionName.getText(), parameters, type, expression);
     this.translation.stack().declareFunction(function);
+    this.translation.stack().popStackFrame();
     this.viewTemplate.addFunction(function);
   }
 

@@ -753,6 +753,93 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
             "display days: ${days(?week())};")));
   }
 
+  // A function's parameters are declared in its own scope, which closes after its body.
+
+  @Test
+  void testFunctionScope_ParameterIsNotDeclaredInTheNextFunction() {
+    InvalidIdentifierException exception = assertThrows(InvalidIdentifierException.class,
+        () -> translateTemplate(lines("let text:?a(text:$x) = $x;", "let text:?b() = $x;",
+            "display ${?b()};")));
+    assertEquals(InvalidIdentifierException.ErrorCode.UNDECLARED_IDENTIFIER,
+        exception.getErrorCode());
+    assertEquals("line 2:16 Variable '$x' is not declared.", exception.getMessage());
+  }
+
+  @Test
+  void testFunctionScope_ParameterIsNotDeclaredInATemplateLine() {
+    InvalidIdentifierException exception = assertThrows(InvalidIdentifierException.class,
+        () -> translateTemplate(lines("let text:?a(text:$x) = $x;", "display ${$x};")));
+    assertEquals(InvalidIdentifierException.ErrorCode.UNDECLARED_IDENTIFIER,
+        exception.getErrorCode());
+    assertEquals("line 2:10 Variable '$x' is not declared.", exception.getMessage());
+  }
+
+  @Test
+  void testFunctionScope_TwoFunctionsTakeParametersOfTheSameName() {
+    assertEquals(
+        lines(
+            "GLOBALS:",
+            "string:a(string:x) -> { $x }",
+            "string:b(string:x) -> { $x }",
+            "TEMPLATES:",
+            "let body01() -> { eval(udf:b('c')) }",
+            "MAIN:",
+            "for-each(/*).call(body01())"),
+        translateTemplate(lines("let text:?a(text:$x) = $x;", "let text:?b(text:$x) = $x;",
+            "display ${?b('c')};")));
+  }
+
+  @Test
+  void testFunctionScope_VariableTakesTheNameOfAParameter() {
+    assertEquals(
+        lines(
+            "GLOBALS:",
+            "string:a(string:x) -> { $x }",
+            "string:x='b'",
+            "TEMPLATES:",
+            "let body01() -> { eval($x) }",
+            "MAIN:",
+            "for-each(/*).call(body01())"),
+        translateTemplate(lines("let text:?a(text:$x) = $x;", "let text:$x = 'b';",
+            "display ${$x};")));
+  }
+
+  @Test
+  void testFunctionScope_FunctionTakesTheNameOfAParameter() {
+    assertEquals(
+        lines(
+            "GLOBALS:",
+            "string:a(string:x) -> { $x }",
+            "string:x() -> { 'd' }",
+            "TEMPLATES:",
+            "let body01() -> { eval(udf:x()) }",
+            "MAIN:",
+            "for-each(/*).call(body01())"),
+        translateTemplate(lines("let text:?a(text:$x) = $x;", "let text:?x() = 'd';",
+            "display ${?x()};")));
+  }
+
+  @Test
+  void testFunctionScope_TemplateTakesAParameterOfTheSameName() {
+    assertEquals(
+        lines(
+            "GLOBALS:",
+            "string:a(string:x) -> { $x }",
+            "TEMPLATES:",
+            "let t(string:x) -> { eval($x) }",
+            "let body01() -> { call(t(string:x='c')) }",
+            "MAIN:",
+            "for-each(/*).call(body01())"),
+        translateTemplate(lines("let text:?a(text:$x) = $x;",
+            "let template:t(text:$x) display ${$x};", "invoke t('c');")));
+  }
+
+  @Test
+  void testFunctionScope_FunctionCannotTakeTheNameOfItsParameter() {
+    assertNameClash("line 1:0 Function '?x' has the same name as Parameter '$x', already"
+        + " declared in this scope.", "let text:?x(text:$x) = $x;", "display ${?x('c')};");
+  }
+
   // #endregion Function declarations ------------------------------------------
 
   // #region Sequence function declarations ------------------------------------
