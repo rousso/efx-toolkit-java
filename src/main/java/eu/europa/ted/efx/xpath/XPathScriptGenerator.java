@@ -112,14 +112,15 @@ public class XPathScriptGenerator implements ScriptGenerator {
       return Expression.instantiate(fieldReference.getScript() + "/xs:time(text())", fieldReference.getClass());
     }
     if (fieldReference.is(EfxDataType.Duration.class)) {
-      return Expression.instantiate("(for $F in " + fieldReference.getScript() + " return (if ($F/@unitCode='WEEK')" + //
-          " then xs:dayTimeDuration(concat('P', $F/number() * 7, 'D'))" + //
-          " else if ($F/@unitCode='DAY')" + //
-          " then xs:dayTimeDuration(concat('P', $F/number(), 'D'))" + //
-          " else if ($F/@unitCode='YEAR')" + //
-          " then xs:yearMonthDuration(concat('P', $F/number(), 'Y'))" + //
-          " else if ($F/@unitCode='MONTH')" + //
-          " then xs:yearMonthDuration(concat('P', $F/number(), 'M'))" + //
+      return Expression.instantiate("(for $__F in " + fieldReference.getScript() + //
+          " return (if ($__F/@unitCode='WEEK')" + //
+          " then xs:dayTimeDuration(concat('P', $__F/number() * 7, 'D'))" + //
+          " else if ($__F/@unitCode='DAY')" + //
+          " then xs:dayTimeDuration(concat('P', $__F/number(), 'D'))" + //
+          " else if ($__F/@unitCode='YEAR')" + //
+          " then xs:yearMonthDuration(concat('P', $__F/number(), 'Y'))" + //
+          " else if ($__F/@unitCode='MONTH')" + //
+          " then xs:yearMonthDuration(concat('P', $__F/number(), 'M'))" + //
           // " else if (" + fieldReference.script + ")" + //
           // " then fn:error('Invalid @unitCode')" + //
           " else ()))", fieldReference.getClass());
@@ -362,8 +363,8 @@ public class XPathScriptGenerator implements ScriptGenerator {
   @Override
   public BooleanExpression composeUniqueValueCondition(PathExpression needle,
       PathExpression haystack) {
-    return new BooleanExpression("count(for $x in " + needle.getScript() + ", $y in " + haystack.getScript()
-        + "[. = $x] return $y) = 1");
+    return new BooleanExpression("count(for $__x in " + needle.getScript() + ", $__y in "
+        + haystack.getScript() + "[. = $__x] return $__y) = 1");
   }
 
   @Override
@@ -404,7 +405,7 @@ public class XPathScriptGenerator implements ScriptGenerator {
 
   private BooleanExpression composeTypedUniqueValueCondition(String needle, String haystack) {
     return new BooleanExpression(
-        "count(for $n in " + needle + ", $x in " + haystack + "[. = $n] return $x) = 1");
+        "count(for $__n in " + needle + ", $__x in " + haystack + "[. = $__n] return $__x) = 1");
   }
 
   //#endregion Boolean Expressions ------------------------------------------
@@ -436,8 +437,8 @@ public class XPathScriptGenerator implements ScriptGenerator {
       // TODO: Improve this implementation; Check if both are dayTime or yearMonth and compare
       // directly, otherwise, compare by adding to current-date()
       return new BooleanExpression(
-          "boolean(for $T in (current-date()) return ($T + " + leftOperand.getScript() + " "
-              + operators.get(operator) + " $T + " + rightOperand.getScript() + "))");
+          "boolean(for $__T in (current-date()) return ($__T + " + leftOperand.getScript() + " "
+              + operators.get(operator) + " $__T + " + rightOperand.getScript() + "))");
     }
     return new BooleanExpression(
         leftOperand.getScript() + " " + operators.get(operator) + " " + rightOperand.getScript());
@@ -902,7 +903,8 @@ public class XPathScriptGenerator implements ScriptGenerator {
       final T list, final Class<T> listType) {
     final String seq = list.getScript();
     return Expression.instantiate(
-        "for $v in distinct-values(" + seq + ") return if (count(" + seq + "[. = $v]) > 1) then $v else ()",
+        "for $__v in distinct-values(" + seq + ") return if (count(" + seq
+            + "[. = $__v]) > 1) then $__v else ()",
         listType);
   }
 
@@ -915,12 +917,16 @@ public class XPathScriptGenerator implements ScriptGenerator {
 
   @Override
   public <T extends SequenceExpression> T composeIntersectFunction(T listOne, T listTwo, Class<T> listType) {
-    return Expression.instantiate("distinct-values(for $L1 in " + listOne.getScript() + " return if (some $L2 in " + listTwo.getScript() + " satisfies $L1 = $L2) then $L1 else ())", listType);
+    return Expression.instantiate("distinct-values(for $__L1 in " + listOne.getScript()
+        + " return if (some $__L2 in " + listTwo.getScript()
+        + " satisfies $__L1 = $__L2) then $__L1 else ())", listType);
   }
 
   @Override
   public <T extends SequenceExpression> T composeExceptFunction(T listOne, T listTwo, Class<T> listType) {
-    return Expression.instantiate("distinct-values(for $L1 in " + listOne.getScript() + " return if (every $L2 in " + listTwo.getScript() + " satisfies $L1 != $L2) then $L1 else ())", listType);
+    return Expression.instantiate("distinct-values(for $__L1 in " + listOne.getScript()
+        + " return if (every $__L2 in " + listTwo.getScript()
+        + " satisfies $__L1 != $__L2) then $__L1 else ())", listType);
   }
 
   @Override

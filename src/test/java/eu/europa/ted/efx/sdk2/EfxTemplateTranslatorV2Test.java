@@ -2079,11 +2079,11 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testFormattedExpressionBlock_RepeatableDurationFieldWithPredicateWithoutUnit_FormatsEachValue() {
-    final String durations = "(for $F in PathNode/RepeatableDurationField[true()] return (if ($F/@unitCode='WEEK')"
-        + " then xs:dayTimeDuration(concat('P', $F/number() * 7, 'D'))"
-        + " else if ($F/@unitCode='DAY') then xs:dayTimeDuration(concat('P', $F/number(), 'D'))"
-        + " else if ($F/@unitCode='YEAR') then xs:yearMonthDuration(concat('P', $F/number(), 'Y'))"
-        + " else if ($F/@unitCode='MONTH') then xs:yearMonthDuration(concat('P', $F/number(), 'M')) else ()))";
+    final String durations = "(for $__F in PathNode/RepeatableDurationField[true()] return (if ($__F/@unitCode='WEEK')"
+        + " then xs:dayTimeDuration(concat('P', $__F/number() * 7, 'D'))"
+        + " else if ($__F/@unitCode='DAY') then xs:dayTimeDuration(concat('P', $__F/number(), 'D'))"
+        + " else if ($__F/@unitCode='YEAR') then xs:yearMonthDuration(concat('P', $__F/number(), 'Y'))"
+        + " else if ($__F/@unitCode='MONTH') then xs:yearMonthDuration(concat('P', $__F/number(), 'M')) else ()))";
     final String months = "(years-from-duration($__item) * 12 + months-from-duration($__item))";
     final String number = "(if (" + months + " != 0) then " + months + " else days-from-duration($__item))";
     assertEquals(
