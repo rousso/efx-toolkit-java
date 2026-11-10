@@ -857,8 +857,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
         .resolve(List.of(indexing.getArguments().at(0, TypedExpression.class),
             script.composeVariableReference(INDEX_VARIABLE, NumericExpression.class)))
         .orElseThrow().compose(script));
-    return this.inParentheses(script.composeForExpression(binding, element, sequenceType),
-        element.getClass());
+    return ExpressionConstruct.inParentheses(script,
+        script.composeForExpression(binding, element, sequenceType), element.getClass());
   }
 
   /**
@@ -953,14 +953,10 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    * @return the path in parentheses, or the value as it is
    */
   private TypedExpression wholeSequence(final TypedExpression sequence) {
-    return sequence instanceof PathExpression ? this.inParentheses(sequence, sequence.getClass())
+    return sequence instanceof PathExpression
+        ? ExpressionConstruct.inParentheses(this.translation.script(), sequence,
+            sequence.getClass())
         : sequence;
-  }
-
-  private <T extends TypedExpression> T inParentheses(final TypedExpression expression,
-      final Class<T> type) {
-    return this.translation.script().composeParenthesizedExpression(
-        TypedExpression.from(expression, type), type);
   }
 
   /**

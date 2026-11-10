@@ -255,7 +255,16 @@ class ExpressionConstruct implements Composable {
     return SequencePath.fromEfxDataType.get(EfxTypeLattice.toPrimitive(path.getDataType()));
   }
 
-  private static <E extends TypedExpression> E inParentheses(final ScriptGenerator script,
+  /**
+   * Puts an expression in parentheses, as the class it is given.
+   *
+   * @param <E> the class of the expression in parentheses
+   * @param script the script generator
+   * @param content the expression
+   * @param type the class of the expression in parentheses
+   * @return the expression in parentheses
+   */
+  static <E extends TypedExpression> E inParentheses(final ScriptGenerator script,
       final TypedExpression content, final Class<E> type) {
     return script.composeParenthesizedExpression(TypedExpression.from(content, type), type);
   }
