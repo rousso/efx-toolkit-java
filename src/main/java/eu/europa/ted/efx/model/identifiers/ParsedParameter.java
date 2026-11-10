@@ -25,11 +25,16 @@ public class ParsedParameter extends Identifier implements Parameter {
   }
 
   /**
-   * @return how an error names the parameter: "Parameter '$x'"
+   * @param name the name of a parameter
+   * @return how an error names a parameter of that name: "Parameter '$x'"
    */
+  public static String describe(final String name) {
+    return describeDollarName("Parameter", name);
+  }
+
   @Override
   public String describe() {
-    return describeDollarName("Parameter", this.name);
+    return describe(this.name);
   }
 
   /**

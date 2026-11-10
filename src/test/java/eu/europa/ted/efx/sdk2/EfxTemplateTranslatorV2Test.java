@@ -2898,6 +2898,35 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
         "let text*:?f(text:$p) = for text:$p in BT-00-Text return $p;");
   }
 
+  @Test
+  void testParameterReference_Sequence_NamesItAsWritten() {
+    TypeMismatchException exception = assertThrows(TypeMismatchException.class,
+        () -> translateTemplate("let text:?first(text*:$items) = upper-case($items);"));
+    assertEquals(TypeMismatchException.ErrorCode.IDENTIFIER_IS_SEQUENCE, exception.getErrorCode());
+    assertEquals("line 1:43 Type mismatch. Function 'upper-case' cannot take 'text*'."
+        + " Its argument must be 'text'. Parameter '$items' is declared as a sequence.",
+        exception.getMessage());
+  }
+
+  @Test
+  void testParameterReference_AsContext_NamesItAsWritten() {
+    InvalidIdentifierException exception = assertThrows(InvalidIdentifierException.class,
+        () -> translateTemplate("let text:?f(text:$p) = $p::BT-00-Text;"));
+    assertEquals(InvalidIdentifierException.ErrorCode.NOT_A_CONTEXT_VARIABLE,
+        exception.getErrorCode());
+    assertEquals("line 1:23 Parameter '$p' is not a context variable.", exception.getMessage());
+  }
+
+  @Test
+  void testTemplateParameterReference_Sequence_NamesItAsWritten() {
+    TypeMismatchException exception = assertThrows(TypeMismatchException.class,
+        () -> translateTemplate("let template:t(text*:$items) display ${upper-case($items)};"));
+    assertEquals(TypeMismatchException.ErrorCode.IDENTIFIER_IS_SEQUENCE, exception.getErrorCode());
+    assertEquals("line 1:50 Type mismatch. Function 'upper-case' cannot take 'text*'."
+        + " Its argument must be 'text'. Parameter '$items' is declared as a sequence.",
+        exception.getMessage());
+  }
+
   private void assertNameClash(final String message, final String... template) {
     InvalidIdentifierException exception = assertThrows(InvalidIdentifierException.class,
         () -> translateTemplate(lines(template)));

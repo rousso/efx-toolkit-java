@@ -209,3 +209,7 @@ H40 adds the abstract `describe()` to `model.identifiers.Identifier`, which name
 ## A name clash names both declarations (H41)
 
 H41 changes `exceptions.InvalidIdentifierException.alreadyDeclared(ParserRuleContext, String)` to `alreadyDeclared(ParserRuleContext, String, String)`: after the identifier declared, it takes the identifier that already holds the name, both as an error names them, and names both when they are named otherwise. The factory is on develop, so the CHANGELOG lists the change under breaking changes. The package-private `model.CallStack.inScope(String)`, which only the check used, goes.
+
+## A reference named as what it reads (H42)
+
+H42 adds the static `model.identifiers.ParsedParameter.describe(String)`, as `Variable` and `Dictionary` have one, so that a reference to a parameter is named "Parameter '$x'"; the instance `describe()` uses it. The package-private origins of `sdk2` take the identifier as an error names it, where they took its name.

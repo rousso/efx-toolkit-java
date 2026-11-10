@@ -478,7 +478,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
     final String name = ctx.variableName.getText();
     final Optional<TypedExpression> parameter = this.translation.stack().getParameter(name);
     if (parameter.isPresent()) {
-      return new Subexpression<>(parameter.get(), new VariableOrigin(this, ctx, name));
+      return new Subexpression<>(parameter.get(),
+          new VariableOrigin(this, ctx, ParsedParameter.describe(name)));
     }
     final Optional<Variable> variable = this.translation.stack().getVariable(name);
     if (variable.isPresent()) {
@@ -497,10 +498,10 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
     final Context context = this.contextsOfVariables.get(variable);
     if (context == null) {
       return new Subexpression<>(variable.referenceExpression,
-          new VariableOrigin(this, ctx, variable.name));
+          new VariableOrigin(this, ctx, variable.describe()));
     }
     return new Subexpression<>((PathExpression) variable.referenceExpression,
-        new ContextVariableOrigin(this, ctx, variable.name, context));
+        new ContextVariableOrigin(this, ctx, variable.describe(), context));
   }
 
   /**

@@ -352,7 +352,8 @@ abstract class Origin<E extends TypedExpression> {
     protected final ParserRuleContext reference;
 
     /**
-     * The identifier as an error names it, such as "Variable '$x'" or "Function '?f'".
+     * The identifier as an error names it, such as "Variable '$x'", "Parameter '$x'" or
+     * "Function '?f'".
      */
     protected final String identifier;
 
@@ -376,8 +377,8 @@ abstract class Origin<E extends TypedExpression> {
   static final class VariableOrigin extends IdentifierOrigin<TypedExpression> {
 
     VariableOrigin(final EfxExpressionVisitor translator, final ParserRuleContext reference,
-        final String name) {
-      super(translator, reference, Variable.describe(name));
+        final String identifier) {
+      super(translator, reference, identifier);
     }
 
     @Override
@@ -398,8 +399,8 @@ abstract class Origin<E extends TypedExpression> {
     private final Context context;
 
     ContextVariableOrigin(final EfxExpressionVisitor translator,
-        final ParserRuleContext reference, final String name, final Context context) {
-      super(translator, reference, Variable.describe(name));
+        final ParserRuleContext reference, final String identifier, final Context context) {
+      super(translator, reference, identifier);
       this.context = context;
     }
 
