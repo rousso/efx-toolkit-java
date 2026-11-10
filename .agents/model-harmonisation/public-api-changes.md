@@ -213,3 +213,7 @@ H41 changes `exceptions.InvalidIdentifierException.alreadyDeclared(ParserRuleCon
 ## A reference named as what it reads (H42)
 
 H42 adds the static `model.identifiers.ParsedParameter.describe(String)`, as `Variable` and `Dictionary` have one, so that a reference to a parameter is named "Parameter '$x'"; the instance `describe()` uses it. The package-private origins of `sdk2` take the identifier as an error names it, where they took its name.
+
+## `CallStack.getTypeOfIdentifier` removed (H43)
+
+H43 removes `model.CallStack.getTypeOfIdentifier(String)`, which is on develop. Nothing in the toolkit called it, there or here, and since H40 it named any name it did not find a function, because its fallback `getFunction` raised its own error first. The CHANGELOG lists the removal under breaking changes.

@@ -31,7 +31,6 @@ import eu.europa.ted.efx.exceptions.InvalidIdentifierException;
 import eu.europa.ted.efx.exceptions.TypeMismatchException;
 import eu.europa.ted.efx.interfaces.TypeChecker;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
-import eu.europa.ted.efx.model.types.EfxDataType;
 import eu.europa.ted.efx.model.identifiers.ParsedParameter;
 import eu.europa.ted.efx.model.identifiers.Dictionary;
 import eu.europa.ted.efx.model.identifiers.Function;
@@ -421,28 +420,6 @@ public class CallStack {
       .map(identifier -> ((Function) identifier).parameters)
       .orElseThrow(() -> InvalidIdentifierException.undeclaredIdentifier(this.peekParserContext(),
           Function.spellingOf(functionName).describe()));
-  }
-
-  /**
-   * Retrieves the data type of a given identifier by its name.
-   * <p>
-   * This method first attempts to find the identifier using the {@code getIdentifier} method.
-   * If not found, it tries to resolve it as a function using the {@code getFunction} method.
-   * If the identifier is still not found, a {@link ParseCancellationException} is thrown.
-   * </p>
-   *
-   * @param identifierName the name of the identifier to look up
-   * @return the class type of the identifier's data type
-   * @throws ParseCancellationException if the identifier is not declared
-   */
-  public Class<? extends EfxDataType> getTypeOfIdentifier(String identifierName) {
-    Optional<Identifier> identifier = this.getIdentifier(identifierName)
-        .or(() -> Optional.ofNullable((Identifier) this.getFunction(identifierName)));
-    if (!identifier.isPresent()) {
-      throw InvalidIdentifierException.undeclaredIdentifier(this.peekParserContext(),
-          Variable.describe(identifierName));
-    }
-    return identifier.get().dataType;
   }
 
   /**
