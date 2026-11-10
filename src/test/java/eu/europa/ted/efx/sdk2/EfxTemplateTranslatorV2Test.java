@@ -2851,7 +2851,33 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
         "display ${$dic[at 1]};");
     InvalidIdentifierException exception =
         assertThrows(InvalidIdentifierException.class, () -> translateTemplate(template));
-    assertEquals(InvalidIdentifierException.ErrorCode.UNDECLARED_IDENTIFIER,
+    assertEquals(InvalidIdentifierException.ErrorCode.DICTIONARY_WITHOUT_KEY,
+        exception.getErrorCode());
+    assertEquals("line 2:10 Dictionary '$dic' has no value of its own: look up a key in it,"
+        + " as in $dic['key'].", exception.getMessage());
+  }
+
+  @Test
+  void testDictionaryName_AsValue_Throws() {
+    var template = lines(
+        "let $dic index BT-00-Number by BT-00-Text;",
+        "display ${$dic};");
+    InvalidIdentifierException exception =
+        assertThrows(InvalidIdentifierException.class, () -> translateTemplate(template));
+    assertEquals(InvalidIdentifierException.ErrorCode.DICTIONARY_WITHOUT_KEY,
+        exception.getErrorCode());
+    assertEquals("line 2:10 Dictionary '$dic' has no value of its own: look up a key in it,"
+        + " as in $dic['key'].", exception.getMessage());
+  }
+
+  @Test
+  void testDictionaryName_AsContext_Throws() {
+    var template = lines(
+        "let $dic index BT-00-Number by BT-00-Text;",
+        "display ${$dic::BT-00-Number};");
+    InvalidIdentifierException exception =
+        assertThrows(InvalidIdentifierException.class, () -> translateTemplate(template));
+    assertEquals(InvalidIdentifierException.ErrorCode.DICTIONARY_WITHOUT_KEY,
         exception.getErrorCode());
   }
 

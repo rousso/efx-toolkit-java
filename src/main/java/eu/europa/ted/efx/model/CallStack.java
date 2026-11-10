@@ -408,15 +408,12 @@ public class CallStack {
    * Retrieves a dictionary from the global identifier registry by its name.
    *
    * @param dictionaryName the name of the dictionary to retrieve
-   * @return the {@link Dictionary} associated with the given name
-   * @throws InvalidIdentifierException if the dictionary name is not found in the registry,
-   *         with a message indicating the undeclared identifier
+   * @return the {@link Dictionary} declared with the given name, or nothing if none is
    */
-  public Dictionary getDictionary(String dictionaryName) {
+  public Optional<Dictionary> getDictionary(String dictionaryName) {
     return Optional.ofNullable(this.globalIdentifierRegistry.get(dictionaryName))
         .filter(Dictionary.class::isInstance)
-        .map(Dictionary.class::cast)
-        .orElseThrow(() -> InvalidIdentifierException.undeclaredIdentifier(this.peekParserContext(), dictionaryName));
+        .map(Dictionary.class::cast);
   }
 
   /**

@@ -193,3 +193,7 @@ H30 removes the static methods `functionName`, `operatorName`, `argumentRole` an
 ## The argument-count error (H36)
 
 H36 replaces the two overloads of `exceptions.InvalidArgumentException.argumentNumberMismatch`, `(Invocable, int, int)` and `(Invocable, int)`, by `argumentNumberMismatch(ParserRuleContext, Invocable, int)`: the call, what it calls, and the number of its arguments; the number the call should give is read from the declared parameters. The second overload had no caller. `model.constructs.Spelling` gains `count(int)`, for "1 argument" or "2 arguments". Both overloads are on develop (taking `Parametrised`), so the CHANGELOG's line on `argumentTypeMismatch` names the replacement too. `exceptions.InvalidUsageException.templateOnlyFunction(ParserRuleContext, String)` keeps its signature, which is on develop, but its string is now the call as an error names it, "Function 'format-short'" or "Operator ':preferredLanguage'", where it was the function's name; the CHANGELOG says so beside the line on `argumentNumberMismatch`.
+
+## A declared dictionary used as a value (H38)
+
+H38 changes `model.CallStack.getDictionary(String)` to return `Optional<Dictionary>`, as `getVariable(String)` does; it raised the undeclared-identifier error itself, which the visitor's lookup now raises, at the same position. `exceptions.InvalidIdentifierException` gains the error code `DICTIONARY_WITHOUT_KEY` and its factory `dictionaryWithoutKey(ParserRuleContext, String)`. `getDictionary` is on develop, so the CHANGELOG lists its new return type under breaking changes.

@@ -26,7 +26,8 @@ public class InvalidIdentifierException extends EfxCompilationException {
         IDENTIFIER_ALREADY_DECLARED,
         NOT_A_CONTEXT_VARIABLE,
         UNDECLARED_ENDPOINT,
-        IDENTIFIER_IS_RESERVED
+        IDENTIFIER_IS_RESERVED,
+        DICTIONARY_WITHOUT_KEY
     }
 
     private static final String UNDECLARED_IDENTIFIER = "Identifier '%s' is not declared.";
@@ -34,6 +35,7 @@ public class InvalidIdentifierException extends EfxCompilationException {
     private static final String NOT_A_CONTEXT_VARIABLE = "Variable '%s' is not a context variable.";
     private static final String UNDECLARED_ENDPOINT = "Dynamic function '%s' references undeclared API endpoint '%s'.";
     private static final String IDENTIFIER_IS_RESERVED = "Identifier '%s' is reserved: the translator generates the names that start with '%s'.";
+    private static final String DICTIONARY_WITHOUT_KEY = "Dictionary '$%1$s' has no value of its own: look up a key in it, as in $%1$s['key'].";
 
     private final ErrorCode errorCode;
 
@@ -74,5 +76,18 @@ public class InvalidIdentifierException extends EfxCompilationException {
             String identifierName, String reservedPrefix) {
         return new InvalidIdentifierException(ErrorCode.IDENTIFIER_IS_RESERVED, ctx,
                 IDENTIFIER_IS_RESERVED, identifierName, reservedPrefix);
+    }
+
+    /**
+     * A use of the name of a dictionary other than a lookup of a key in it.
+     *
+     * @param ctx the name, as written
+     * @param dictionaryName the name of the dictionary
+     * @return the exception that rejects the use
+     */
+    public static InvalidIdentifierException dictionaryWithoutKey(ParserRuleContext ctx,
+            String dictionaryName) {
+        return new InvalidIdentifierException(ErrorCode.DICTIONARY_WITHOUT_KEY, ctx,
+                DICTIONARY_WITHOUT_KEY, dictionaryName);
     }
 }

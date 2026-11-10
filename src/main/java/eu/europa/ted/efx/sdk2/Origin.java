@@ -439,8 +439,9 @@ abstract class Origin<E extends TypedExpression> {
 
   /**
    * A name that is not declared as a variable, a parameter or a context variable. It is not a
-   * value: it may only name a dictionary, which a key in brackets after it is looked up in. An
-   * index after it reads its value, and is rejected.
+   * value: it may only name a dictionary, which a key in brackets after it is looked up in. Any
+   * other use of it, an index after it included, is rejected: a dictionary has no value of its
+   * own, and a name that nothing declares is undeclared.
    */
   static final class DictionaryNameOrigin extends Origin<TypedExpression> {
 
@@ -456,17 +457,19 @@ abstract class Origin<E extends TypedExpression> {
 
     @Override
     TypedExpression valueOf(final TypedExpression expression) {
-      throw InvalidIdentifierException.undeclaredIdentifier(this.reference, this.name);
+      throw this.noValue();
     }
 
     @Override
     TypedExpression pathOf(final TypedExpression expression) {
-      throw InvalidIdentifierException.undeclaredIdentifier(this.reference, this.name);
+      throw this.noValue();
     }
 
     @Override
     Optional<Context> contextOf(final TypedExpression expression) {
-      throw InvalidIdentifierException.notAContextVariable(this.reference, this.name);
+      throw this.namesADictionary()
+          ? InvalidIdentifierException.dictionaryWithoutKey(this.reference, this.name)
+          : InvalidIdentifierException.notAContextVariable(this.reference, this.name);
     }
 
     @Override
@@ -477,7 +480,20 @@ abstract class Origin<E extends TypedExpression> {
     @Override
     Subexpression<?> readFromField(final TypedExpression expression, final ParserRuleContext step,
         final Spelling spelling, final FieldReader reader) {
-      throw InvalidIdentifierException.undeclaredIdentifier(this.reference, this.name);
+      throw this.noValue();
+    }
+
+    /**
+     * @return the error of a use of the name that reads its value
+     */
+    private InvalidIdentifierException noValue() {
+      return this.namesADictionary()
+          ? InvalidIdentifierException.dictionaryWithoutKey(this.reference, this.name)
+          : InvalidIdentifierException.undeclaredIdentifier(this.reference, this.name);
+    }
+
+    private boolean namesADictionary() {
+      return this.translator.translation().stack().getDictionary(this.name).isPresent();
     }
   }
 

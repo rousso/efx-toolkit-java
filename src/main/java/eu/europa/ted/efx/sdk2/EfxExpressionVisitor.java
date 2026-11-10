@@ -873,7 +873,9 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    */
   Subexpression<?> lookUp(final String name, final ParserRuleContext reference,
       final ExpressionContext key) {
-    final Dictionary dictionary = this.translation.stack().getDictionary(name);
+    final Dictionary dictionary = this.translation.stack().getDictionary(name)
+        .orElseThrow(() -> InvalidIdentifierException.undeclaredIdentifier(
+            this.translation.stack().peekParserContext(), name));
     this.readsInCurrentContext().countReadOfRoot();
     return new Subexpression<>(
         this.resolved(ExpressionConstruct.lookup(reference.getText(), dictionary),
