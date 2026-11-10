@@ -256,6 +256,19 @@ class ExpressionConstruct implements Composable {
   }
 
   /**
+   * Gives the toolkit's own class of a path: a path of a single value, or of a sequence, of its
+   * primitive, as the path is. A symbol resolver may give a path of a subclass of its own, which
+   * the script generator cannot build around a script it composes.
+   *
+   * @param path the path of a field or a node, as the symbol resolver gives it
+   * @return the class the toolkit gives a path of the same type
+   */
+  static Class<? extends PathExpression> pathClassOf(final PathExpression path) {
+    return EfxTypeLattice.isScalar(path.getDataType()) ? elementClassOf(path)
+        : sequenceClassOf(path);
+  }
+
+  /**
    * Puts an expression in parentheses, as the class it is given.
    *
    * @param <E> the class of the expression in parentheses

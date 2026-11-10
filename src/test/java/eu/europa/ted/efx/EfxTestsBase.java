@@ -7,6 +7,7 @@ import org.antlr.v4.runtime.misc.ParseCancellationException;
 import org.junit.jupiter.api.function.Executable;
 
 import eu.europa.ted.efx.exceptions.ThrowingErrorListener;
+import eu.europa.ted.efx.interfaces.TranslatorDependencyFactory;
 import eu.europa.ted.efx.interfaces.TranslatorOptions;
 import eu.europa.ted.efx.mock.DependencyFactoryMock;
 import eu.europa.ted.efx.model.DecimalFormat;
@@ -39,6 +40,13 @@ public abstract class EfxTestsBase {
 
   protected abstract String getSdkVersion();
 
+  /**
+   * @return the dependencies the translator is given: the mocks of the unit tests
+   */
+  protected TranslatorDependencyFactory getDependencyFactory() {
+    return DependencyFactoryMock.INSTANCE;
+  }
+
   protected void testExpressionTranslationWithContext(final String expectedTranslation,
       final String context, final String expression) {
     assertEquals(expectedTranslation, translateExpressionWithContext(context, expression));
@@ -65,7 +73,7 @@ public abstract class EfxTestsBase {
 
   protected String translateExpression(final String expression, final String... params) {
     try {
-      String result = EfxTranslator.translateExpression(DependencyFactoryMock.INSTANCE,
+      String result = EfxTranslator.translateExpression(this.getDependencyFactory(),
           getSdkVersion(), expression, DEFAULT_OPTIONS, params);
       assertValidXPath(result);
       return result;
@@ -76,7 +84,7 @@ public abstract class EfxTestsBase {
 
   protected String translateTemplate(final String template) {
     try {
-      return EfxTranslator.translateTemplate(DependencyFactoryMock.INSTANCE, getSdkVersion(),
+      return EfxTranslator.translateTemplate(this.getDependencyFactory(), getSdkVersion(),
           template + "\n", DEFAULT_OPTIONS);
     } catch (InstantiationException e) {
       throw new RuntimeException(e);
