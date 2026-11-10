@@ -1481,7 +1481,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
     if (noValue.isPresent()) {
       return noValue.get();
     }
-    return InvalidArgumentException.argumentTypeMismatch(call, diagnosis);
+    return TypeMismatchException.cannotConvert(call, diagnosis);
   }
 
   // #endregion Function invocation -------------------------------------------

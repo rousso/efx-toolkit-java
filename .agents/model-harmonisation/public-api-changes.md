@@ -197,3 +197,7 @@ H36 replaces the two overloads of `exceptions.InvalidArgumentException.argumentN
 ## A declared dictionary used as a value (H38)
 
 H38 changes `model.CallStack.getDictionary(String)` to return `Optional<Dictionary>`, as `getVariable(String)` does; it raised the undeclared-identifier error itself, which the visitor's lookup now raises, at the same position. `exceptions.InvalidIdentifierException` gains the error code `DICTIONARY_WITHOUT_KEY` and its factory `dictionaryWithoutKey(ParserRuleContext, String)`. `getDictionary` is on develop, so the CHANGELOG lists its new return type under breaking changes.
+
+## Type errors of declared calls (H39)
+
+H39 removes `exceptions.InvalidArgumentException.argumentTypeMismatch(ParserRuleContext, Diagnosis)`, which step 1 added in place of develop's `argumentTypeMismatch(int, Parametrised, Class, Class)`, with its message template and its error code `ARGUMENT_TYPE_MISMATCH`: a type error in a call of a declared function or template is a `TypeMismatchException` from `cannotConvert(ParserRuleContext, Diagnosis)`, as in a call of a built-in function. The CHANGELOG's line on `argumentTypeMismatch` now says the factory and the code are removed.

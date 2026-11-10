@@ -24,13 +24,11 @@ public class InvalidArgumentException extends EfxCompilationException {
 
     public enum ErrorCode {
         ARGUMENT_NUMBER_MISMATCH,
-        ARGUMENT_TYPE_MISMATCH,
         UNSUPPORTED_SEQUENCE_TYPE,
         MISSING_ARGUMENT
     }
 
     private static final String ARGUMENT_NUMBER_MISMATCH = "Argument number mismatch. %s takes %s but got %d.";
-    private static final String ARGUMENT_TYPE_MISMATCH = "Type mismatch. %s";
     private static final String UNSUPPORTED_SEQUENCE_TYPE = "Unsupported sequence type '%s' in call to %s.";
     private static final String MISSING_ARGUMENT = "No argument passed for parameter '%s'.";
 
@@ -65,18 +63,6 @@ public class InvalidArgumentException extends EfxCompilationException {
         return new InvalidArgumentException(ErrorCode.ARGUMENT_NUMBER_MISMATCH, ctx,
                 ARGUMENT_NUMBER_MISMATCH, invocable.describe(),
                 invocable.getSpelling().count(invocable.parameters.size()), actualNumber);
-    }
-
-    /**
-     * An argument of a declared function or template that does not fit its parameter.
-     *
-     * @param ctx the call
-     * @param diagnosis what the call gives, and what the argument at fault must be
-     * @return the exception, whose message gives the diagnosis
-     */
-    public static InvalidArgumentException argumentTypeMismatch(ParserRuleContext ctx, Diagnosis diagnosis) {
-        return new InvalidArgumentException(ErrorCode.ARGUMENT_TYPE_MISMATCH, ctx,
-                ARGUMENT_TYPE_MISMATCH, diagnosis.describe());
     }
 
     public static InvalidArgumentException unsupportedSequenceType(ParserRuleContext ctx, String type, String functionName) {

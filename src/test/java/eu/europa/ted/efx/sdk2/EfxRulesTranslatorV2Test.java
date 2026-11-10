@@ -751,9 +751,9 @@ class EfxRulesTranslatorV2Test extends EfxTestsBase {
   @Test
   void testApiCall_WrongArgumentType_ThrowsError() throws IOException {
     String rules = readInput("testApiCall_WrongArgumentType_ThrowsError");
-    InvalidArgumentException exception = assertThrows(InvalidArgumentException.class,
+    TypeMismatchException exception = assertThrows(TypeMismatchException.class,
         () -> translator.translateRules(rules));
-    assertEquals(InvalidArgumentException.ErrorCode.ARGUMENT_TYPE_MISMATCH, exception.getErrorCode());
+    assertEquals(TypeMismatchException.ErrorCode.CANNOT_CONVERT, exception.getErrorCode());
   }
 
   @Test

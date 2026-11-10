@@ -2832,7 +2832,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
     var template = lines(
         "let template:param-validation-template(text:$param1, number:$param2) display Valid parameters;",
         "invoke param-validation-template('test', 'test');");
-    assertThrows(InvalidArgumentException.class, () -> translateTemplate(template));
+    assertThrows(TypeMismatchException.class, () -> translateTemplate(template));
   }
 
   @Test
@@ -2925,7 +2925,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
     var template = lines(
         "let template:greeting(text:$name) display Hello ${$name};",
         "invoke greeting(ND-SubNode);");
-    assertThrows(InvalidArgumentException.class, () -> translateTemplate(template));
+    assertThrows(TypeMismatchException.class, () -> translateTemplate(template));
   }
 
   @Test
@@ -3045,22 +3045,22 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testTypeErrorMessage_FunctionInvocation() {
-    InvalidArgumentException ex = assertThrows(InvalidArgumentException.class,
+    TypeMismatchException ex = assertThrows(TypeMismatchException.class,
         () -> translateTemplate(lines(
             "let text:?greeting(text:$name) = concat('Hello ', $name);",
             "{ND-Root} ${?greeting(1)}")));
-    assertEquals(InvalidArgumentException.ErrorCode.ARGUMENT_TYPE_MISMATCH, ex.getErrorCode());
+    assertEquals(TypeMismatchException.ErrorCode.CANNOT_CONVERT, ex.getErrorCode());
     assertEquals("line 2:12 Type mismatch. Function '?greeting' cannot take 'number'."
         + " Its argument must be 'text'.", ex.getMessage());
   }
 
   @Test
   void testTypeErrorMessage_TemplateInvocation() {
-    InvalidArgumentException ex = assertThrows(InvalidArgumentException.class,
+    TypeMismatchException ex = assertThrows(TypeMismatchException.class,
         () -> translateTemplate(lines(
             "let template:greeting(text:$name) display Hello ${$name};",
             "invoke greeting(ND-SubNode);")));
-    assertEquals(InvalidArgumentException.ErrorCode.ARGUMENT_TYPE_MISMATCH, ex.getErrorCode());
+    assertEquals(TypeMismatchException.ErrorCode.CANNOT_CONVERT, ex.getErrorCode());
     assertEquals("line 2:0 Type mismatch. Template 'greeting' cannot take 'node'."
         + " Its argument must be 'text'.", ex.getMessage());
   }
