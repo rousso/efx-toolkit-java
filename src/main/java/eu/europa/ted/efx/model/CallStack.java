@@ -278,30 +278,19 @@ public class CallStack {
   /**
    * Checks that a name can be declared.
    *
-   * @param name The name being declared.
+   * @param identifier The identifier being declared.
    * @throws InvalidIdentifierException if the translator keeps the name for itself, or if the name
-   *         is already declared in scope.
+   *         is already declared in scope, by an identifier of the same kind or of another.
    */
   private void checkDeclarable(Identifier identifier) {
     if (this.reservedPrefix != null && identifier.name.startsWith(this.reservedPrefix)) {
       throw InvalidIdentifierException.identifierIsReserved(this.peekParserContext(),
           identifier.describe(), this.reservedPrefix);
     }
-    if (this.inScope(identifier.name)) {
+    this.getIdentifier(identifier.name).ifPresent(declared -> {
       throw InvalidIdentifierException.alreadyDeclared(this.peekParserContext(),
-          identifier.describe());
-    }
-  }
-
-  /**
-   * Checks if an identifier is declared in the current scope.
-   * 
-   * @param identifier The identifier to check.
-   * @return True if the identifier is declared in the current scope.
-   */
-  boolean inScope(String identifier) {
-    return this.globalIdentifierRegistry.containsKey(identifier)
-        || this.frames.stream().anyMatch(f -> f.identifierRegistry.containsKey(identifier));
+          identifier.describe(), declared.describe());
+    });
   }
 
   /**

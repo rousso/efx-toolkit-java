@@ -2874,6 +2874,39 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
   }
 
   @Test
+  void testNameClash_FunctionThenVariable_NamesBoth() {
+    assertNameClash("line 2:0 Variable '$x' has the same name as Function '?x', already declared"
+        + " in this scope.", "let text:?x() = 'a';", "let text:$x = 'b';");
+  }
+
+  @Test
+  void testNameClash_VariableThenFunction_NamesBoth() {
+    assertNameClash("line 2:0 Function '?x' has the same name as Variable '$x', already declared"
+        + " in this scope.", "let text:$x = 'b';", "let text:?x() = 'a';");
+  }
+
+  @Test
+  void testNameClash_TwoVariables_NamesOne() {
+    assertNameClash("line 2:0 Variable '$x' is already declared in this scope.",
+        "let text:$x = 'b';", "let text:$x = 'c';");
+  }
+
+  @Test
+  void testNameClash_ParameterThenIterator_NamesBoth() {
+    assertNameClash("line 1:24 Variable '$p' has the same name as Parameter '$p', already"
+        + " declared in this scope.",
+        "let text*:?f(text:$p) = for text:$p in BT-00-Text return $p;");
+  }
+
+  private void assertNameClash(final String message, final String... template) {
+    InvalidIdentifierException exception = assertThrows(InvalidIdentifierException.class,
+        () -> translateTemplate(lines(template)));
+    assertEquals(InvalidIdentifierException.ErrorCode.IDENTIFIER_ALREADY_DECLARED,
+        exception.getErrorCode());
+    assertEquals(message, exception.getMessage());
+  }
+
+  @Test
   void testDictionaryName_AsValue_Throws() {
     var template = lines(
         "let $dic index BT-00-Number by BT-00-Text;",

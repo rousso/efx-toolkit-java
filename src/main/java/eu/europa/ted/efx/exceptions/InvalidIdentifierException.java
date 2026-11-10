@@ -32,6 +32,7 @@ public class InvalidIdentifierException extends EfxCompilationException {
 
     private static final String UNDECLARED_IDENTIFIER = "%s is not declared.";
     private static final String IDENTIFIER_ALREADY_DECLARED = "%s is already declared in this scope.";
+    private static final String NAME_ALREADY_DECLARED = "%s has the same name as %s, already declared in this scope.";
     private static final String NOT_A_CONTEXT_VARIABLE = "%s is not a context variable.";
     private static final String UNDECLARED_ENDPOINT = "%s references undeclared API endpoint '%s'.";
     private static final String IDENTIFIER_IS_RESERVED = "%s is reserved: the translator generates the names that start with '%s'.";
@@ -63,16 +64,23 @@ public class InvalidIdentifierException extends EfxCompilationException {
     }
 
     /**
-     * A declaration of a name that is already declared in the scope.
+     * A declaration of a name that is already declared in the scope. When the identifier that
+     * holds the name is of another kind, and so named otherwise, the message names both.
      *
      * @param ctx the declaration
      * @param identifier the identifier declared, as an error names it, such as "Variable '$x'"
+     * @param declared the identifier that holds the name, as an error names it, such as
+     *        "Function '?x'"
      * @return the exception
      */
     public static InvalidIdentifierException alreadyDeclared(ParserRuleContext ctx,
-            String identifier) {
+            String identifier, String declared) {
+        if (identifier.equals(declared)) {
+            return new InvalidIdentifierException(ErrorCode.IDENTIFIER_ALREADY_DECLARED, ctx,
+                    IDENTIFIER_ALREADY_DECLARED, identifier);
+        }
         return new InvalidIdentifierException(ErrorCode.IDENTIFIER_ALREADY_DECLARED, ctx,
-                IDENTIFIER_ALREADY_DECLARED, identifier);
+                NAME_ALREADY_DECLARED, identifier, declared);
     }
 
     /**
