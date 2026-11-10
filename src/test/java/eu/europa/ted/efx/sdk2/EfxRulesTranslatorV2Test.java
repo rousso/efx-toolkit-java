@@ -829,7 +829,7 @@ class EfxRulesTranslatorV2Test extends EfxTestsBase {
         () -> translator.translateRules(rules));
     assertEquals(InvalidUsageException.ErrorCode.DYNAMIC_FUNCTION_OUTSIDE_RULE,
         exception.getErrorCode());
-    assertEquals("line 3:22 Dynamic function 'check' can only be called inline within a rule"
+    assertEquals("line 3:22 Function '?check' can only be called inline within a rule"
         + " expression (ASSERT/REPORT). Use 'LET dynamic : $var = ?check(...)' to declare a"
         + " dynamic variable at this scope.", exception.getMessage());
   }

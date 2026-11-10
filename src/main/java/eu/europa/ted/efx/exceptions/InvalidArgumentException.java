@@ -30,7 +30,7 @@ public class InvalidArgumentException extends EfxCompilationException {
 
     private static final String ARGUMENT_NUMBER_MISMATCH = "Argument number mismatch. %s takes %s but got %d.";
     private static final String UNSUPPORTED_SEQUENCE_TYPE = "Unsupported sequence type '%s' in call to %s.";
-    private static final String MISSING_ARGUMENT = "No argument passed for parameter '%s'.";
+    private static final String MISSING_ARGUMENT = "No argument passed for %s.";
 
     private final ErrorCode errorCode;
 
@@ -69,7 +69,16 @@ public class InvalidArgumentException extends EfxCompilationException {
         return new InvalidArgumentException(ErrorCode.UNSUPPORTED_SEQUENCE_TYPE, ctx, UNSUPPORTED_SEQUENCE_TYPE, type, functionName);
     }
 
-    public static InvalidArgumentException missingArgument(ParserRuleContext ctx, String parameterName) {
-        return new InvalidArgumentException(ErrorCode.MISSING_ARGUMENT, ctx, MISSING_ARGUMENT, parameterName);
+    /**
+     * A parameter of the expression that no argument was passed for.
+     *
+     * @param ctx the declaration of the parameter
+     * @param parameter the parameter as an error names it, such as "Parameter '$p'"
+     * @return the exception
+     */
+    public static InvalidArgumentException missingArgument(ParserRuleContext ctx,
+            String parameter) {
+        return new InvalidArgumentException(ErrorCode.MISSING_ARGUMENT, ctx, MISSING_ARGUMENT,
+                parameter);
     }
 }

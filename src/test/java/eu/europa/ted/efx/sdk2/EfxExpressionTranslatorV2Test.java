@@ -4745,7 +4745,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     InvalidArgumentException exception = assertThrows(InvalidArgumentException.class,
         () -> translateExpression("{ND-Root, text:$p} ${$p}"));
     assertEquals(InvalidArgumentException.ErrorCode.MISSING_ARGUMENT, exception.getErrorCode());
-    assertEquals("line 1:10 No argument passed for parameter 'p'.", exception.getMessage());
+    assertEquals("line 1:10 No argument passed for Parameter '$p'.", exception.getMessage());
   }
 
   @Test

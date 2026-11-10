@@ -221,3 +221,7 @@ H43 removes `model.CallStack.getTypeOfIdentifier(String)`, which is on develop. 
 ## The read counts in `Context` (H44)
 
 H44 adds the public class `model.Reads`, with a package-private constructor, which the visitor kept as a private nested class: `countReadOfContext()`, `countReadOfRoot()`, `ofContext()` and `all()`. `model.Context` gains `reads()`, and `model.ContextStack` gains `readsInCurrentContext()`. Both classes are on develop; the additions break nothing, and EFX-1 calls none of them. The CHANGELOG lists `Reads` with the new classes.
+
+## Two more messages name the identifier as written (H50)
+
+H50 changes two factories, both on develop. `exceptions.InvalidArgumentException.missingArgument(ParserRuleContext, String)` keeps its signature, but its string is now the parameter as an error names it, such as "Parameter '$p'", where it was the bare name; EFX-1 and EFX-2 both pass `ParsedParameter.describe(name)`. `exceptions.InvalidUsageException.dynamicFunctionOutsideRule(ParserRuleContext, String)` becomes `dynamicFunctionOutsideRule(ParserRuleContext, DynamicFunction)`: the message names the function as `describe()` does ("Function '?check'") and writes its bare name in the example it gives. The CHANGELOG lists both under breaking changes, and the change of the EFX-1 message in its section on EFX-1.

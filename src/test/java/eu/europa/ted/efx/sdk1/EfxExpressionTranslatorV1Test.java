@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import org.antlr.v4.runtime.misc.ParseCancellationException;
 import org.junit.jupiter.api.Test;
 import eu.europa.ted.efx.EfxTestsBase;
+import eu.europa.ted.efx.exceptions.InvalidArgumentException;
 
 class EfxExpressionTranslatorV1Test extends EfxTestsBase {
   @Override
@@ -1626,6 +1627,14 @@ class EfxExpressionTranslatorV1Test extends EfxTestsBase {
   void testParameterizedExpression_WithUnquotedStringParameter() {
     assertThrows(ParseCancellationException.class,
         () -> translateExpression("{ND-Root, text:$p1, text:$p2} ${$p1 == $p2}", "hello", "world"));
+  }
+
+  @Test
+  void testParameterizedExpression_MissingArgument_Throws() {
+    InvalidArgumentException exception = assertThrows(InvalidArgumentException.class,
+        () -> translateExpression("{ND-Root, text:$p} ${$p}"));
+    assertEquals(InvalidArgumentException.ErrorCode.MISSING_ARGUMENT, exception.getErrorCode());
+    assertEquals("line 1:10 No argument passed for Parameter '$p'.", exception.getMessage());
   }
 
   @Test

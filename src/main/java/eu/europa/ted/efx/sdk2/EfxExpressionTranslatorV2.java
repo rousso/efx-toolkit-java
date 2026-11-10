@@ -231,7 +231,7 @@ public class EfxExpressionTranslatorV2 extends TranslatorListener
   public void exitParameterDeclaration(final ParameterDeclarationContext ctx) {
     final String parameterName = ctx.parameterName.getText();
     if (this.expressionArguments.isEmpty()) {
-      throw InvalidArgumentException.missingArgument(ctx, parameterName);
+      throw InvalidArgumentException.missingArgument(ctx, ParsedParameter.describe(parameterName));
     }
 
     final ParsedParameter parameter = new ParsedParameter(parameterName,
