@@ -10,10 +10,18 @@ public class Template extends Invocable {
     }
 
     /**
+     * @param name the name of a template, declared or not
+     * @return the template as {@code invoke} writes it, by its name
+     */
+    public static Spelling spellingOf(final String name) {
+        return Spelling.template(name);
+    }
+
+    /**
      * @return the template as {@code invoke} writes it, by its name
      */
     @Override
     public Spelling getSpelling() {
-        return Spelling.template(this.name);
+        return spellingOf(this.name);
     }
 }

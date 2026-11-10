@@ -5034,8 +5034,40 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
             "for number:$__index in [1, 2] return $__index"));
     assertEquals(InvalidIdentifierException.ErrorCode.IDENTIFIER_IS_RESERVED,
         exception.getErrorCode());
-    assertEquals("line 1:12 Identifier '__index' is reserved: the translator generates the names"
+    assertEquals("line 1:12 Variable '$__index' is reserved: the translator generates the names"
         + " that start with '__'.", exception.getMessage());
+  }
+
+  @Test
+  void testIteratorVariable_DeclaredTwice_NamesItAsWritten() {
+    final InvalidIdentifierException exception = assertThrows(InvalidIdentifierException.class,
+        () -> translateExpressionWithContext("ND-Root",
+            "for text:$x in BT-00-Text, text:$x in BT-00-Text return $x"));
+    assertEquals(InvalidIdentifierException.ErrorCode.IDENTIFIER_ALREADY_DECLARED,
+        exception.getErrorCode());
+    assertEquals("line 1:12 Variable '$x' is already declared in this scope.",
+        exception.getMessage());
+  }
+
+  @Test
+  void testUndeclaredVariable_NamesItAsWritten() {
+    final InvalidIdentifierException exception = assertThrows(InvalidIdentifierException.class,
+        () -> translateExpressionWithContext("ND-Root", "$undeclared + 1"));
+    assertEquals("line 1:12 Variable '$undeclared' is not declared.", exception.getMessage());
+  }
+
+  @Test
+  void testUndeclaredFunction_NamesItAsWritten() {
+    final InvalidIdentifierException exception = assertThrows(InvalidIdentifierException.class,
+        () -> translateExpressionWithContext("ND-Root", "?undeclared(1)"));
+    assertEquals("line 1:12 Function '?undeclared' is not declared.", exception.getMessage());
+  }
+
+  @Test
+  void testNotAContextVariable_NamesItAsWritten() {
+    final InvalidIdentifierException exception = assertThrows(InvalidIdentifierException.class,
+        () -> translateExpressionWithContext("ND-Root", "$y::BT-00-Number"));
+    assertEquals("line 1:12 Variable '$y' is not a context variable.", exception.getMessage());
   }
 
   // #endregion: Indexers
@@ -5413,7 +5445,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   void testTypeErrorMessage_NodeContextVariable() {
     assertTypeError(TypeMismatchException.ErrorCode.NODE_CONTEXT_AS_VALUE,
         "line 1:48 Type mismatch. Operator '==' cannot take 'node' and 'text'."
-            + " Its left operand must be a value. Context variable '$n' refers to node"
+            + " Its left operand must be a value. Variable '$n' refers to node"
             + " 'ND-SubNode', which has no value: only field context variables can be used as"
             + " values.",
         "for context:$n in ND-SubNode return $n == 'test'");

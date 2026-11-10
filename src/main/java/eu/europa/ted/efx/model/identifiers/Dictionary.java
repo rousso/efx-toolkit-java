@@ -38,6 +38,19 @@ public class Dictionary extends Identifier {
     this.type = SequencePath.fromEfxDataType.get(EfxTypeLattice.toPrimitive(pathExpression.getDataType()));
   }
 
+  /**
+   * @param name the name of a dictionary, declared or not
+   * @return how an error names a dictionary of that name: "Dictionary '$dic'"
+   */
+  public static String describe(final String name) {
+    return describeDollarName("Dictionary", name);
+  }
+
+  @Override
+  public String describe() {
+    return describe(this.name);
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) return true;

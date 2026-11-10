@@ -71,11 +71,19 @@ public class Function extends Invocable implements Composable {
     }
 
     /**
+     * @param name the name of a function declared in EFX, declared or not
+     * @return the function as a call writes it, with its prefix, as {@code ?greeting}
+     */
+    public static Spelling spellingOf(final String name) {
+        return Spelling.function("?" + name);
+    }
+
+    /**
      * @return the function as a call writes it, with its prefix, as {@code ?greeting}
      */
     @Override
     public Spelling getSpelling() {
-        return Spelling.function("?" + this.name);
+        return spellingOf(this.name);
     }
 
     @Override

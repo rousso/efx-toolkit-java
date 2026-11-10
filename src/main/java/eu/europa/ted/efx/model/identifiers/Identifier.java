@@ -34,6 +34,24 @@ public abstract class Identifier implements ParsedEntity {
     this.dataType = dataType;
   }
 
+  /**
+   * @return how an error names the identifier, as EFX writes it: "Variable '$x'",
+   *         "Parameter '$x'", "Dictionary '$dic'", "Function '?f'" or "Template 'greeting'"
+   */
+  public abstract String describe();
+
+  /**
+   * Names an identifier that EFX writes with a dollar sign before its name: a variable, a
+   * parameter or a dictionary.
+   *
+   * @param kind what the identifier is, as an error says it, such as "Variable"
+   * @param name its name, as declared
+   * @return how an error names it, such as "Variable '$x'"
+   */
+  protected static String describeDollarName(final String kind, final String name) {
+    return kind + " '$" + name + "'";
+  }
+
   @Override
   public int hashCode() {
     return Objects.hash(name, dataType);

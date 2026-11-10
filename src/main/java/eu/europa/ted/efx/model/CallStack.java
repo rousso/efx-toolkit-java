@@ -251,7 +251,7 @@ public class CallStack {
    * @param identifier The identifier to declare.
    */
   public void declareIdentifier(Identifier identifier) {
-    this.checkDeclarable(identifier.name);
+    this.checkDeclarable(identifier);
     this.frames.peek().declareIdentifier(identifier);
   }
 
@@ -261,17 +261,17 @@ public class CallStack {
    * @param identifier The identifier to declare.
    */
   public void declareGlobalIdentifier(Identifier identifier) {
-    this.checkDeclarable(identifier.name);
+    this.checkDeclarable(identifier);
     this.globalIdentifierRegistry.put(identifier.name, identifier);
   }
 
   public void declareFunction(Function function) {
-    this.checkDeclarable(function.name);
+    this.checkDeclarable(function);
     this.globalIdentifierRegistry.put(function.name, function);
   }
 
   public void declareTemplate(Template template) {
-    this.checkDeclarable(template.name);
+    this.checkDeclarable(template);
     this.globalIdentifierRegistry.put(template.name, template);
   }
 
@@ -282,13 +282,14 @@ public class CallStack {
    * @throws InvalidIdentifierException if the translator keeps the name for itself, or if the name
    *         is already declared in scope.
    */
-  private void checkDeclarable(String name) {
-    if (this.reservedPrefix != null && name.startsWith(this.reservedPrefix)) {
-      throw InvalidIdentifierException.identifierIsReserved(this.peekParserContext(), name,
-          this.reservedPrefix);
+  private void checkDeclarable(Identifier identifier) {
+    if (this.reservedPrefix != null && identifier.name.startsWith(this.reservedPrefix)) {
+      throw InvalidIdentifierException.identifierIsReserved(this.peekParserContext(),
+          identifier.describe(), this.reservedPrefix);
     }
-    if (this.inScope(name)) {
-      throw InvalidIdentifierException.alreadyDeclared(this.peekParserContext(), name);
+    if (this.inScope(identifier.name)) {
+      throw InvalidIdentifierException.alreadyDeclared(this.peekParserContext(),
+          identifier.describe());
     }
   }
 
@@ -386,7 +387,8 @@ public class CallStack {
     return Optional.ofNullable(this.globalIdentifierRegistry.get(functionName))
         .filter(Function.class::isInstance)
         .map(Function.class::cast)
-        .orElseThrow(() -> InvalidIdentifierException.undeclaredIdentifier(this.peekParserContext(), functionName));
+        .orElseThrow(() -> InvalidIdentifierException.undeclaredIdentifier(this.peekParserContext(),
+            Function.spellingOf(functionName).describe()));
   }
 
   /**
@@ -401,7 +403,8 @@ public class CallStack {
     return Optional.ofNullable(this.globalIdentifierRegistry.get(templateName))
         .filter(Template.class::isInstance)
         .map(Template.class::cast)
-        .orElseThrow(() -> InvalidIdentifierException.undeclaredIdentifier(this.peekParserContext(), templateName));
+        .orElseThrow(() -> InvalidIdentifierException.undeclaredIdentifier(this.peekParserContext(),
+            Template.spellingOf(templateName).describe()));
   }
 
   /**
@@ -427,7 +430,8 @@ public class CallStack {
     return Optional.ofNullable(this.globalIdentifierRegistry.get(functionName))
       .filter(Function.class::isInstance)
       .map(identifier -> ((Function) identifier).parameters)
-      .orElseThrow(() -> InvalidIdentifierException.undeclaredIdentifier(this.peekParserContext(), functionName));
+      .orElseThrow(() -> InvalidIdentifierException.undeclaredIdentifier(this.peekParserContext(),
+          Function.spellingOf(functionName).describe()));
   }
 
   /**
@@ -446,7 +450,8 @@ public class CallStack {
     Optional<Identifier> identifier = this.getIdentifier(identifierName)
         .or(() -> Optional.ofNullable((Identifier) this.getFunction(identifierName)));
     if (!identifier.isPresent()) {
-      throw InvalidIdentifierException.undeclaredIdentifier(this.peekParserContext(), identifierName);
+      throw InvalidIdentifierException.undeclaredIdentifier(this.peekParserContext(),
+          Variable.describe(identifierName));
     }
     return identifier.get().dataType;
   }
@@ -465,7 +470,8 @@ public class CallStack {
         () -> getVariable(identifierName).ifPresentOrElse(
             variable -> this.push(variable.referenceExpression),
             () -> {
-              throw InvalidIdentifierException.undeclaredIdentifier(this.peekParserContext(), identifierName);
+              throw InvalidIdentifierException.undeclaredIdentifier(this.peekParserContext(),
+                  Variable.describe(identifierName));
             }));
   }
 

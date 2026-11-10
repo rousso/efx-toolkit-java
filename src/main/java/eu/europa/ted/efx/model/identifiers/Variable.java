@@ -52,6 +52,19 @@ public class Variable extends Identifier {
         .isAssignableFrom(EfxTypeLattice.toPrimitive(initializationExpression.getDataType()));
   }
 
+  /**
+   * @param name the name of a variable, declared or not
+   * @return how an error names a variable of that name: "Variable '$x'"
+   */
+  public static String describe(final String name) {
+    return describeDollarName("Variable", name);
+  }
+
+  @Override
+  public String describe() {
+    return describe(this.name);
+  }
+
   public void addDynamicDependencies(final List<DynamicVariable> dependencies) {
     this.dynamicDependencies.addAll(dependencies);
   }

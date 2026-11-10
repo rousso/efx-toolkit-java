@@ -465,7 +465,7 @@ class LateBoundTypeResolutionTest extends EfxTestsBase {
 
   @Test
   void testOperandOrigin_SequenceFunction() {
-    assertSequenceError(ErrorCode.IDENTIFIER_IS_SEQUENCE, "2:16", "$f",
+    assertSequenceError(ErrorCode.IDENTIFIER_IS_SEQUENCE, "2:16", "?f",
         () -> translateTemplate(lines(
             "let text*:?f() = ['a', 'b'];",
             "with BT-00-Text[?f() == 'a'] display foo;")));
@@ -473,7 +473,7 @@ class LateBoundTypeResolutionTest extends EfxTestsBase {
 
   @Test
   void testOperandOrigin_ParenthesizedSequenceFunction() {
-    assertSequenceError(ErrorCode.IDENTIFIER_IS_SEQUENCE, "2:17", "$f",
+    assertSequenceError(ErrorCode.IDENTIFIER_IS_SEQUENCE, "2:17", "?f",
         () -> translateTemplate(lines(
             "let text*:?f() = ['a', 'b'];",
             "with BT-00-Text[(?f()) == 'a'] display foo;")));

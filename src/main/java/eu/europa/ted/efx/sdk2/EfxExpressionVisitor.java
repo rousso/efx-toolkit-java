@@ -875,7 +875,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
       final ExpressionContext key) {
     final Dictionary dictionary = this.translation.stack().getDictionary(name)
         .orElseThrow(() -> InvalidIdentifierException.undeclaredIdentifier(
-            this.translation.stack().peekParserContext(), name));
+            this.translation.stack().peekParserContext(), Dictionary.describe(name)));
     this.readsInCurrentContext().countReadOfRoot();
     return new Subexpression<>(
         this.resolved(ExpressionConstruct.lookup(reference.getText(), dictionary),
@@ -1389,11 +1389,10 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    */
   @Override
   public Subexpression<?> visitFunctionInvocation(final FunctionInvocationContext ctx) {
-    final String name = ctx.functionName.getText();
+    final Function function = this.translation.stack().getFunction(ctx.functionName.getText());
     return new Subexpression<>(
-        this.invocationOf(ctx, this.translation.stack().getFunction(name))
-            .compose(this.translation.script()),
-        new IdentifierOrigin<>(this, ctx, name));
+        this.invocationOf(ctx, function).compose(this.translation.script()),
+        new IdentifierOrigin<>(this, ctx, function.describe()));
   }
 
   /**

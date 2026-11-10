@@ -667,7 +667,8 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
     String apiName = ctx.functionName.getText();
     String endpointName = ctx.endpointName != null ? unquote(ctx.endpointName.getText()) : "default";
     if (!this.validationPlan.getEndpoints().containsKey(endpointName)) {
-      throw InvalidIdentifierException.undeclaredEndpoint(ctx, apiName, endpointName);
+      throw InvalidIdentifierException.undeclaredEndpoint(ctx,
+          Function.spellingOf(apiName).describe(), endpointName);
     }
     RuleSeverity errorSeverity = ctx.onErrorClause() != null && ctx.onErrorClause().Warn() != null
         ? RuleSeverity.WARNING : RuleSeverity.ERROR;

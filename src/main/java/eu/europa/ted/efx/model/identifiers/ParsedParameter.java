@@ -25,6 +25,14 @@ public class ParsedParameter extends Identifier implements Parameter {
   }
 
   /**
+   * @return how an error names the parameter: "Parameter '$x'"
+   */
+  @Override
+  public String describe() {
+    return describeDollarName("Parameter", this.name);
+  }
+
+  /**
    * A parameter declared in EFX takes what converts to the class of the expression that reads it.
    */
   @Override

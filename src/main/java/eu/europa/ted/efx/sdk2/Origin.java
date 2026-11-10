@@ -28,6 +28,7 @@ import eu.europa.ted.efx.model.constructs.Rejection;
 import eu.europa.ted.efx.model.constructs.Spelling;
 import eu.europa.ted.efx.model.expressions.PathExpression;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
+import eu.europa.ted.efx.model.identifiers.Variable;
 import eu.europa.ted.efx.model.types.FieldTypes;
 import eu.europa.ted.efx.sdk2.EfxParser.ExpressionContext;
 
@@ -349,19 +350,23 @@ abstract class Origin<E extends TypedExpression> {
   static class IdentifierOrigin<E extends TypedExpression> extends Origin<E> {
 
     protected final ParserRuleContext reference;
-    protected final String name;
+
+    /**
+     * The identifier as an error names it, such as "Variable '$x'" or "Function '?f'".
+     */
+    protected final String identifier;
 
     IdentifierOrigin(final EfxExpressionVisitor translator, final ParserRuleContext reference,
-        final String name) {
+        final String identifier) {
       super(translator);
       this.reference = reference;
-      this.name = name;
+      this.identifier = identifier;
     }
 
     @Override
     Optional<TypeMismatchException> sequenceError(final Diagnosis diagnosis) {
       return Optional.of(
-          TypeMismatchException.identifierIsSequence(this.reference, diagnosis, this.name));
+          TypeMismatchException.identifierIsSequence(this.reference, diagnosis, this.identifier));
     }
   }
 
@@ -372,12 +377,12 @@ abstract class Origin<E extends TypedExpression> {
 
     VariableOrigin(final EfxExpressionVisitor translator, final ParserRuleContext reference,
         final String name) {
-      super(translator, reference, name);
+      super(translator, reference, Variable.describe(name));
     }
 
     @Override
     Optional<Context> contextOf(final TypedExpression expression) {
-      throw InvalidIdentifierException.notAContextVariable(this.reference, this.name);
+      throw InvalidIdentifierException.notAContextVariable(this.reference, this.identifier);
     }
   }
 
@@ -394,7 +399,7 @@ abstract class Origin<E extends TypedExpression> {
 
     ContextVariableOrigin(final EfxExpressionVisitor translator,
         final ParserRuleContext reference, final String name, final Context context) {
-      super(translator, reference, name);
+      super(translator, reference, Variable.describe(name));
       this.context = context;
     }
 
@@ -417,7 +422,7 @@ abstract class Origin<E extends TypedExpression> {
     Optional<TypeMismatchException> noValueError(final Diagnosis diagnosis) {
       if (this.context.isNodeContext()) {
         return Optional.of(TypeMismatchException.nodeContextUsedAsValue(this.reference, diagnosis,
-            this.name, this.context.symbol()));
+            this.identifier, this.context.symbol()));
       }
       return Optional.empty();
     }
@@ -469,7 +474,8 @@ abstract class Origin<E extends TypedExpression> {
     Optional<Context> contextOf(final TypedExpression expression) {
       throw this.namesADictionary()
           ? InvalidIdentifierException.dictionaryWithoutKey(this.reference, this.name)
-          : InvalidIdentifierException.notAContextVariable(this.reference, this.name);
+          : InvalidIdentifierException.notAContextVariable(this.reference,
+              Variable.describe(this.name));
     }
 
     @Override
@@ -489,7 +495,8 @@ abstract class Origin<E extends TypedExpression> {
     private InvalidIdentifierException noValue() {
       return this.namesADictionary()
           ? InvalidIdentifierException.dictionaryWithoutKey(this.reference, this.name)
-          : InvalidIdentifierException.undeclaredIdentifier(this.reference, this.name);
+          : InvalidIdentifierException.undeclaredIdentifier(this.reference,
+              Variable.describe(this.name));
     }
 
     private boolean namesADictionary() {

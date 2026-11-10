@@ -2858,6 +2858,22 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
   }
 
   @Test
+  void testUndeclaredDictionary_NamesItAsWritten() {
+    InvalidIdentifierException exception = assertThrows(InvalidIdentifierException.class,
+        () -> translateTemplate("display ${$dic['key']};"));
+    assertEquals(InvalidIdentifierException.ErrorCode.UNDECLARED_IDENTIFIER,
+        exception.getErrorCode());
+    assertEquals("line 1:10 Dictionary '$dic' is not declared.", exception.getMessage());
+  }
+
+  @Test
+  void testUndeclaredTemplate_NamesItAsWritten() {
+    InvalidIdentifierException exception = assertThrows(InvalidIdentifierException.class,
+        () -> translateTemplate("invoke nothing('a');"));
+    assertEquals("line 1:0 Template 'nothing' is not declared.", exception.getMessage());
+  }
+
+  @Test
   void testDictionaryName_AsValue_Throws() {
     var template = lines(
         "let $dic index BT-00-Number by BT-00-Text;",
