@@ -3168,7 +3168,8 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
     InvalidArgumentException ex =
         assertThrows(InvalidArgumentException.class, () -> translateTemplate(template));
     assertEquals(InvalidArgumentException.ErrorCode.ARGUMENT_NUMBER_MISMATCH, ex.getErrorCode());
-    assertEquals("Argument number mismatch in call to template 'greeting'. Expected 1 but got 0.",
+    assertEquals(
+        "line 2:0 Argument number mismatch. Template 'greeting' takes 1 argument but got 0.",
         ex.getMessage());
   }
 
@@ -3180,7 +3181,8 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
     InvalidArgumentException ex =
         assertThrows(InvalidArgumentException.class, () -> translateTemplate(template));
     assertEquals(InvalidArgumentException.ErrorCode.ARGUMENT_NUMBER_MISMATCH, ex.getErrorCode());
-    assertEquals("Argument number mismatch in call to function 'greeting'. Expected 1 but got 0.",
+    assertEquals(
+        "line 2:10 Argument number mismatch. Function '?greeting' takes 1 argument but got 0.",
         ex.getMessage());
   }
 
@@ -3192,7 +3194,8 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
     InvalidArgumentException ex =
         assertThrows(InvalidArgumentException.class, () -> translateTemplate(template));
     assertEquals(InvalidArgumentException.ErrorCode.ARGUMENT_NUMBER_MISMATCH, ex.getErrorCode());
-    assertEquals("Argument number mismatch in call to function 'greeting'. Expected 1 but got 3.",
+    assertEquals(
+        "line 2:10 Argument number mismatch. Function '?greeting' takes 1 argument but got 3.",
         ex.getMessage());
   }
 

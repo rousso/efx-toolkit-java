@@ -32,12 +32,15 @@ public final class Spelling {
    * whose operands are named by their side.
    */
   private enum Kind {
-    FUNCTION("Function"), TEMPLATE("Template"), OPERATOR("Operator");
+    FUNCTION("Function", "argument"), TEMPLATE("Template", "argument"),
+    OPERATOR("Operator", "operand");
 
     private final String noun;
+    private final String argument;
 
-    Kind(final String noun) {
+    Kind(final String noun, final String argument) {
       this.noun = noun;
+      this.argument = argument;
     }
   }
 
@@ -91,11 +94,20 @@ public final class Spelling {
    */
   public String roleOf(final int position, final int count) {
     if (this.kind != Kind.OPERATOR) {
-      return Parameters.numbered("argument", position, count);
+      return Parameters.numbered(this.kind.argument, position, count);
     }
     if (count == 1) {
-      return "operand";
+      return this.kind.argument;
     }
     return position == 0 ? "left operand" : "right operand";
+  }
+
+  /**
+   * @param number a number of arguments
+   * @return how an error counts the arguments of what was written: "1 argument" or
+   *         "2 arguments", and the operands of an operator as "1 operand" or "2 operands"
+   */
+  public String count(final int number) {
+    return number + " " + this.kind.argument + (number == 1 ? "" : "s");
   }
 }

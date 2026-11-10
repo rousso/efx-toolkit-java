@@ -29,7 +29,7 @@ public class InvalidArgumentException extends EfxCompilationException {
         MISSING_ARGUMENT
     }
 
-    private static final String ARGUMENT_NUMBER_MISMATCH = "Argument number mismatch in call to %s '%s'. Expected %d but got %d.";
+    private static final String ARGUMENT_NUMBER_MISMATCH = "Argument number mismatch. %s takes %s but got %d.";
     private static final String ARGUMENT_TYPE_MISMATCH = "Type mismatch. %s";
     private static final String UNSUPPORTED_SEQUENCE_TYPE = "Unsupported sequence type '%s' in call to %s.";
     private static final String MISSING_ARGUMENT = "No argument passed for parameter '%s'.";
@@ -50,16 +50,21 @@ public class InvalidArgumentException extends EfxCompilationException {
         return this.errorCode;
     }
 
-    public static InvalidArgumentException argumentNumberMismatch(Invocable identifier,
-            int expectedNumber, int actualNumber) {
-        return new InvalidArgumentException(ErrorCode.ARGUMENT_NUMBER_MISMATCH,
-                ARGUMENT_NUMBER_MISMATCH, identifier.getClass().getSimpleName().toLowerCase(),
-                identifier.name, expectedNumber, actualNumber);
-    }
-
-    public static InvalidArgumentException argumentNumberMismatch(Invocable identifier,
-            int expectedNumber) {
-        return argumentNumberMismatch(identifier, expectedNumber, expectedNumber + 1);
+    /**
+     * A call of a declared function or template with another number of arguments than it
+     * declares parameters.
+     *
+     * @param ctx the call
+     * @param invocable the function or template called
+     * @param actualNumber the number of arguments of the call
+     * @return the exception, whose message names what is called by its spelling, as a type error
+     *         does
+     */
+    public static InvalidArgumentException argumentNumberMismatch(ParserRuleContext ctx,
+            Invocable invocable, int actualNumber) {
+        return new InvalidArgumentException(ErrorCode.ARGUMENT_NUMBER_MISMATCH, ctx,
+                ARGUMENT_NUMBER_MISMATCH, invocable.describe(),
+                invocable.getSpelling().count(invocable.parameters.size()), actualNumber);
     }
 
     /**

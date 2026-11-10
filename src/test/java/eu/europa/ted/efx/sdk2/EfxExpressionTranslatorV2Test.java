@@ -378,6 +378,8 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     InvalidUsageException exception = assertThrows(InvalidUsageException.class,
         () -> translateExpressionWithContext("ND-Root", "BT-00-Text-Multilingual:preferredLanguage"));
     assertEquals(InvalidUsageException.ErrorCode.TEMPLATE_ONLY_FUNCTION, exception.getErrorCode());
+    assertEquals("line 1:12 Operator ':preferredLanguage' can only be used in templates,"
+        + " not in expressions or validation rules.", exception.getMessage());
   }
 
   @Test
@@ -385,6 +387,8 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     InvalidUsageException exception = assertThrows(InvalidUsageException.class,
         () -> translateExpressionWithContext("ND-Root", "BT-00-Text-Multilingual:preferredLanguageText"));
     assertEquals(InvalidUsageException.ErrorCode.TEMPLATE_ONLY_FUNCTION, exception.getErrorCode());
+    assertEquals("line 1:12 Operator ':preferredLanguageText' can only be used in templates,"
+        + " not in expressions or validation rules.", exception.getMessage());
   }
 
   @Test

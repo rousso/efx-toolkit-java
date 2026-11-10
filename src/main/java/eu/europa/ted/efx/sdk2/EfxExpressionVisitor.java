@@ -1469,8 +1469,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
       final Invocable declaration, final List<Subexpression<?>> subexpressions,
       final List<TypedExpression> arguments) {
     if (!declaration.takes(arguments.size())) {
-      return InvalidArgumentException.argumentNumberMismatch(declaration,
-          declaration.parameters.size(), arguments.size());
+      return InvalidArgumentException.argumentNumberMismatch(call, declaration,
+          arguments.size());
     }
     final Mismatch mismatch = declaration.mismatchOf(arguments);
     final Diagnosis diagnosis = mismatch.diagnose();
@@ -1956,7 +1956,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
 
   /**
    * Checks the arguments its sub-expressions give a built-in, and translates the call with the
-   * built-in. A type error is reported at the call, and names the built-in as the call spells it.
+   * built-in. An error is reported at the call, and names the built-in as the call spells it.
    *
    * @param call the call
    * @param builtIn the built-in called
@@ -1972,7 +1972,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
     final List<TypedExpression> arguments =
         subexpressions.stream().map(readAs::of).collect(Collectors.toList());
     if (builtIn.isTemplateOnly() && !this.translatesTemplateOnlyBuiltIns()) {
-      throw InvalidUsageException.templateOnlyFunction(call, builtIn.getName());
+      throw InvalidUsageException.templateOnlyFunction(call, spelling.describe());
     }
     final Optional<Resolution> resolution = builtIn.resolve(arguments);
     if (resolution.isEmpty()) {

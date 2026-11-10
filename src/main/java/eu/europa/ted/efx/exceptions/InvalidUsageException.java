@@ -45,7 +45,7 @@ public class InvalidUsageException extends EfxCompilationException {
     private static final String INVALID_NOTICE_SUBTYPE_RANGE_ORDER = "Notice subtype range '%s-%s' is not in ascending order.";
     private static final String INVALID_NOTICE_SUBTYPE_TOKEN = "Invalid notice subtype token '%s'. Expected format: 'X' or 'X-Y'.";
     private static final String FIELD_NOT_WITHHOLDABLE = "Field '%s' is always published and cannot be withheld from publication.";
-    private static final String TEMPLATE_ONLY_FUNCTION = "Function '%s' can only be used in templates, not in expressions or validation rules.";
+    private static final String TEMPLATE_ONLY_FUNCTION = "%s can only be used in templates, not in expressions or validation rules.";
     private static final String UNSUPPORTED_REGEX_CONSTRUCT = "Invalid regex pattern %s at position %d: %s";
     private static final String CIRCULAR_INCLUDE = "Circular #include detected: '%s'.";
     private static final String EMPTY_RULES_FILE = "Rules file must contain at least one validation stage.";
@@ -92,8 +92,16 @@ public class InvalidUsageException extends EfxCompilationException {
         return new InvalidUsageException(ErrorCode.FIELD_NOT_WITHHOLDABLE, ctx, FIELD_NOT_WITHHOLDABLE, fieldId);
     }
 
-    public static InvalidUsageException templateOnlyFunction(ParserRuleContext ctx, String functionName) {
-        return new InvalidUsageException(ErrorCode.TEMPLATE_ONLY_FUNCTION, ctx, TEMPLATE_ONLY_FUNCTION, functionName);
+    /**
+     * A call, outside a template, of a built-in that only templates can call.
+     *
+     * @param ctx the call
+     * @param call how the error names the call, as a type error does: "Function 'format-short'",
+     *        or "Operator ':preferredLanguage'" after a field
+     * @return the exception
+     */
+    public static InvalidUsageException templateOnlyFunction(ParserRuleContext ctx, String call) {
+        return new InvalidUsageException(ErrorCode.TEMPLATE_ONLY_FUNCTION, ctx, TEMPLATE_ONLY_FUNCTION, call);
     }
 
     public static InvalidUsageException unsupportedRegexConstruct(String pattern, int position, String reason) {
