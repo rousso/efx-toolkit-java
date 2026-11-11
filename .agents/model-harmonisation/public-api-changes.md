@@ -38,7 +38,7 @@ The public types of `src/main/java` that H1 to H6 removed, added or reshaped, me
 | `model.signatures.Overload` | no | H3 | `compose` takes `ParsedArguments<?>` |
 | `model.signatures.Parameter` | no | H1 | an interface (`getName`, `getType`), no longer a class; the class is `BuiltInParameter` |
 | `model.signatures.ParameterType` | no | H2, H3, H4 | `T_OR_T_SEQUENCE` and `expressionTypeOf` added; `rejectionKindOf` gives `Match.Kind` |
-| `model.signatures.Parameters` | no | H1, H2 | `Parameters<P extends Parameter> extends LinkedList<P>`, no longer final; `fixed` and `variadic` factories, `roleOf`, `equals` and `hashCode` added; `parameterAt` and `getVariadic` answer in `P`; `of(ParsedParameters)` and `getFixed()` removed |
+| `model.signatures.Parameters` | no | H1, H2, H55 | `Parameters<P extends Parameter> extends LinkedList<P>`, no longer final; `fixed` and `variadic` factories and `roleOf` added; `parameterAt` and `getVariadic` answer in `P`; `of(ParsedParameters)` and `getFixed()` removed |
 | `model.signatures.Resolution` | no | H2, H4 | abstract; holds the matched `Parameters<?>` and the arguments, or the mismatch; `compose` and `getOverload` removed |
 | `model.signatures.Signature` | no | H1 | `getParameters()` gives `Parameters<BuiltInParameter>`; `signature(BuiltInParameter...)` |
 | `model.signatures.Signature.Builder` | no | H1 | `variadic(BuiltInParameter)` |

@@ -19,7 +19,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -37,6 +36,8 @@ import eu.europa.ted.efx.model.types.EfxDataType;
  * <p>A variadic tail takes one or more arguments after the fixed parameters. Parameters that
  * mention {@code T} are generic: they are bound to the value primitive of the argument at the
  * first position of {@code T} before the arguments are checked against them.</p>
+ *
+ * <p>Two parameter lists are equal as lists are: by their fixed parameters, in order.</p>
  *
  * @param <P> the kind of parameter: declared by a signature, or parsed with a function or a
  *        template declared in EFX
@@ -286,20 +287,6 @@ public class Parameters<P extends Parameter> extends LinkedList<P> {
   private static Parameter.Impl<?> bound(final Parameter parameter,
       final Class<? extends EfxDataType.Primitive> primitive) {
     return parameter(parameter.getName(), parameter.getType().bind(primitive));
-  }
-
-  /**
-   * Two parameter lists are equal when their fixed parameters and their variadic tails are.
-   */
-  @Override
-  public boolean equals(final Object other) {
-    return other instanceof Parameters && super.equals(other)
-        && Objects.equals(this.variadic, ((Parameters<?>) other).variadic);
-  }
-
-  @Override
-  public int hashCode() {
-    return 31 * super.hashCode() + Objects.hashCode(this.variadic);
   }
 
   @Override
