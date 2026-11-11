@@ -85,18 +85,6 @@ public class XPathScriptGenerator implements ScriptGenerator {
     this.translatorOptions = translatorOptions;
   }
 
-  /**
-   * Names a variable that the XPath binds for its own use, such as the variable of the
-   * {@code for} that a function is translated to. The names start with {@code __}, which EFX-2
-   * reserves, so that they cannot hide a variable of the EFX program.
-   *
-   * @param name The variable's name without the prefix, such as {@code "L1"}.
-   * @return The variable as the XPath writes it, such as {@code "$__L1"}.
-   */
-  protected String ownVariable(final String name) {
-    return "$__" + name;
-  }
-
   @Override
   public PathExpression composeNodeReferenceWithPredicate(PathExpression nodeReference,
       BooleanExpression predicate) {
@@ -1038,6 +1026,19 @@ public class XPathScriptGenerator implements ScriptGenerator {
 
   //#region Helpers -----------------------------------------------------------
 
+
+  /**
+   * Names a variable that the XPath binds for its own use, such as the variable of the
+   * {@code for} that a function is translated to. The names start with {@code __}, which EFX-2
+   * reserves, so that they cannot hide a variable of an EFX-2 program. EFX-1 does not reserve the
+   * prefix, and its XPath takes the same names.
+   *
+   * @param name The variable's name without the prefix, such as {@code "L1"}.
+   * @return The variable as the XPath writes it, such as {@code "$__L1"}.
+   */
+  private String ownVariable(final String name) {
+    return "$__" + name;
+  }
 
   private String quoted(final String text) {
     return "'" + text.replaceAll("\"", "").replaceAll("'", "") + "'";

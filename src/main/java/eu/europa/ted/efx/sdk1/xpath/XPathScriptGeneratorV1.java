@@ -34,16 +34,6 @@ public class XPathScriptGeneratorV1 extends XPathScriptGenerator {
         super(translatorOptions);
     }
 
-    /**
-     * Preserved V1 behavior: the variables that the XPath binds for its own use keep their
-     * names without the prefix {@code __}, such as {@code "$L1"}, so that the XPath of EFX-1
-     * stays as it was.
-     */
-    @Override
-    protected String ownVariable(final String name) {
-        return "$" + name;
-    }
-
     @Override
     public PathExpression composeFieldReferenceWithAxis(final PathExpression fieldReference,
         final String axis) {
