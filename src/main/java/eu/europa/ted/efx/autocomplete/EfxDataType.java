@@ -3,8 +3,8 @@ package eu.europa.ted.efx.autocomplete;
 import java.util.Arrays;
 import java.util.Optional;
 
+import eu.europa.ted.efx.model.constructs.ParameterType;
 import eu.europa.ted.efx.model.expressions.TypedExpression;
-import eu.europa.ted.efx.model.signatures.ParameterType;
 import eu.europa.ted.efx.model.types.EfxDataType.BooleanScalar;
 import eu.europa.ted.efx.model.types.EfxDataType.BooleanSequence;
 import eu.europa.ted.efx.model.types.EfxDataType.DateScalar;
@@ -51,7 +51,7 @@ public enum EfxDataType {
    * @param parameterType a parameter or result type, with {@code T} bound
    * @return the data type that stands for it, or nothing for a node
    */
-  static Optional<EfxDataType> of(final ParameterType parameterType) {
+  static Optional<EfxDataType> of(final ParameterType<?> parameterType) {
     final var type = TypedExpression.getEfxDataType(parameterType.getExpressionType());
     return Arrays.stream(values()).filter(value -> value.type.isAssignableFrom(type)).findFirst();
   }

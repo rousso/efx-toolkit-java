@@ -32,6 +32,7 @@ import java.util.Map;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
+import org.antlr.v4.runtime.BaseErrorListener;
 import org.xml.sax.InputSource;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -42,6 +43,7 @@ import eu.europa.ted.efx.EfxTranslatorOptions;
 import eu.europa.ted.efx.exceptions.InvalidArgumentException;
 import eu.europa.ted.efx.exceptions.InvalidIdentifierException;
 import eu.europa.ted.efx.exceptions.InvalidUsageException;
+import eu.europa.ted.efx.exceptions.SymbolResolutionException;
 import eu.europa.ted.efx.exceptions.ThrowingErrorListener;
 import eu.europa.ted.efx.exceptions.TypeMismatchException;
 import eu.europa.ted.efx.interfaces.IncludedFileResolver;
@@ -67,12 +69,17 @@ class EfxRulesTranslatorV2Test extends EfxTestsBase {
 
   @BeforeEach
   void setUp() throws InstantiationException {
-    translator = new EfxRulesTranslatorV2(
+    translator = translatorWith(ThrowingErrorListener.INSTANCE);
+  }
+
+  private static EfxRulesTranslatorV2 translatorWith(final BaseErrorListener errorListener)
+      throws InstantiationException {
+    return new EfxRulesTranslatorV2(
         new SchematronGenerator(),
         DependencyFactoryMock.INSTANCE.createSymbolResolver(SDK_VERSION, ""),
         DependencyFactoryMock.INSTANCE.createScriptGenerator(SDK_VERSION, "",
             new EfxTranslatorOptions("udf", DecimalFormat.EFX_DEFAULT)),
-        ThrowingErrorListener.INSTANCE);
+        errorListener);
   }
 
   //#region Private helper methods
@@ -133,6 +140,30 @@ class EfxRulesTranslatorV2Test extends EfxTestsBase {
 
     assertEquals(11, outputFiles.size(), "Should generate exactly 11 files");
     assertAllOutputs(testName, outputFiles);
+  }
+
+  // A listener that does not throw lets the parser recover from a file without a stage, and the
+  // translator still rejects the file.
+
+  @Test
+  void testEmptyRulesFile_IsRejectedBehindAListenerThatDoesNotThrow()
+      throws InstantiationException {
+    assertEmptyRulesFile("");
+  }
+
+  @Test
+  void testRulesFileWithoutAStage_IsRejectedBehindAListenerThatDoesNotThrow()
+      throws InstantiationException {
+    assertEmptyRulesFile("LET text : $testVar = \"test-value\";");
+  }
+
+  private static void assertEmptyRulesFile(final String rules) throws InstantiationException {
+    final EfxRulesTranslatorV2 lenient = translatorWith(new BaseErrorListener());
+    InvalidUsageException exception = assertThrows(InvalidUsageException.class,
+        () -> lenient.translateRules(rules));
+    assertEquals(InvalidUsageException.ErrorCode.EMPTY_RULES_FILE, exception.getErrorCode());
+    assertEquals("Rules file must contain at least one validation stage.",
+        exception.getMessage());
   }
 
   //#endregion STAGE tests
@@ -200,9 +231,10 @@ class EfxRulesTranslatorV2Test extends EfxTestsBase {
     TypeMismatchException exception = assertThrows(TypeMismatchException.class,
         () -> translator.translateRules(rules));
     assertEquals(TypeMismatchException.ErrorCode.FIELD_MAY_REPEAT, exception.getErrorCode());
-    assertEquals("line 4:12 Type mismatch. 'ASSERT' cannot take 'indicator*'. Its condition must"
-        + " be 'indicator'. Field 'BT-00-Repeatable-Indicator' may return multiple values from"
-        + " context 'ND-Root': use a sequence expression or change the context.",
+    assertEquals("line 4:12 Type mismatch. Clause 'ASSERT' cannot take 'indicator*'."
+        + " Its condition must be 'indicator'. Field 'BT-00-Repeatable-Indicator' may return"
+        + " multiple values from context 'ND-Root': use a sequence expression or change the"
+        + " context.",
         exception.getMessage());
   }
 
@@ -307,6 +339,36 @@ class EfxRulesTranslatorV2Test extends EfxTestsBase {
         () -> translator.translateRules(rules));
     assertEquals(InvalidUsageException.ErrorCode.INVALID_NOTICE_SUBTYPE_RANGE_ORDER,
         exception.getErrorCode());
+  }
+
+  @Test
+  void testInClause_UnknownSubtype_Throws() {
+    assertUnknownNoticeSubtype("Unknown notice subtype '99' in range '99'.", "99");
+  }
+
+  @Test
+  void testInClause_UnknownStartOfRange_Throws() {
+    assertUnknownNoticeSubtype("Unknown notice subtype '99' in range '99-3'.", "99-3");
+  }
+
+  @Test
+  void testInClause_UnknownEndOfRange_Throws() {
+    assertUnknownNoticeSubtype("Unknown notice subtype '99' in range '1-99'.", "1-99");
+  }
+
+  private void assertUnknownNoticeSubtype(final String message, final String range) {
+    String rules = lines(
+        "---- STAGE 1a ----",
+        "",
+        "WITH BT-00-Text",
+        "    ASSERT BT-00-Text is present",
+        "    AS ERROR R-K7P-M2Q",
+        "    FOR BT-00-Text IN " + range);
+    SymbolResolutionException exception = assertThrows(SymbolResolutionException.class,
+        () -> translator.translateRules(rules));
+    assertEquals(SymbolResolutionException.ErrorCode.UNKNOWN_NOTICE_SUBTYPE,
+        exception.getErrorCode());
+    assertEquals(message, exception.getMessage());
   }
 
   @Test
@@ -732,6 +794,47 @@ class EfxRulesTranslatorV2Test extends EfxTestsBase {
   }
 
   @Test
+  void testApiCall_InvalidEndpointName_ThrowsError() {
+    String rules = lines(
+        "ENDPOINT '1bad' AT 'https://api.ted.europa.eu/v1';",
+        "",
+        "---- STAGE 1a ----",
+        "",
+        "WITH BT-00-Text",
+        "    ASSERT BT-00-Text is present",
+        "    AS ERROR R-K7P-M2Q",
+        "    FOR BT-00-Text IN 1");
+    InvalidUsageException exception = assertThrows(InvalidUsageException.class,
+        () -> translator.translateRules(rules));
+    assertEquals(InvalidUsageException.ErrorCode.INVALID_ENDPOINT_NAME, exception.getErrorCode());
+    assertEquals("line 1:0 Endpoint name '1bad' is not valid. Endpoint names must start with a"
+        + " letter and contain only letters, digits, hyphens, and underscores.",
+        exception.getMessage());
+  }
+
+  @Test
+  void testApiCall_OutsideRule_ThrowsError() {
+    String rules = lines(
+        "ENDPOINT 'default' AT 'https://api.ted.europa.eu/v1';",
+        "LET dynamic : ?check(text : $id) CALL API;",
+        "LET indicator : $ok = ?check(BT-00-Text);",
+        "",
+        "---- STAGE 1a ----",
+        "",
+        "WITH BT-00-Text",
+        "    ASSERT BT-00-Text is present",
+        "    AS ERROR R-K7P-M2Q",
+        "    FOR BT-00-Text IN 1");
+    InvalidUsageException exception = assertThrows(InvalidUsageException.class,
+        () -> translator.translateRules(rules));
+    assertEquals(InvalidUsageException.ErrorCode.DYNAMIC_FUNCTION_OUTSIDE_RULE,
+        exception.getErrorCode());
+    assertEquals("line 3:22 Function '?check' can only be called inline within a rule"
+        + " expression (ASSERT/REPORT). Use 'LET dynamic : $var = ?check(...)' to declare a"
+        + " dynamic variable at this scope.", exception.getMessage());
+  }
+
+  @Test
   void testApiCall_CompositeVariableInitializer_ThrowsError() throws IOException {
     // The grammar enforces that dynamicVariableInitializer only accepts a single function
     // invocation, so a compound expression is rejected at parse time.
@@ -750,9 +853,9 @@ class EfxRulesTranslatorV2Test extends EfxTestsBase {
   @Test
   void testApiCall_WrongArgumentType_ThrowsError() throws IOException {
     String rules = readInput("testApiCall_WrongArgumentType_ThrowsError");
-    InvalidArgumentException exception = assertThrows(InvalidArgumentException.class,
+    TypeMismatchException exception = assertThrows(TypeMismatchException.class,
         () -> translator.translateRules(rules));
-    assertEquals(InvalidArgumentException.ErrorCode.ARGUMENT_TYPE_MISMATCH, exception.getErrorCode());
+    assertEquals(TypeMismatchException.ErrorCode.CANNOT_CONVERT, exception.getErrorCode());
   }
 
   @Test

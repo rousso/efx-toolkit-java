@@ -51,8 +51,8 @@ public class TypeMismatchException extends EfxCompilationException {
     private static final String FROM_CONTEXT = "context '%s'";
     private static final String FROM_ROOT = "the root";
     private static final String FIELD_IS_MULTILINGUAL = "Field '%s' is multilingual and has one value per language: use :preferredLanguageText to select the preferred language, or an index [at n] to select a specific value.";
-    private static final String NODE_CONTEXT_AS_VALUE = "Context variable '$%s' refers to node '%s', which has no value: only field context variables can be used as values.";
-    private static final String IDENTIFIER_IS_SEQUENCE = "Variable '$%s' is declared as a sequence.";
+    private static final String NODE_CONTEXT_AS_VALUE = "%s refers to node '%s', which has no value: only field context variables can be used as values.";
+    private static final String IDENTIFIER_IS_SEQUENCE = "%s is declared as a sequence.";
     private static final String DICTIONARY_IS_SEQUENCE = "Dictionary lookup '$%s' returns a sequence: use an index to select a single value, as in $%s['key'][at 1].";
 
     private final ErrorCode errorCode;
@@ -168,14 +168,15 @@ public class TypeMismatchException extends EfxCompilationException {
      *
      * @param ctx the reference to the variable
      * @param diagnosis what the construct taking the variable was given, and what it requires
-     * @param variableName the name of the variable
+     * @param variable the variable as an error names it, such as "Variable '$x'": see
+     *        {@link eu.europa.ted.efx.model.identifiers.Identifier#describe()}
      * @param nodeId the node it holds
      * @return the exception, whose message gives the diagnosis and the reason
      */
     public static TypeMismatchException nodeContextUsedAsValue(ParserRuleContext ctx, Diagnosis diagnosis,
-            String variableName, String nodeId) {
+            String variable, String nodeId) {
         return diagnosed(ErrorCode.NODE_CONTEXT_AS_VALUE, ctx, diagnosis,
-                String.format(NODE_CONTEXT_AS_VALUE, variableName, nodeId));
+                String.format(NODE_CONTEXT_AS_VALUE, variable, nodeId));
     }
 
     /**
@@ -184,13 +185,14 @@ public class TypeMismatchException extends EfxCompilationException {
      *
      * @param ctx the reference to the identifier
      * @param diagnosis what the construct taking the identifier was given, and what it requires
-     * @param variableName the name of the identifier
+     * @param identifier the identifier as an error names it, such as "Variable '$x'" or
+     *        "Function '?f'": see {@link eu.europa.ted.efx.model.identifiers.Identifier#describe()}
      * @return the exception, whose message gives the diagnosis and the reason
      */
     public static TypeMismatchException identifierIsSequence(ParserRuleContext ctx, Diagnosis diagnosis,
-            String variableName) {
+            String identifier) {
         return diagnosed(ErrorCode.IDENTIFIER_IS_SEQUENCE, ctx, diagnosis,
-                String.format(IDENTIFIER_IS_SEQUENCE, variableName));
+                String.format(IDENTIFIER_IS_SEQUENCE, identifier));
     }
 
     /**

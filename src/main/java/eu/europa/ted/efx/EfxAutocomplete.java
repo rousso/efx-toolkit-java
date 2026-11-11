@@ -22,8 +22,8 @@ import eu.europa.ted.efx.autocomplete.CompletionKind;
 import eu.europa.ted.efx.autocomplete.EfxKeyword;
 import eu.europa.ted.efx.autocomplete.EfxLinkedProperty;
 import eu.europa.ted.efx.autocomplete.FunctionCompletions;
-import eu.europa.ted.efx.model.signatures.BuiltIn;
-import eu.europa.ted.efx.model.signatures.BuiltIns;
+import eu.europa.ted.efx.model.builtins.BuiltIn;
+import eu.europa.ted.efx.model.builtins.BuiltIns;
 
 /**
  * Exposes autocomplete suggestions for the EFX graphical UI editors.

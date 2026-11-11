@@ -753,6 +753,93 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
             "display days: ${days(?week())};")));
   }
 
+  // A function's parameters are declared in its own scope, which closes after its body.
+
+  @Test
+  void testFunctionScope_ParameterIsNotDeclaredInTheNextFunction() {
+    InvalidIdentifierException exception = assertThrows(InvalidIdentifierException.class,
+        () -> translateTemplate(lines("let text:?a(text:$x) = $x;", "let text:?b() = $x;",
+            "display ${?b()};")));
+    assertEquals(InvalidIdentifierException.ErrorCode.UNDECLARED_IDENTIFIER,
+        exception.getErrorCode());
+    assertEquals("line 2:16 Variable '$x' is not declared.", exception.getMessage());
+  }
+
+  @Test
+  void testFunctionScope_ParameterIsNotDeclaredInATemplateLine() {
+    InvalidIdentifierException exception = assertThrows(InvalidIdentifierException.class,
+        () -> translateTemplate(lines("let text:?a(text:$x) = $x;", "display ${$x};")));
+    assertEquals(InvalidIdentifierException.ErrorCode.UNDECLARED_IDENTIFIER,
+        exception.getErrorCode());
+    assertEquals("line 2:10 Variable '$x' is not declared.", exception.getMessage());
+  }
+
+  @Test
+  void testFunctionScope_TwoFunctionsTakeParametersOfTheSameName() {
+    assertEquals(
+        lines(
+            "GLOBALS:",
+            "string:a(string:x) -> { $x }",
+            "string:b(string:x) -> { $x }",
+            "TEMPLATES:",
+            "let body01() -> { eval(udf:b('c')) }",
+            "MAIN:",
+            "for-each(/*).call(body01())"),
+        translateTemplate(lines("let text:?a(text:$x) = $x;", "let text:?b(text:$x) = $x;",
+            "display ${?b('c')};")));
+  }
+
+  @Test
+  void testFunctionScope_VariableTakesTheNameOfAParameter() {
+    assertEquals(
+        lines(
+            "GLOBALS:",
+            "string:a(string:x) -> { $x }",
+            "string:x='b'",
+            "TEMPLATES:",
+            "let body01() -> { eval($x) }",
+            "MAIN:",
+            "for-each(/*).call(body01())"),
+        translateTemplate(lines("let text:?a(text:$x) = $x;", "let text:$x = 'b';",
+            "display ${$x};")));
+  }
+
+  @Test
+  void testFunctionScope_FunctionTakesTheNameOfAParameter() {
+    assertEquals(
+        lines(
+            "GLOBALS:",
+            "string:a(string:x) -> { $x }",
+            "string:x() -> { 'd' }",
+            "TEMPLATES:",
+            "let body01() -> { eval(udf:x()) }",
+            "MAIN:",
+            "for-each(/*).call(body01())"),
+        translateTemplate(lines("let text:?a(text:$x) = $x;", "let text:?x() = 'd';",
+            "display ${?x()};")));
+  }
+
+  @Test
+  void testFunctionScope_TemplateTakesAParameterOfTheSameName() {
+    assertEquals(
+        lines(
+            "GLOBALS:",
+            "string:a(string:x) -> { $x }",
+            "TEMPLATES:",
+            "let t(string:x) -> { eval($x) }",
+            "let body01() -> { call(t(string:x='c')) }",
+            "MAIN:",
+            "for-each(/*).call(body01())"),
+        translateTemplate(lines("let text:?a(text:$x) = $x;",
+            "let template:t(text:$x) display ${$x};", "invoke t('c');")));
+  }
+
+  @Test
+  void testFunctionScope_FunctionCannotTakeTheNameOfItsParameter() {
+    assertNameClash("line 1:0 Function '?x' has the same name as Parameter '$x', already"
+        + " declared in this scope.", "let text:?x(text:$x) = $x;", "display ${?x('c')};");
+  }
+
   // #endregion Function declarations ------------------------------------------
 
   // #region Sequence function declarations ------------------------------------
@@ -2079,11 +2166,11 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testFormattedExpressionBlock_RepeatableDurationFieldWithPredicateWithoutUnit_FormatsEachValue() {
-    final String durations = "(for $F in PathNode/RepeatableDurationField[true()] return (if ($F/@unitCode='WEEK')"
-        + " then xs:dayTimeDuration(concat('P', $F/number() * 7, 'D'))"
-        + " else if ($F/@unitCode='DAY') then xs:dayTimeDuration(concat('P', $F/number(), 'D'))"
-        + " else if ($F/@unitCode='YEAR') then xs:yearMonthDuration(concat('P', $F/number(), 'Y'))"
-        + " else if ($F/@unitCode='MONTH') then xs:yearMonthDuration(concat('P', $F/number(), 'M')) else ()))";
+    final String durations = "(for $__F in PathNode/RepeatableDurationField[true()] return (if ($__F/@unitCode='WEEK')"
+        + " then xs:dayTimeDuration(concat('P', $__F/number() * 7, 'D'))"
+        + " else if ($__F/@unitCode='DAY') then xs:dayTimeDuration(concat('P', $__F/number(), 'D'))"
+        + " else if ($__F/@unitCode='YEAR') then xs:yearMonthDuration(concat('P', $__F/number(), 'Y'))"
+        + " else if ($__F/@unitCode='MONTH') then xs:yearMonthDuration(concat('P', $__F/number(), 'M')) else ()))";
     final String months = "(years-from-duration($__item) * 12 + months-from-duration($__item))";
     final String number = "(if (" + months + " != 0) then " + months + " else days-from-duration($__item))";
     assertEquals(
@@ -2823,6 +2910,17 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
     assertThrows(InvalidIndentationException.class, () -> translateTemplate(template));
   }
 
+  @Test
+  void testTemplateLine_InvalidIndentation_InconsistentSpaces() {
+    InvalidIndentationException exception = assertThrows(InvalidIndentationException.class,
+        () -> translateTemplate(
+            lines("{BT-00-Text} foo", "  {BT-00-Text} bar", "   {BT-00-Text} baz")));
+    assertEquals(InvalidIndentationException.ErrorCode.INCONSISTENT_INDENTATION_SPACES,
+        exception.getErrorCode());
+    assertEquals("line 3:0 Inconsistent indentation. Expected a multiple of 2 spaces.",
+        exception.getMessage());
+  }
+
   // #endregion InvalidIndentationException ------------------------------------
 
   // #region TypeMismatchException ---------------------------------------------
@@ -2832,7 +2930,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
     var template = lines(
         "let template:param-validation-template(text:$param1, number:$param2) display Valid parameters;",
         "invoke param-validation-template('test', 'test');");
-    assertThrows(InvalidArgumentException.class, () -> translateTemplate(template));
+    assertThrows(TypeMismatchException.class, () -> translateTemplate(template));
   }
 
   @Test
@@ -2851,7 +2949,111 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
         "display ${$dic[at 1]};");
     InvalidIdentifierException exception =
         assertThrows(InvalidIdentifierException.class, () -> translateTemplate(template));
+    assertEquals(InvalidIdentifierException.ErrorCode.DICTIONARY_WITHOUT_KEY,
+        exception.getErrorCode());
+    assertEquals("line 2:10 Dictionary '$dic' has no value of its own: look up a key in it,"
+        + " as in $dic['key'].", exception.getMessage());
+  }
+
+  @Test
+  void testUndeclaredDictionary_NamesItAsWritten() {
+    InvalidIdentifierException exception = assertThrows(InvalidIdentifierException.class,
+        () -> translateTemplate("display ${$dic['key']};"));
     assertEquals(InvalidIdentifierException.ErrorCode.UNDECLARED_IDENTIFIER,
+        exception.getErrorCode());
+    assertEquals("line 1:10 Dictionary '$dic' is not declared.", exception.getMessage());
+  }
+
+  @Test
+  void testUndeclaredTemplate_NamesItAsWritten() {
+    InvalidIdentifierException exception = assertThrows(InvalidIdentifierException.class,
+        () -> translateTemplate("invoke nothing('a');"));
+    assertEquals("line 1:0 Template 'nothing' is not declared.", exception.getMessage());
+  }
+
+  @Test
+  void testNameClash_FunctionThenVariable_NamesBoth() {
+    assertNameClash("line 2:0 Variable '$x' has the same name as Function '?x', already declared"
+        + " in this scope.", "let text:?x() = 'a';", "let text:$x = 'b';");
+  }
+
+  @Test
+  void testNameClash_VariableThenFunction_NamesBoth() {
+    assertNameClash("line 2:0 Function '?x' has the same name as Variable '$x', already declared"
+        + " in this scope.", "let text:$x = 'b';", "let text:?x() = 'a';");
+  }
+
+  @Test
+  void testNameClash_TwoVariables_NamesOne() {
+    assertNameClash("line 2:0 Variable '$x' is already declared in this scope.",
+        "let text:$x = 'b';", "let text:$x = 'c';");
+  }
+
+  @Test
+  void testNameClash_ParameterThenIterator_NamesBoth() {
+    assertNameClash("line 1:24 Variable '$p' has the same name as Parameter '$p', already"
+        + " declared in this scope.",
+        "let text*:?f(text:$p) = for text:$p in BT-00-Text return $p;");
+  }
+
+  @Test
+  void testParameterReference_Sequence_NamesItAsWritten() {
+    TypeMismatchException exception = assertThrows(TypeMismatchException.class,
+        () -> translateTemplate("let text:?first(text*:$items) = upper-case($items);"));
+    assertEquals(TypeMismatchException.ErrorCode.IDENTIFIER_IS_SEQUENCE, exception.getErrorCode());
+    assertEquals("line 1:43 Type mismatch. Function 'upper-case' cannot take 'text*'."
+        + " Its argument must be 'text'. Parameter '$items' is declared as a sequence.",
+        exception.getMessage());
+  }
+
+  @Test
+  void testParameterReference_AsContext_NamesItAsWritten() {
+    InvalidIdentifierException exception = assertThrows(InvalidIdentifierException.class,
+        () -> translateTemplate("let text:?f(text:$p) = $p::BT-00-Text;"));
+    assertEquals(InvalidIdentifierException.ErrorCode.NOT_A_CONTEXT_VARIABLE,
+        exception.getErrorCode());
+    assertEquals("line 1:23 Parameter '$p' is not a context variable.", exception.getMessage());
+  }
+
+  @Test
+  void testTemplateParameterReference_Sequence_NamesItAsWritten() {
+    TypeMismatchException exception = assertThrows(TypeMismatchException.class,
+        () -> translateTemplate("let template:t(text*:$items) display ${upper-case($items)};"));
+    assertEquals(TypeMismatchException.ErrorCode.IDENTIFIER_IS_SEQUENCE, exception.getErrorCode());
+    assertEquals("line 1:50 Type mismatch. Function 'upper-case' cannot take 'text*'."
+        + " Its argument must be 'text'. Parameter '$items' is declared as a sequence.",
+        exception.getMessage());
+  }
+
+  private void assertNameClash(final String message, final String... template) {
+    InvalidIdentifierException exception = assertThrows(InvalidIdentifierException.class,
+        () -> translateTemplate(lines(template)));
+    assertEquals(InvalidIdentifierException.ErrorCode.IDENTIFIER_ALREADY_DECLARED,
+        exception.getErrorCode());
+    assertEquals(message, exception.getMessage());
+  }
+
+  @Test
+  void testDictionaryName_AsValue_Throws() {
+    var template = lines(
+        "let $dic index BT-00-Number by BT-00-Text;",
+        "display ${$dic};");
+    InvalidIdentifierException exception =
+        assertThrows(InvalidIdentifierException.class, () -> translateTemplate(template));
+    assertEquals(InvalidIdentifierException.ErrorCode.DICTIONARY_WITHOUT_KEY,
+        exception.getErrorCode());
+    assertEquals("line 2:10 Dictionary '$dic' has no value of its own: look up a key in it,"
+        + " as in $dic['key'].", exception.getMessage());
+  }
+
+  @Test
+  void testDictionaryName_AsContext_Throws() {
+    var template = lines(
+        "let $dic index BT-00-Number by BT-00-Text;",
+        "display ${$dic::BT-00-Number};");
+    InvalidIdentifierException exception =
+        assertThrows(InvalidIdentifierException.class, () -> translateTemplate(template));
+    assertEquals(InvalidIdentifierException.ErrorCode.DICTIONARY_WITHOUT_KEY,
         exception.getErrorCode());
   }
 
@@ -2899,7 +3101,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
     var template = lines(
         "let template:greeting(text:$name) display Hello ${$name};",
         "invoke greeting(ND-SubNode);");
-    assertThrows(InvalidArgumentException.class, () -> translateTemplate(template));
+    assertThrows(TypeMismatchException.class, () -> translateTemplate(template));
   }
 
   @Test
@@ -2975,7 +3177,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
   void testTypeErrorMessage_ExpressionBlock() {
     assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
         "line 1:12 Type mismatch. Expression block cannot take 'node'."
-            + " Its expression must be a value.",
+            + " Its expression must be a value or a sequence of values.",
         "{ND-Root} ${ND-SubNode}");
   }
 
@@ -2998,7 +3200,8 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
   @Test
   void testTypeErrorMessage_When() {
     assertTypeError(TypeMismatchException.ErrorCode.CANNOT_CONVERT,
-        "line 1:5 Type mismatch. 'when' cannot take 'number'. Its condition must be 'indicator'.",
+        "line 1:5 Type mismatch. Clause 'when' cannot take 'number'."
+            + " Its condition must be 'indicator'.",
         "when 1 display this is one;");
   }
 
@@ -3018,22 +3221,22 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testTypeErrorMessage_FunctionInvocation() {
-    InvalidArgumentException ex = assertThrows(InvalidArgumentException.class,
+    TypeMismatchException ex = assertThrows(TypeMismatchException.class,
         () -> translateTemplate(lines(
             "let text:?greeting(text:$name) = concat('Hello ', $name);",
             "{ND-Root} ${?greeting(1)}")));
-    assertEquals(InvalidArgumentException.ErrorCode.ARGUMENT_TYPE_MISMATCH, ex.getErrorCode());
+    assertEquals(TypeMismatchException.ErrorCode.CANNOT_CONVERT, ex.getErrorCode());
     assertEquals("line 2:12 Type mismatch. Function '?greeting' cannot take 'number'."
         + " Its argument must be 'text'.", ex.getMessage());
   }
 
   @Test
   void testTypeErrorMessage_TemplateInvocation() {
-    InvalidArgumentException ex = assertThrows(InvalidArgumentException.class,
+    TypeMismatchException ex = assertThrows(TypeMismatchException.class,
         () -> translateTemplate(lines(
             "let template:greeting(text:$name) display Hello ${$name};",
             "invoke greeting(ND-SubNode);")));
-    assertEquals(InvalidArgumentException.ErrorCode.ARGUMENT_TYPE_MISMATCH, ex.getErrorCode());
+    assertEquals(TypeMismatchException.ErrorCode.CANNOT_CONVERT, ex.getErrorCode());
     assertEquals("line 2:0 Type mismatch. Template 'greeting' cannot take 'node'."
         + " Its argument must be 'text'.", ex.getMessage());
   }
@@ -3168,7 +3371,8 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
     InvalidArgumentException ex =
         assertThrows(InvalidArgumentException.class, () -> translateTemplate(template));
     assertEquals(InvalidArgumentException.ErrorCode.ARGUMENT_NUMBER_MISMATCH, ex.getErrorCode());
-    assertEquals("Argument number mismatch in call to template 'greeting'. Expected 1 but got 0.",
+    assertEquals(
+        "line 2:0 Argument number mismatch. Template 'greeting' takes 1 argument but got 0.",
         ex.getMessage());
   }
 
@@ -3180,7 +3384,8 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
     InvalidArgumentException ex =
         assertThrows(InvalidArgumentException.class, () -> translateTemplate(template));
     assertEquals(InvalidArgumentException.ErrorCode.ARGUMENT_NUMBER_MISMATCH, ex.getErrorCode());
-    assertEquals("Argument number mismatch in call to function 'greeting'. Expected 1 but got 0.",
+    assertEquals(
+        "line 2:10 Argument number mismatch. Function '?greeting' takes 1 argument but got 0.",
         ex.getMessage());
   }
 
@@ -3192,7 +3397,8 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
     InvalidArgumentException ex =
         assertThrows(InvalidArgumentException.class, () -> translateTemplate(template));
     assertEquals(InvalidArgumentException.ErrorCode.ARGUMENT_NUMBER_MISMATCH, ex.getErrorCode());
-    assertEquals("Argument number mismatch in call to function 'greeting'. Expected 1 but got 3.",
+    assertEquals(
+        "line 2:10 Argument number mismatch. Function '?greeting' takes 1 argument but got 3.",
         ex.getMessage());
   }
 

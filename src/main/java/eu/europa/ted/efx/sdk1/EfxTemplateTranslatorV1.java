@@ -63,8 +63,8 @@ import eu.europa.ted.efx.model.templates.LabelFromKeyContentTemplateFragment;
 import eu.europa.ted.efx.model.templates.TextContentTemplateFragment;
 import eu.europa.ted.efx.model.templates.ViewTemplateSection;
 import eu.europa.ted.efx.model.types.EfxDataType;
-import eu.europa.ted.efx.model.variables.Variable;
-import eu.europa.ted.efx.model.variables.Variables;
+import eu.europa.ted.efx.model.identifiers.Variable;
+import eu.europa.ted.efx.model.identifiers.Variables;
 import eu.europa.ted.efx.sdk1.EfxParser.*;
 
 /**

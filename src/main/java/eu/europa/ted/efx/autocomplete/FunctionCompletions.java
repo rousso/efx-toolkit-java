@@ -19,10 +19,10 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import eu.europa.ted.efx.model.signatures.BuiltIn;
-import eu.europa.ted.efx.model.signatures.Parameter;
-import eu.europa.ted.efx.model.signatures.ParameterType;
-import eu.europa.ted.efx.model.signatures.Signature;
+import eu.europa.ted.efx.model.builtins.BuiltIn;
+import eu.europa.ted.efx.model.constructs.Parameter;
+import eu.europa.ted.efx.model.constructs.ParameterType;
+import eu.europa.ted.efx.model.constructs.Signature;
 
 /**
  * The completion items of a built-in function: the mapping from the signature catalogue to the
@@ -137,25 +137,24 @@ public final class FunctionCompletions {
           dataTypeOf(this.signature.getResult()), List.copyOf(parameters));
     }
 
-    private List<Parameter> fixed() {
-      return this.signature.getParameters().getFixed();
+    private List<? extends Parameter> fixed() {
+      return this.signature.getParameters();
     }
 
-    private Optional<Parameter> variadic() {
+    private Optional<? extends Parameter> variadic() {
       return this.signature.getParameters().getVariadic();
     }
 
-    private Stream<ParameterType> types() {
-      return Stream.concat(
-          Stream.concat(this.fixed().stream(), this.variadic().stream()).map(Parameter::getType),
-          Stream.of(this.signature.getResult()));
+    private Stream<ParameterType<?>> types() {
+      return Stream.concat(Stream.concat(this.fixed().stream(), this.variadic().stream())
+          .map(Parameter::getType), Stream.of(this.signature.getResult()));
     }
 
-    private static boolean sameType(final ParameterType one, final ParameterType other) {
+    private static boolean sameType(final ParameterType<?> one, final ParameterType<?> other) {
       return one.getExpressionType().equals(other.getExpressionType());
     }
 
-    private static EfxDataType dataTypeOf(final ParameterType type) {
+    private static EfxDataType dataTypeOf(final ParameterType<?> type) {
       return EfxDataType.of(type).orElseThrow();
     }
   }

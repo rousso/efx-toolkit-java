@@ -27,6 +27,11 @@ import eu.europa.ted.efx.model.expressions.PathExpression;
  * {@link SymbolResolver} is to provide further information on these referenced entities by looking
  * them up in a symbol dictionary (or repository). This symbol repository is typically the eForms
  * SDK itself.
+ *
+ * <p>Every class of the paths a resolver returns, the toolkit's own or a subclass of them, must have
+ * a public constructor that takes the path's script alone. The translators and their script
+ * generator build expressions of the class of a path with that constructor, around the scripts
+ * they compose.</p>
  */
 public interface SymbolResolver {
 
