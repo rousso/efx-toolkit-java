@@ -85,6 +85,18 @@ public class XPathScriptGenerator implements ScriptGenerator {
     this.translatorOptions = translatorOptions;
   }
 
+  /**
+   * Names a variable that the XPath binds for its own use, such as the variable of the
+   * {@code for} that a function is translated to. The names start with {@code __}, which EFX-2
+   * reserves, so that they cannot hide a variable of the EFX program.
+   *
+   * @param name The variable's name without the prefix, such as {@code "L1"}.
+   * @return The variable as the XPath writes it, such as {@code "$__L1"}.
+   */
+  protected String ownVariable(final String name) {
+    return "$__" + name;
+  }
+
   @Override
   public PathExpression composeNodeReferenceWithPredicate(PathExpression nodeReference,
       BooleanExpression predicate) {
@@ -112,15 +124,16 @@ public class XPathScriptGenerator implements ScriptGenerator {
       return Expression.instantiate(fieldReference.getScript() + "/xs:time(text())", fieldReference.getClass());
     }
     if (fieldReference.is(EfxDataType.Duration.class)) {
-      return Expression.instantiate("(for $__F in " + fieldReference.getScript() + //
-          " return (if ($__F/@unitCode='WEEK')" + //
-          " then xs:dayTimeDuration(concat('P', $__F/number() * 7, 'D'))" + //
-          " else if ($__F/@unitCode='DAY')" + //
-          " then xs:dayTimeDuration(concat('P', $__F/number(), 'D'))" + //
-          " else if ($__F/@unitCode='YEAR')" + //
-          " then xs:yearMonthDuration(concat('P', $__F/number(), 'Y'))" + //
-          " else if ($__F/@unitCode='MONTH')" + //
-          " then xs:yearMonthDuration(concat('P', $__F/number(), 'M'))" + //
+      final String f = this.ownVariable("F");
+      return Expression.instantiate("(for " + f + " in " + fieldReference.getScript() + //
+          " return (if (" + f + "/@unitCode='WEEK')" + //
+          " then xs:dayTimeDuration(concat('P', " + f + "/number() * 7, 'D'))" + //
+          " else if (" + f + "/@unitCode='DAY')" + //
+          " then xs:dayTimeDuration(concat('P', " + f + "/number(), 'D'))" + //
+          " else if (" + f + "/@unitCode='YEAR')" + //
+          " then xs:yearMonthDuration(concat('P', " + f + "/number(), 'Y'))" + //
+          " else if (" + f + "/@unitCode='MONTH')" + //
+          " then xs:yearMonthDuration(concat('P', " + f + "/number(), 'M'))" + //
           // " else if (" + fieldReference.script + ")" + //
           // " then fn:error('Invalid @unitCode')" + //
           " else ()))", fieldReference.getClass());
@@ -363,8 +376,10 @@ public class XPathScriptGenerator implements ScriptGenerator {
   @Override
   public BooleanExpression composeUniqueValueCondition(PathExpression needle,
       PathExpression haystack) {
-    return new BooleanExpression("count(for $__x in " + needle.getScript() + ", $__y in "
-        + haystack.getScript() + "[. = $__x] return $__y) = 1");
+    final String x = this.ownVariable("x");
+    final String y = this.ownVariable("y");
+    return new BooleanExpression("count(for " + x + " in " + needle.getScript() + ", " + y
+        + " in " + haystack.getScript() + "[. = " + x + "] return " + y + ") = 1");
   }
 
   @Override
@@ -404,8 +419,10 @@ public class XPathScriptGenerator implements ScriptGenerator {
   }
 
   private BooleanExpression composeTypedUniqueValueCondition(String needle, String haystack) {
-    return new BooleanExpression(
-        "count(for $__n in " + needle + ", $__x in " + haystack + "[. = $__n] return $__x) = 1");
+    final String n = this.ownVariable("n");
+    final String x = this.ownVariable("x");
+    return new BooleanExpression("count(for " + n + " in " + needle + ", " + x + " in "
+        + haystack + "[. = " + n + "] return " + x + ") = 1");
   }
 
   //#endregion Boolean Expressions ------------------------------------------
@@ -436,9 +453,11 @@ public class XPathScriptGenerator implements ScriptGenerator {
     if (leftOperand.is(EfxDataType.Duration.class)) {
       // TODO: Improve this implementation; Check if both are dayTime or yearMonth and compare
       // directly, otherwise, compare by adding to current-date()
+      final String t = this.ownVariable("T");
       return new BooleanExpression(
-          "boolean(for $__T in (current-date()) return ($__T + " + leftOperand.getScript() + " "
-              + operators.get(operator) + " $__T + " + rightOperand.getScript() + "))");
+          "boolean(for " + t + " in (current-date()) return (" + t + " + "
+              + leftOperand.getScript() + " " + operators.get(operator) + " " + t + " + "
+              + rightOperand.getScript() + "))");
     }
     return new BooleanExpression(
         leftOperand.getScript() + " " + operators.get(operator) + " " + rightOperand.getScript());
@@ -676,10 +695,12 @@ public class XPathScriptGenerator implements ScriptGenerator {
       StringExpression padChar) {
     String len = length.getScript();
     String ch = padChar.getScript();
-    String padding = "string-join(for $__i in 1 to " + len + " return " + ch + ", '')";
-    return new StringExpression("(for $__s in " + text.getScript()
+    String i = this.ownVariable("i");
+    String s = this.ownVariable("s");
+    String padding = "string-join(for " + i + " in 1 to " + len + " return " + ch + ", '')";
+    return new StringExpression("(for " + s + " in " + text.getScript()
         + " return concat(substring(" + padding + ", 1, " + len
-        + " - string-length($__s)), $__s))");
+        + " - string-length(" + s + ")), " + s + "))");
   }
 
   @Override
@@ -687,32 +708,38 @@ public class XPathScriptGenerator implements ScriptGenerator {
       StringExpression padChar) {
     String len = length.getScript();
     String ch = padChar.getScript();
-    String padding = "string-join(for $__i in 1 to " + len + " return " + ch + ", '')";
-    return new StringExpression("(for $__s in " + text.getScript()
-        + " return concat($__s, substring(" + padding + ", 1, " + len
-        + " - string-length($__s))))");
+    String i = this.ownVariable("i");
+    String s = this.ownVariable("s");
+    String padding = "string-join(for " + i + " in 1 to " + len + " return " + ch + ", '')";
+    return new StringExpression("(for " + s + " in " + text.getScript()
+        + " return concat(" + s + ", substring(" + padding + ", 1, " + len
+        + " - string-length(" + s + "))))");
   }
 
   @Override
   public StringExpression composeRepeatFunction(StringExpression text, NumericExpression count) {
-    return new StringExpression("(for $__s in " + text.getScript()
-        + " return string-join(for $__i in 1 to " + count.getScript()
-        + " return $__s, ''))");
+    final String s = this.ownVariable("s");
+    final String i = this.ownVariable("i");
+    return new StringExpression("(for " + s + " in " + text.getScript()
+        + " return string-join(for " + i + " in 1 to " + count.getScript()
+        + " return " + s + ", ''))");
   }
 
   @Override
   public StringExpression composeReplaceFunction(StringExpression text, StringExpression search,
       StringExpression replacement) {
+    String s = this.ownVariable("s");
+    String t = this.ownVariable("t");
     // Escape regex metacharacters in the search string for literal matching
-    String escapedSearch = "replace($__s, '([.\\\\?*+{}\\[\\]()^$|])', '\\\\$1')";
+    String escapedSearch = "replace(" + s + ", '([.\\\\?*+{}\\[\\]()^$|])', '\\\\$1')";
     // Escape replacement-string semantics: \ must become \\, $ must become \$
     // (order matters: escape backslashes first, then dollars)
     String escapedReplacement = "replace(replace(" + replacement.getScript()
         + ", '\\\\', '\\\\\\\\'), '\\$', '\\\\\\$')";
     // Bind text and search to avoid double evaluation; guard against empty search at runtime
-    return new StringExpression("(for $__s in " + search.getScript() + ", $__t in "
-        + text.getScript() + " return if ($__s = '') then $__t else replace($__t, "
-        + escapedSearch + ", " + escapedReplacement + "))");
+    return new StringExpression("(for " + s + " in " + search.getScript() + ", " + t + " in "
+        + text.getScript() + " return if (" + s + " = '') then " + t + " else replace(" + t
+        + ", " + escapedSearch + ", " + escapedReplacement + "))");
   }
 
   @Override
@@ -730,9 +757,9 @@ public class XPathScriptGenerator implements ScriptGenerator {
 
   @Override
   public StringExpression composeCapitalizeFirstFunction(StringExpression text) {
-    return new StringExpression(
-        "(for $__s in " + text.getScript()
-            + " return concat(upper-case(substring($__s, 1, 1)), substring($__s, 2)))");
+    final String s = this.ownVariable("s");
+    return new StringExpression("(for " + s + " in " + text.getScript()
+        + " return concat(upper-case(substring(" + s + ", 1, 1)), substring(" + s + ", 2)))");
   }
 
   @Override
@@ -902,9 +929,10 @@ public class XPathScriptGenerator implements ScriptGenerator {
   public <T extends SequenceExpression> T composeGetDuplicatesFunction(
       final T list, final Class<T> listType) {
     final String seq = list.getScript();
+    final String v = this.ownVariable("v");
     return Expression.instantiate(
-        "for $__v in distinct-values(" + seq + ") return if (count(" + seq
-            + "[. = $__v]) > 1) then $__v else ()",
+        "for " + v + " in distinct-values(" + seq + ") return if (count(" + seq
+            + "[. = " + v + "]) > 1) then " + v + " else ()",
         listType);
   }
 
@@ -917,16 +945,20 @@ public class XPathScriptGenerator implements ScriptGenerator {
 
   @Override
   public <T extends SequenceExpression> T composeIntersectFunction(T listOne, T listTwo, Class<T> listType) {
-    return Expression.instantiate("distinct-values(for $__L1 in " + listOne.getScript()
-        + " return if (some $__L2 in " + listTwo.getScript()
-        + " satisfies $__L1 = $__L2) then $__L1 else ())", listType);
+    final String l1 = this.ownVariable("L1");
+    final String l2 = this.ownVariable("L2");
+    return Expression.instantiate("distinct-values(for " + l1 + " in " + listOne.getScript()
+        + " return if (some " + l2 + " in " + listTwo.getScript()
+        + " satisfies " + l1 + " = " + l2 + ") then " + l1 + " else ())", listType);
   }
 
   @Override
   public <T extends SequenceExpression> T composeExceptFunction(T listOne, T listTwo, Class<T> listType) {
-    return Expression.instantiate("distinct-values(for $__L1 in " + listOne.getScript()
-        + " return if (every $__L2 in " + listTwo.getScript()
-        + " satisfies $__L1 != $__L2) then $__L1 else ())", listType);
+    final String l1 = this.ownVariable("L1");
+    final String l2 = this.ownVariable("L2");
+    return Expression.instantiate("distinct-values(for " + l1 + " in " + listOne.getScript()
+        + " return if (every " + l2 + " in " + listTwo.getScript()
+        + " satisfies " + l1 + " != " + l2 + ") then " + l1 + " else ())", listType);
   }
 
   @Override
@@ -965,9 +997,11 @@ public class XPathScriptGenerator implements ScriptGenerator {
   @Override
   public NumericExpression composeIndexOfSubstringFunction(StringExpression text,
       StringExpression substring) {
-    return new NumericExpression(
-        "(for $__s in " + text.getScript() + ", $__sub in " + substring.getScript()
-            + " return if (contains($__s, $__sub)) then string-length(substring-before($__s, $__sub)) + 1 else 0)");
+    final String s = this.ownVariable("s");
+    final String sub = this.ownVariable("sub");
+    return new NumericExpression("(for " + s + " in " + text.getScript() + ", " + sub + " in "
+        + substring.getScript() + " return if (contains(" + s + ", " + sub + "))"
+        + " then string-length(substring-before(" + s + ", " + sub + ")) + 1 else 0)");
   }
 
   @Override
