@@ -37,8 +37,8 @@ import eu.europa.ted.efx.xpath.XPathScriptGenerator;
 
 /**
  * Proves that the catalogue rejects one expression of each rule of the invalid-operation table
- * ({@code EfxInvalidOperationV2Test}) that a built-in decides. Until the translator resolves its
- * operators through the catalogue, none of the table's rows reaches it.
+ * ({@code EfxInvalidOperationV2Test}) that a built-in decides. The table checks the same rules
+ * through the translator; this class checks the catalogue alone.
  *
  * <p>The table's other rules are not the catalogue's: the condition and the branches of a
  * conditional, the body of a quantified expression, the values of a list, an iterator variable, a

@@ -994,8 +994,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
         "ND-Root", "if 1 > 2 then P1D else BT-00-Duration");
   }
 
-  // The else branch reaches as far to the right as the expression goes, as in XPath (Yannis,
-  // 31 October): the seventh language change of the untyped grammar.
+  // The expression after else extends as far to the right as it can, as in XPath.
 
   @Test
   void testConditionalExpression_ElseBranchTakesTheComparison_Throws() {
@@ -1016,9 +1015,8 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
         "(if TRUE then 1 else 2) == 3");
   }
 
-  // The conditional takes the join of its branches (Yannis, 31 October), the eighth language change
-  // of the untyped grammar: a sequence if either branch is one, the other promoted to a sequence of
-  // one, and a single value if both are.
+  // The conditional takes the join of its branches: a sequence if either branch is one, the
+  // other promoted to a sequence of one, and a single value if both are.
 
   @Test
   void testConditionalExpression_SequenceInThenBranch() {

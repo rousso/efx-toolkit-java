@@ -10,9 +10,6 @@
 # duration); a form folded into a longer one, whose extra parameters it makes optional, has no
 # line of its own. Then the keywords and the properties, in the order of EfxKeyword and
 # EfxLinkedProperty.
-#
-# Written once from the hand-written list it replaces (EfxBuiltInFunction, deleted in P5.1), with
-# the changes the P5.1 design lists: 27 functions added, 4 items changed, count of a node left out.
 FUNCTION not(value INDICATOR) -> INDICATOR
 FUNCTION empty(value TEXT) -> INDICATOR
 FUNCTION contains(haystack TEXT, needle TEXT) -> INDICATOR

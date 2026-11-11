@@ -326,9 +326,9 @@ public interface ParameterType<E extends TypedExpression> {
    * sequence, {@link #T_SEQUENCE}.
    *
    * <p>{@code T} ranges over the six value primitives. A multilingual text binds it to text and a
-   * dynamic value to indicator, as the typed grammar reads them today; a node never binds it. Until
-   * it is bound, a type variable accepts no argument, and its expression class is that of every
-   * value, or every sequence, it stands for.</p>
+   * dynamic value to indicator; a node never binds it. Until it is bound, a type variable accepts
+   * no argument, and its expression class is that of every value, or every sequence, it stands
+   * for.</p>
    *
    * @param <E> the expression class of every value, or every sequence, it stands for
    */
