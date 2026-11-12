@@ -267,6 +267,21 @@ public interface ParameterType<E extends TypedExpression> {
           + "'";
     }
 
+    /**
+     * Two concrete types are equal when they take the same expression class, since
+     * {@link ParameterType#of} makes a new one each time, as when {@code T} is bound.
+     */
+    @Override
+    public boolean equals(final Object other) {
+      return other instanceof Concrete
+          && this.expressionType.equals(((Concrete<?>) other).expressionType);
+    }
+
+    @Override
+    public int hashCode() {
+      return this.expressionType.hashCode();
+    }
+
     @Override
     public String toString() {
       return this.expressionType.getSimpleName();

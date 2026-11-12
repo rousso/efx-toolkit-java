@@ -2,7 +2,6 @@ package eu.europa.ted.efx.model.constructs;
 
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -21,6 +20,9 @@ import eu.europa.ted.efx.model.expressions.sequence.SequenceExpression;
  * overload of a {@link Composable} reads them as the expression classes its signature gives them,
  * and what a clause belongs to reads them with the typed accessors. A template block passes its
  * arguments down to the blocks it holds.</p>
+ *
+ * <p>Two argument lists are equal as lists are: argument by argument, each by its parameter and its
+ * value.</p>
  *
  * @param <P> the kind of parameter: declared by a signature, or parsed with a function or a
  *        template declared in EFX
@@ -124,22 +126,5 @@ public class Arguments<P extends Parameter> extends LinkedList<Argument<P>> {
         return this.subList(position, this.size()).stream()
                 .map(argument -> type.cast(argument.value))
                 .collect(Collectors.toList());
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj == null || getClass() != obj.getClass()) {
-            return false;
-        }
-        Arguments<?> other = (Arguments<?>) obj;
-        return Objects.equals(this.getArgumentValues(), other.getArgumentValues());
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hashCode(this.getArgumentValues());
     }
 }

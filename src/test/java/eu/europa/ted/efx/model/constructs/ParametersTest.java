@@ -15,6 +15,7 @@ package eu.europa.ted.efx.model.constructs;
 
 import static eu.europa.ted.efx.model.constructs.Parameter.Impl.parameter;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.HashSet;
@@ -23,6 +24,7 @@ import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
+import eu.europa.ted.efx.model.expressions.scalar.StringExpression;
 import eu.europa.ted.efx.model.identifiers.ParsedParameters;
 
 class ParametersTest {
@@ -42,5 +44,15 @@ class ParametersTest {
     assertEquals(List.of(x), one);
     assertEquals(one, List.of(x));
     assertEquals(List.of(x).hashCode(), one.hashCode());
+  }
+
+  @Test
+  void testParameter_IsEqualToOneOfTheSameNameAndType() {
+    final Parameter x = parameter("x", ParameterType.TEXT);
+    final Parameter bound = parameter("x", ParameterType.of(StringExpression.class));
+    assertEquals(x, bound);
+    assertEquals(x.hashCode(), bound.hashCode());
+    assertNotEquals(x, parameter("y", ParameterType.TEXT));
+    assertNotEquals(x, parameter("x", ParameterType.NUMBER));
   }
 }

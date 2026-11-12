@@ -13,6 +13,8 @@
  */
 package eu.europa.ted.efx.model.constructs;
 
+import java.util.Objects;
+
 import eu.europa.ted.efx.model.expressions.TypedExpression;
 
 /**
@@ -70,6 +72,20 @@ public interface Parameter {
     @Override
     public ParameterType<E> getType() {
       return this.type;
+    }
+
+    /**
+     * Two parameters are equal when their names and their types are.
+     */
+    @Override
+    public boolean equals(final Object other) {
+      return other instanceof Impl && this.name.equals(((Impl<?>) other).name)
+          && this.type.equals(((Impl<?>) other).type);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(this.name, this.type);
     }
 
     @Override
