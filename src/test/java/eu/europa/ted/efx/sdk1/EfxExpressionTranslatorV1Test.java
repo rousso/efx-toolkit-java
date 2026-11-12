@@ -6,6 +6,7 @@ import org.antlr.v4.runtime.misc.ParseCancellationException;
 import org.junit.jupiter.api.Test;
 import eu.europa.ted.efx.EfxTestsBase;
 import eu.europa.ted.efx.exceptions.InvalidArgumentException;
+import eu.europa.ted.efx.exceptions.InvalidIdentifierException;
 
 class EfxExpressionTranslatorV1Test extends EfxTestsBase {
   @Override
@@ -1635,6 +1636,25 @@ class EfxExpressionTranslatorV1Test extends EfxTestsBase {
         () -> translateExpression("{ND-Root, text:$p} ${$p}"));
     assertEquals(InvalidArgumentException.ErrorCode.MISSING_ARGUMENT, exception.getErrorCode());
     assertEquals("line 1:10 No argument passed for Parameter '$p'.", exception.getMessage());
+  }
+
+  @Test
+  void testParameterizedExpression_ParameterAsContext_Throws() {
+    InvalidIdentifierException exception = assertThrows(InvalidIdentifierException.class,
+        () -> translateExpression("{ND-Root, text:$p} ${$p::BT-00-Text}", "'a'"));
+    assertEquals(InvalidIdentifierException.ErrorCode.NOT_A_CONTEXT_VARIABLE,
+        exception.getErrorCode());
+    assertEquals("line 1:21 Parameter '$p' is not a context variable.", exception.getMessage());
+  }
+
+  @Test
+  void testIteratorVariableAsContext_Throws() {
+    InvalidIdentifierException exception = assertThrows(InvalidIdentifierException.class,
+        () -> translateExpressionWithContext("ND-Root",
+            "for text:$t in BT-00-Text return $t::BT-00-Text"));
+    assertEquals(InvalidIdentifierException.ErrorCode.NOT_A_CONTEXT_VARIABLE,
+        exception.getErrorCode());
+    assertEquals("line 1:45 Variable '$t' is not a context variable.", exception.getMessage());
   }
 
   @Test

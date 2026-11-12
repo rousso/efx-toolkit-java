@@ -33,6 +33,7 @@ import org.apache.commons.lang3.StringUtils;
 import eu.europa.ted.eforms.sdk.component.SdkComponent;
 import eu.europa.ted.eforms.sdk.component.SdkComponentType;
 import eu.europa.ted.efx.exceptions.InvalidArgumentException;
+import eu.europa.ted.efx.exceptions.InvalidIdentifierException;
 import eu.europa.ted.efx.exceptions.TypeMismatchException;
 import eu.europa.ted.efx.exceptions.TranslatorConfigurationException;
 import eu.europa.ted.efx.interfaces.EfxExpressionTranslator;
@@ -1183,9 +1184,19 @@ public class EfxExpressionTranslatorV1 extends EfxBaseListener
     }
   }
 
+  /**
+   * Takes the context that a context variable holds. A parameter or a variable that holds a value
+   * names no context.
+   */
   @Override
   public void exitContextVariableSpecifier(ContextVariableSpecifierContext ctx) {
-    Context variableContext = this.efxContext.getContextFromVariable(getVariableName(ctx.variableReference()));
+    final String name = getVariableName(ctx.variableReference());
+    Context variableContext = this.efxContext.getContextFromVariable(name);
+    if (variableContext == null) {
+      throw InvalidIdentifierException.notAContextVariable(ctx.variableReference(),
+          this.stack.getParameter(name).isPresent() ? ParsedParameter.describe(name)
+              : Variable.describe(name));
+    }
     if (variableContext.isFieldContext()) {
       this.efxContext.push(new FieldContext(variableContext.symbol(),
           this.symbols.getAbsolutePathOfField(variableContext.symbol()), this.symbols

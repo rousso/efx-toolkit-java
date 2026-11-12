@@ -67,7 +67,7 @@ Although this is a pre-release version of the EFX Toolkit, it provides productio
 
 NOTE: Transpilation of EFX-1 to XPath and XSL in this version of the EFX Toolkit is **better than** what is provided by **EFX Toolkit 1.3.0**.
 
-Two error messages that EFX-1 shares with EFX-2 now name a variable as it is written: "Variable '$x' is already declared in this scope." and "Variable '$x' is not declared.", where they said "Identifier 'x'". When a parameter already holds the name of a variable, the first names both: "Variable '$x' has the same name as Parameter '$x', already declared in this scope." A parameter of an expression with no argument passed for it is named the same way: "No argument passed for Parameter '$p'.", where it was "parameter 'p'".
+Two error messages that EFX-1 shares with EFX-2 now name a variable as it is written: "Variable '$x' is already declared in this scope." and "Variable '$x' is not declared.", where they said "Identifier 'x'". When a parameter already holds the name of a variable, the first names both: "Variable '$x' has the same name as Parameter '$x', already declared in this scope." A parameter of an expression with no argument passed for it is named the same way: "No argument passed for Parameter '$p'.", where it was "parameter 'p'". A field read through a parameter or a variable that holds no context, such as `$p::BT-00-Text`, raises "Parameter '$p' is not a context variable.", where it threw a `NullPointerException`.
 
 ## Breaking changes
 
