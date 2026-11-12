@@ -3,15 +3,19 @@ package eu.europa.ted.efx.sdk1;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import org.antlr.v4.runtime.CharStreams;
+import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.misc.ParseCancellationException;
+import org.antlr.v4.runtime.tree.ParseTree;
+import org.antlr.v4.runtime.tree.ParseTreeWalker;
 import org.junit.jupiter.api.Test;
 import eu.europa.ted.efx.EfxTestsBase;
 import eu.europa.ted.efx.component.EfxTranslatorFactory;
 import eu.europa.ted.efx.exceptions.InvalidIdentifierException;
 import eu.europa.ted.efx.interfaces.EfxTemplateTranslator;
 import eu.europa.ted.efx.mock.DependencyFactoryMock;
-import eu.europa.ted.efx.model.CallStack;
 import eu.europa.ted.efx.model.ContextStack;
+import eu.europa.ted.efx.model.templates.Markup;
 import eu.europa.ted.efx.model.templates.ViewTemplateSection;
 
 class EfxTemplateTranslatorV1Test extends EfxTestsBase {
@@ -61,16 +65,17 @@ class EfxTemplateTranslatorV1Test extends EfxTestsBase {
   }
 
   @Test
-  void testTranslatorReused_AfterASyntaxError_KeepsNothingOfTheTemplateBefore()
-      throws InstantiationException {
-    final EfxTemplateTranslatorV1 translator = (EfxTemplateTranslatorV1) EfxTranslatorFactory
+  void testTranslatorReused_AfterASyntaxError_RendersAsANewOne() throws InstantiationException {
+    final EfxTemplateTranslator translator = EfxTranslatorFactory
         .getEfxTemplateTranslator(this.getSdkVersion(), DependencyFactoryMock.INSTANCE, DEFAULT_OPTIONS);
     assertThrows(InvalidIdentifierException.class, () -> translator.renderTemplate(
-        "{ND-Root} ${for context:$c in BT-00-Text return $missing}\n", DEFAULT_OPTIONS));
-    final CallStack callStackOfTheFirst = translator.stack;
+        lines("{ND-Root} foo", "\t{ND-Root} ${for context:$c in BT-00-Text return $missing}") + "\n",
+        DEFAULT_OPTIONS));
     assertThrows(ParseCancellationException.class,
         () -> translator.renderTemplate("{ND-Root} ${1 + }\n", DEFAULT_OPTIONS));
-    assertNotSame(callStackOfTheFirst, translator.stack);
+    final String template = lines("{ND-Root} foo", "\t{BT-00-Text} bar");
+    assertEquals(translateTemplate(template),
+        translator.renderTemplate(template + "\n", DEFAULT_OPTIONS));
   }
 
   @Test
@@ -82,6 +87,35 @@ class EfxTemplateTranslatorV1Test extends EfxTestsBase {
     final ViewTemplateSection sectionOfTheTemplate = translator.section;
     translator.translateExpression("{ND-Root} ${1}");
     assertNotSame(sectionOfTheTemplate, translator.section);
+  }
+
+  /**
+   * The translator is a listener that a walk of a template file can call directly, without
+   * {@code renderTemplate}: the walk leaves the translated file on the stack.
+   */
+  @Test
+  void testTranslatorWalkedDirectly_TranslatesTheTemplateAsANewOne() throws InstantiationException {
+    final EfxTemplateTranslatorV1 translator = (EfxTemplateTranslatorV1) EfxTranslatorFactory
+        .getEfxTemplateTranslator(this.getSdkVersion(), DependencyFactoryMock.INSTANCE, DEFAULT_OPTIONS);
+    ParseTreeWalker.DEFAULT.walk(translator, templateFileOf("{ND-Root} first\n"));
+    translator.stack.pop(Markup.class);
+    ParseTreeWalker.DEFAULT.walk(translator, templateFileOf("{ND-Root} second\n"));
+    assertEquals(translateTemplate("{ND-Root} second"), translator.stack.pop(Markup.class).script);
+  }
+
+  @Test
+  void testTranslatorWalkedDirectly_AfterARender_TranslatesTheTemplateAsANewOne()
+      throws InstantiationException {
+    final EfxTemplateTranslatorV1 translator = (EfxTemplateTranslatorV1) EfxTranslatorFactory
+        .getEfxTemplateTranslator(this.getSdkVersion(), DependencyFactoryMock.INSTANCE, DEFAULT_OPTIONS);
+    translator.renderTemplate("{ND-Root} first\n", DEFAULT_OPTIONS);
+    ParseTreeWalker.DEFAULT.walk(translator, templateFileOf("{ND-Root} second\n"));
+    assertEquals(translateTemplate("{ND-Root} second"), translator.stack.pop(Markup.class).script);
+  }
+
+  private static ParseTree templateFileOf(final String template) {
+    return new EfxParser(new CommonTokenStream(new EfxLexer(CharStreams.fromString(template))))
+        .templateFile();
   }
   @Override
   protected String getSdkVersion() {

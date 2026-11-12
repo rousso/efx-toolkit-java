@@ -158,7 +158,6 @@ public class EfxTemplateTranslatorV1 extends EfxExpressionTranslatorV1
       logger.warn("EFX profiling is not available for EFX-1 templates. No profiler output will be generated.");
     }
 
-    this.startTranslation();
     final EfxLexer lexer = new EfxLexer(charStream);
     final CommonTokenStream tokens = new CommonTokenStream(lexer);
     final EfxParser parser = new EfxParser(tokens);
@@ -215,6 +214,15 @@ public class EfxTemplateTranslatorV1 extends EfxExpressionTranslatorV1
   }
 
   // #region Template File ----------------------------------------------------
+
+  /**
+   * Starts the translation: every walk of a template file is a translation of its own, whether
+   * {@code renderTemplate} or another caller walks it.
+   */
+  @Override
+  public void enterTemplateFile(TemplateFileContext ctx) {
+    this.startTranslation();
+  }
 
   @Override
   public void exitTemplateFile(TemplateFileContext ctx) {
