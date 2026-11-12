@@ -1,6 +1,7 @@
 package eu.europa.ted.efx.sdk1;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import org.antlr.v4.runtime.misc.ParseCancellationException;
 import org.junit.jupiter.api.Test;
@@ -9,6 +10,7 @@ import eu.europa.ted.efx.component.EfxTranslatorFactory;
 import eu.europa.ted.efx.exceptions.InvalidIdentifierException;
 import eu.europa.ted.efx.interfaces.EfxTemplateTranslator;
 import eu.europa.ted.efx.mock.DependencyFactoryMock;
+import eu.europa.ted.efx.model.ContextStack;
 
 class EfxTemplateTranslatorV1Test extends EfxTestsBase {
 
@@ -27,6 +29,22 @@ class EfxTemplateTranslatorV1Test extends EfxTestsBase {
     translator.renderTemplate(lines("{BT-00-Text} foo", "  {ND-Root} bar") + "\n", DEFAULT_OPTIONS);
     assertEquals(translateTemplate(lines("{BT-00-Text} foo", "\t{ND-Root} bar")),
         translator.renderTemplate(lines("{BT-00-Text} foo", "\t{ND-Root} bar") + "\n", DEFAULT_OPTIONS));
+  }
+
+  /**
+   * The context stack keeps the context of each context variable by its declaration, and every
+   * render declares its variables anew, so a translator that kept one context stack for all its
+   * renders would keep the contexts of every one of them.
+   */
+  @Test
+  void testTranslatorReused_TakesANewContextStackForEachTemplate() throws InstantiationException {
+    final EfxTemplateTranslatorV1 translator = (EfxTemplateTranslatorV1) EfxTranslatorFactory
+        .getEfxTemplateTranslator(this.getSdkVersion(), DependencyFactoryMock.INSTANCE, DEFAULT_OPTIONS);
+    final String template = "{ND-Root} ${for context:$x in BT-00-Text return $x::BT-00-Text}\n";
+    translator.renderTemplate(template, DEFAULT_OPTIONS);
+    final ContextStack contextsOfTheFirst = translator.efxContext;
+    translator.renderTemplate(template, DEFAULT_OPTIONS);
+    assertNotSame(contextsOfTheFirst, translator.efxContext);
   }
   @Override
   protected String getSdkVersion() {

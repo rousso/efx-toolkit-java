@@ -40,6 +40,7 @@ import eu.europa.ted.efx.interfaces.TemplateSection;
 import eu.europa.ted.efx.interfaces.TranslatorContext;
 import eu.europa.ted.efx.interfaces.TranslatorOptions;
 import eu.europa.ted.efx.model.Context;
+import eu.europa.ted.efx.model.ContextStack;
 import eu.europa.ted.efx.model.Context.FieldContext;
 import eu.europa.ted.efx.model.Context.NodeContext;
 import eu.europa.ted.efx.model.expressions.Expression;
@@ -205,6 +206,7 @@ public class EfxTemplateTranslatorV1 extends EfxExpressionTranslatorV1
   @Override
   public void enterTemplateFile(TemplateFileContext ctx) {
     assert blockStack.isEmpty() : UNEXPECTED_INDENTATION;
+    this.efxContext = new ContextStack(this.symbols);
     this.section = new ViewTemplateSection(TemplateSection.DEFAULT, "block");
     this.indentWith = Indent.UNDETERMINED;
     this.indentSpaces = -1;
