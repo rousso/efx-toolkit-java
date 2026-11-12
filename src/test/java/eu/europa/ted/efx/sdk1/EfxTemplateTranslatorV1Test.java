@@ -46,6 +46,17 @@ class EfxTemplateTranslatorV1Test extends EfxTestsBase {
     translator.renderTemplate(template, DEFAULT_OPTIONS);
     assertNotSame(contextsOfTheFirst, translator.efxContext);
   }
+
+  @Test
+  void testTranslatorReused_AfterAFailedTemplate_RendersAsANewOne() throws InstantiationException {
+    final EfxTemplateTranslator translator = EfxTranslatorFactory
+        .getEfxTemplateTranslator(this.getSdkVersion(), DependencyFactoryMock.INSTANCE, DEFAULT_OPTIONS);
+    assertThrows(InvalidIdentifierException.class, () -> translator.renderTemplate(
+        lines("{ND-Root} foo", "\t{BT-00-Text} ${$missing}") + "\n", DEFAULT_OPTIONS));
+    final String template = lines("{ND-Root} foo", "\t{BT-00-Text} bar");
+    assertEquals(translateTemplate(template),
+        translator.renderTemplate(template + "\n", DEFAULT_OPTIONS));
+  }
   @Override
   protected String getSdkVersion() {
     return "eforms-sdk-1.0";

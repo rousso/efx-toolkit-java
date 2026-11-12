@@ -145,8 +145,19 @@ public class EfxExpressionTranslatorV1 extends EfxBaseListener
     this.stack.popParserContext();
   }
 
+  /**
+   * Starts a translation with no declarations and no context, so that nothing of an earlier
+   * translation, finished or failed, stays in it.
+   */
+  void startTranslation() {
+    this.stack = new CallStack(TypeChecker.V1);
+    this.efxContext = new ContextStack(this.symbols);
+  }
+
   @Override
   public String translateExpression(final String expression, final String... parameters) {
+    this.startTranslation();
+    this.expressionParameters.clear();
     this.expressionParameters.addAll(Arrays.asList(parameters));
 
     final EfxLexer lexer =

@@ -1,6 +1,7 @@
 package eu.europa.ted.efx.sdk1;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import org.antlr.v4.runtime.misc.ParseCancellationException;
 import org.junit.jupiter.api.Test;
@@ -10,6 +11,8 @@ import eu.europa.ted.efx.exceptions.InvalidArgumentException;
 import eu.europa.ted.efx.exceptions.InvalidIdentifierException;
 import eu.europa.ted.efx.interfaces.EfxExpressionTranslator;
 import eu.europa.ted.efx.mock.DependencyFactoryMock;
+import eu.europa.ted.efx.model.CallStack;
+import eu.europa.ted.efx.model.ContextStack;
 
 class EfxExpressionTranslatorV1Test extends EfxTestsBase {
   @Override
@@ -568,6 +571,52 @@ class EfxExpressionTranslatorV1Test extends EfxTestsBase {
     final String expression = "{ND-Root} ${for text:$x in BT-00-Text return $x}";
     final String first = translator.translateExpression(expression);
     assertEquals(first, translator.translateExpression(expression));
+  }
+
+  @Test
+  void testTranslatorReused_AfterAFailedTranslation_TranslatesAsANewOne()
+      throws InstantiationException {
+    final EfxExpressionTranslator translator = EfxTranslatorFactory
+        .getEfxExpressionTranslator(this.getSdkVersion(), DependencyFactoryMock.INSTANCE, DEFAULT_OPTIONS);
+    assertThrows(InvalidIdentifierException.class, () -> translator
+        .translateExpression("{ND-Root} ${for text:$x in ('a', $missing) return $x}"));
+    final String expression = "{ND-Root} ${for text:$x in ('a') return $x}";
+    assertEquals(translateExpression(expression), translator.translateExpression(expression));
+  }
+
+  @Test
+  void testTranslatorReused_DeclaresTheSameParameterAgain() throws InstantiationException {
+    final EfxExpressionTranslator translator = EfxTranslatorFactory
+        .getEfxExpressionTranslator(this.getSdkVersion(), DependencyFactoryMock.INSTANCE, DEFAULT_OPTIONS);
+    translator.translateExpression("{ND-Root, text:$p} ${$p}", "'a'");
+    assertEquals("'b'", translator.translateExpression("{ND-Root, text:$p} ${$p}", "'b'"));
+  }
+
+  @Test
+  void testTranslatorReused_DoesNotKeepTheValuesOfAnotherTranslation()
+      throws InstantiationException {
+    final EfxExpressionTranslator translator = EfxTranslatorFactory
+        .getEfxExpressionTranslator(this.getSdkVersion(), DependencyFactoryMock.INSTANCE, DEFAULT_OPTIONS);
+    translator.translateExpression("{ND-Root} ${1}", "'a'");
+    assertEquals("'b'", translator.translateExpression("{ND-Root, text:$p} ${$p}", "'b'"));
+  }
+
+  /**
+   * The context stack keeps the context of each context variable by its declaration, and every
+   * translation declares its variables anew, so a translator that kept one context stack for all its
+   * translations would keep the contexts of every one of them.
+   */
+  @Test
+  void testTranslatorReused_TakesNewStacksForEachExpression() throws InstantiationException {
+    final EfxExpressionTranslatorV1 translator = (EfxExpressionTranslatorV1) EfxTranslatorFactory
+        .getEfxExpressionTranslator(this.getSdkVersion(), DependencyFactoryMock.INSTANCE, DEFAULT_OPTIONS);
+    final String expression = "{ND-Root} ${for context:$c in BT-00-Text return $c::BT-00-Text}";
+    translator.translateExpression(expression);
+    final CallStack callStackOfTheFirst = translator.stack;
+    final ContextStack contextsOfTheFirst = translator.efxContext;
+    translator.translateExpression(expression);
+    assertNotSame(callStackOfTheFirst, translator.stack);
+    assertNotSame(contextsOfTheFirst, translator.efxContext);
   }
 
 
