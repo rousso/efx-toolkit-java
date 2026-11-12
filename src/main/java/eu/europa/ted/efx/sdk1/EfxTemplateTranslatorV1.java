@@ -216,12 +216,16 @@ public class EfxTemplateTranslatorV1 extends EfxExpressionTranslatorV1
   // #region Template File ----------------------------------------------------
 
   /**
-   * Starts the translation: every walk of a template file is a translation of its own, whether
-   * {@code renderTemplate} or another caller walks it.
+   * Starts the translation where the walk enters the template file, before the file is recorded as
+   * the first parser context of the call stack: every walk of a template file is a translation of
+   * its own, whether {@code renderTemplate} or another caller walks it.
    */
   @Override
-  public void enterTemplateFile(TemplateFileContext ctx) {
-    this.startTranslation();
+  public void enterEveryRule(final ParserRuleContext ctx) {
+    if (ctx instanceof TemplateFileContext) {
+      this.startTranslation();
+    }
+    super.enterEveryRule(ctx);
   }
 
   @Override

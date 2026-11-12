@@ -2,21 +2,30 @@ package eu.europa.ted.efx.sdk1;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import org.antlr.v4.runtime.BaseErrorListener;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
+import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.misc.ParseCancellationException;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.ParseTreeWalker;
 import org.junit.jupiter.api.Test;
+import eu.europa.ted.eforms.sdk.component.SdkComponent;
+import eu.europa.ted.eforms.sdk.component.SdkComponentType;
 import eu.europa.ted.efx.EfxTestsBase;
 import eu.europa.ted.efx.component.EfxTranslatorFactory;
 import eu.europa.ted.efx.exceptions.InvalidIdentifierException;
 import eu.europa.ted.efx.interfaces.EfxTemplateTranslator;
+import eu.europa.ted.efx.interfaces.MarkupGenerator;
+import eu.europa.ted.efx.interfaces.ScriptGenerator;
+import eu.europa.ted.efx.interfaces.SymbolResolver;
 import eu.europa.ted.efx.mock.DependencyFactoryMock;
 import eu.europa.ted.efx.model.ContextStack;
 import eu.europa.ted.efx.model.templates.Markup;
 import eu.europa.ted.efx.model.templates.ViewTemplateSection;
+import eu.europa.ted.efx.sdk1.EfxParser.TemplateFileContext;
 
 class EfxTemplateTranslatorV1Test extends EfxTestsBase {
 
@@ -111,6 +120,47 @@ class EfxTemplateTranslatorV1Test extends EfxTestsBase {
     translator.renderTemplate("{ND-Root} first\n", DEFAULT_OPTIONS);
     ParseTreeWalker.DEFAULT.walk(translator, templateFileOf("{ND-Root} second\n"));
     assertEquals(translateTemplate("{ND-Root} second"), translator.stack.pop(Markup.class).script);
+  }
+
+  /**
+   * The template file is the parser context of the call stack while the file is translated, so that
+   * an error raised at the level of the file names its position.
+   */
+  @Test
+  void testTranslation_TakesTheTemplateFileAsItsParserContext() {
+    final DependencyFactoryMock dependencies = DependencyFactoryMock.INSTANCE;
+    final FileParserContextRecorder translator = new FileParserContextRecorder(
+        dependencies.createMarkupGenerator(this.getSdkVersion(), "", DEFAULT_OPTIONS),
+        dependencies.createSymbolResolver(this.getSdkVersion(), ""),
+        dependencies.createScriptGenerator(this.getSdkVersion(), "", DEFAULT_OPTIONS),
+        dependencies.createErrorListener());
+    translator.renderTemplate("{ND-Root} x\n", DEFAULT_OPTIONS);
+    assertSame(translator.templateFile, translator.parserContextOfTheFile);
+  }
+
+  /**
+   * Records the parser context of the call stack where the walk leaves the template file. It is
+   * declared with a qualifier of its own, as it would otherwise inherit the declaration of the
+   * translator it extends, and two translators would be declared as one.
+   */
+  @SdkComponent(versions = {"1"}, componentType = SdkComponentType.EFX_TEMPLATE_TRANSLATOR,
+      qualifier = "file-parser-context")
+  static final class FileParserContextRecorder extends EfxTemplateTranslatorV1 {
+    ParserRuleContext templateFile;
+    ParserRuleContext parserContextOfTheFile;
+
+    FileParserContextRecorder(final MarkupGenerator markupGenerator,
+        final SymbolResolver symbolResolver, final ScriptGenerator scriptGenerator,
+        final BaseErrorListener errorListener) {
+      super(markupGenerator, symbolResolver, scriptGenerator, errorListener);
+    }
+
+    @Override
+    public void exitTemplateFile(final TemplateFileContext ctx) {
+      this.templateFile = ctx;
+      this.parserContextOfTheFile = this.stack.peekParserContext();
+      super.exitTemplateFile(ctx);
+    }
   }
 
   private static ParseTree templateFileOf(final String template) {
