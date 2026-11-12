@@ -142,13 +142,17 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
   }
 
   /**
-   * Keeps the node being translated on the call stack, which names it in the errors it gives.
+   * Keeps the node being translated on the call stack, which names it in the errors it gives. An
+   * error raised under the node with no position of its own, such as the symbol resolver's, is
+   * placed at the node.
    */
   @Override
   public Subexpression<?> visit(final ParseTree tree) {
     this.translation.stack().pushParserContext((ParserRuleContext) tree);
     try {
       return super.visit(tree);
+    } catch (final EfxCompilationException e) {
+      throw e.at((ParserRuleContext) tree);
     } finally {
       this.translation.stack().popParserContext();
     }

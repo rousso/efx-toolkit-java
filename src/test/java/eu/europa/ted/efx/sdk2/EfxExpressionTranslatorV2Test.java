@@ -22,6 +22,7 @@ import eu.europa.ted.efx.EfxTestsBase;
 import eu.europa.ted.efx.exceptions.InvalidArgumentException;
 import eu.europa.ted.efx.exceptions.InvalidIdentifierException;
 import eu.europa.ted.efx.exceptions.InvalidUsageException;
+import eu.europa.ted.efx.exceptions.SymbolResolutionException;
 import eu.europa.ted.efx.exceptions.TypeMismatchException;
 
 class EfxExpressionTranslatorV2Test extends EfxTestsBase {
@@ -5239,6 +5240,54 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   }
 
   // #endregion: InvalidIdentifierException Tests
+
+  // #region: Errors raised with no position ----------------------------------
+
+  @Test
+  void testUnknownField_IsPlacedAtTheField() {
+    SymbolResolutionException ex = assertThrows(SymbolResolutionException.class,
+        () -> translateComputeExpressionWithContext("ND-Root", "BT-NONEXISTENT == 'a'"));
+    assertEquals("line 1:21 Unknown symbol 'BT-NONEXISTENT'.", ex.getMessage());
+  }
+
+  @Test
+  void testUnknownNode_IsPlacedAtTheNode() {
+    SymbolResolutionException ex = assertThrows(SymbolResolutionException.class,
+        () -> translateComputeExpressionWithContext("ND-Root", "ND-NONEXISTENT is present"));
+    assertEquals("line 1:21 Unknown symbol 'ND-NONEXISTENT'.", ex.getMessage());
+  }
+
+  @Test
+  void testUnknownCodelist_IsPlacedAtTheCodelist() {
+    SymbolResolutionException ex = assertThrows(SymbolResolutionException.class,
+        () -> translateComputeExpressionWithContext("ND-Root",
+            "BT-00-Text in #nonexistent-codelist"));
+    assertEquals("line 1:35 Unknown codelist 'nonexistent-codelist'.", ex.getMessage());
+  }
+
+  @Test
+  void testUnsupportedRegexPattern_IsPlacedAtTheCall() {
+    InvalidUsageException ex = assertThrows(InvalidUsageException.class,
+        () -> translateComputeExpressionWithContext("ND-Root", "replace-regex('a', '\\w+', 'b')"));
+    assertTrue(ex.getMessage().startsWith("line 1:21 Invalid regex pattern '\\w+' at position 1: "),
+        ex.getMessage());
+  }
+
+  @Test
+  void testUnknownFieldAsContext_IsPlacedAtTheExpression() {
+    SymbolResolutionException ex = assertThrows(SymbolResolutionException.class,
+        () -> translateExpression("WITH BT-NONEXISTENT COMPUTE 1"));
+    assertEquals("line 1:0 Unknown symbol 'BT-NONEXISTENT'.", ex.getMessage());
+  }
+
+  @Test
+  void testUnknownAliasAsContext_IsPlacedAtTheExpression() {
+    SymbolResolutionException ex = assertThrows(SymbolResolutionException.class,
+        () -> translateExpression("WITH nonexistent COMPUTE 1"));
+    assertEquals("line 1:0 Unknown symbol 'nonexistent'.", ex.getMessage());
+  }
+
+  // #endregion: Errors raised with no position
 
   // #region: TypeMismatchException - nodeCannotBeValue -------------------------
 

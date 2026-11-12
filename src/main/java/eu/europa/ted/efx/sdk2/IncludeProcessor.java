@@ -1,7 +1,9 @@
 package eu.europa.ted.efx.sdk2;
 
 import java.io.IOException;
-import java.util.HashSet;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -29,7 +31,8 @@ public class IncludeProcessor {
           Pattern.MULTILINE);
 
   private final IncludedFileResolver resolver;
-  private final Set<String> resolving = new HashSet<>();
+  /** The files being resolved, in the order in which they include each other. */
+  private final Set<String> resolving = new LinkedHashSet<>();
 
   public IncludeProcessor(IncludedFileResolver resolver) {
     this.resolver = resolver;
@@ -72,7 +75,7 @@ public class IncludeProcessor {
       String path = matcher.group(1);
 
       if (!this.resolving.add(path)) {
-        throw InvalidUsageException.circularInclude(path);
+        throw InvalidUsageException.circularInclude(this.cycleClosedBy(path));
       }
 
       try {
@@ -91,5 +94,16 @@ public class IncludeProcessor {
 
     result.append(text, lastEnd, text.length());
     return result.toString();
+  }
+
+  /**
+   * @param path a file being resolved, which is included again
+   * @return the files that include each other in a circle, from that file back to it
+   */
+  private List<String> cycleClosedBy(final String path) {
+    final List<String> files = new ArrayList<>(this.resolving);
+    final List<String> cycle = new ArrayList<>(files.subList(files.indexOf(path), files.size()));
+    cycle.add(path);
+    return cycle;
   }
 }

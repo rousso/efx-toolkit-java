@@ -339,21 +339,56 @@ class EfxRulesTranslatorV2Test extends EfxTestsBase {
         () -> translator.translateRules(rules));
     assertEquals(InvalidUsageException.ErrorCode.INVALID_NOTICE_SUBTYPE_RANGE_ORDER,
         exception.getErrorCode());
+    assertEquals("line 6:19 Notice subtype range '11-9' is not in ascending order.",
+        exception.getMessage());
   }
 
   @Test
   void testInClause_UnknownSubtype_Throws() {
-    assertUnknownNoticeSubtype("Unknown notice subtype '99' in range '99'.", "99");
+    assertUnknownNoticeSubtype("line 6:19 Unknown notice subtype '99'.", "99");
+  }
+
+  @Test
+  void testInClause_UnknownSubtypeInList_Throws() {
+    assertUnknownNoticeSubtype("line 6:19 Unknown notice subtype '99'.", "1, 99");
   }
 
   @Test
   void testInClause_UnknownStartOfRange_Throws() {
-    assertUnknownNoticeSubtype("Unknown notice subtype '99' in range '99-3'.", "99-3");
+    assertUnknownNoticeSubtype("line 6:19 Unknown notice subtype '99' in range '99-3'.", "99-3");
   }
 
   @Test
   void testInClause_UnknownEndOfRange_Throws() {
-    assertUnknownNoticeSubtype("Unknown notice subtype '99' in range '1-99'.", "1-99");
+    assertUnknownNoticeSubtype("line 6:19 Unknown notice subtype '99' in range '1-99'.", "1-99");
+  }
+
+  @Test
+  void testUnknownFieldInAssert_IsPlacedAtTheField() {
+    String rules = lines(
+        "---- STAGE 1a ----",
+        "",
+        "WITH ND-Root",
+        "    ASSERT BT-NONEXISTENT == 'a'",
+        "    AS ERROR R-K7P-M2Q",
+        "    FOR BT-00-Text IN 1");
+    SymbolResolutionException exception = assertThrows(SymbolResolutionException.class,
+        () -> translator.translateRules(rules));
+    assertEquals("line 4:11 Unknown symbol 'BT-NONEXISTENT'.", exception.getMessage());
+  }
+
+  @Test
+  void testUnknownFieldAsContext_IsPlacedAtTheField() {
+    String rules = lines(
+        "---- STAGE 1a ----",
+        "",
+        "WITH BT-NONEXISTENT",
+        "    ASSERT TRUE",
+        "    AS ERROR R-K7P-M2Q",
+        "    FOR BT-00-Text IN 1");
+    SymbolResolutionException exception = assertThrows(SymbolResolutionException.class,
+        () -> translator.translateRules(rules));
+    assertEquals("line 3:5 Unknown symbol 'BT-NONEXISTENT'.", exception.getMessage());
   }
 
   private void assertUnknownNoticeSubtype(final String message, final String range) {

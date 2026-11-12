@@ -30,6 +30,7 @@ import eu.europa.ted.efx.interfaces.EfxTemplateTranslator;
 import eu.europa.ted.efx.mock.DependencyFactoryMock;
 import eu.europa.ted.efx.exceptions.InvalidArgumentException;
 import eu.europa.ted.efx.exceptions.InvalidIndentationException;
+import eu.europa.ted.efx.exceptions.SymbolResolutionException;
 import eu.europa.ted.efx.exceptions.TypeMismatchException;
 import eu.europa.ted.efx.interfaces.IncludedFileResolver;
 import eu.europa.ted.efx.mock.DependencyFactoryMock;
@@ -3344,6 +3345,25 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
   }
 
   // #endregion Repeatable Fields in Expression Blocks -------------------------
+
+  // #region Errors raised with no position ------------------------------------
+
+  @Test
+  void testUnknownFieldInExpressionBlock_IsPlacedAtTheField() {
+    SymbolResolutionException ex = assertThrows(SymbolResolutionException.class,
+        () -> translateTemplate(
+            lines("{ND-Root} a", "{ND-Root} b", "{ND-Root} ${BT-NONEXISTENT}")));
+    assertEquals("line 3:12 Unknown symbol 'BT-NONEXISTENT'.", ex.getMessage());
+  }
+
+  @Test
+  void testUnknownNodeAsLineContext_IsPlacedAtTheContext() {
+    SymbolResolutionException ex = assertThrows(SymbolResolutionException.class,
+        () -> translateTemplate(lines("{ND-Root} a", "{ND-NONEXISTENT} b")));
+    assertEquals("line 2:1 Unknown symbol 'ND-NONEXISTENT'.", ex.getMessage());
+  }
+
+  // #endregion Errors raised with no position ---------------------------------
 
   // #region IllegalArgumentException ------------------------------------------
 

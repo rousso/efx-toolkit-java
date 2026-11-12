@@ -88,7 +88,26 @@ class IncludeProcessorTest {
 
     String input = "#include \"a.efx\"\n";
     IncludeProcessor processor = new IncludeProcessor(mapResolver(files));
-    assertThrows(InvalidUsageException.class, () -> processor.process(input));
+    InvalidUsageException exception =
+        assertThrows(InvalidUsageException.class, () -> processor.process(input));
+    assertEquals("Circular #include: 'a.efx' includes 'b.efx', which includes 'a.efx'.",
+        exception.getMessage());
+  }
+
+  @Test
+  void testCircularIncludeBelowAnother_NamesOnlyTheCircle() {
+    Map<String, String> files = new HashMap<>();
+    files.put("main.efx", "#include \"a.efx\"\n");
+    files.put("a.efx", "#include \"b.efx\"\n");
+    files.put("b.efx", "#include \"c.efx\"\n");
+    files.put("c.efx", "#include \"a.efx\"\n");
+
+    String input = "#include \"main.efx\"\n";
+    IncludeProcessor processor = new IncludeProcessor(mapResolver(files));
+    InvalidUsageException exception =
+        assertThrows(InvalidUsageException.class, () -> processor.process(input));
+    assertEquals("Circular #include: 'a.efx' includes 'b.efx', which includes 'c.efx',"
+        + " which includes 'a.efx'.", exception.getMessage());
   }
 
   @Test
@@ -98,7 +117,9 @@ class IncludeProcessorTest {
 
     String input = "#include \"self.efx\"\n";
     IncludeProcessor processor = new IncludeProcessor(mapResolver(files));
-    assertThrows(InvalidUsageException.class, () -> processor.process(input));
+    InvalidUsageException exception =
+        assertThrows(InvalidUsageException.class, () -> processor.process(input));
+    assertEquals("Circular #include: 'self.efx' includes 'self.efx'.", exception.getMessage());
   }
 
   @Test
