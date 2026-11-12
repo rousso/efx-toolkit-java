@@ -16,9 +16,7 @@ package eu.europa.ted.efx.sdk2;
 import static eu.europa.ted.efx.model.constructs.Parameter.Impl.parameter;
 
 import java.util.ArrayList;
-import java.util.IdentityHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.IntFunction;
@@ -130,13 +128,6 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
   private final Translation translation;
   private final Origin<TypedExpression> none;
   private final IteratorDeclarations iteratorDeclarations = new IteratorDeclarations();
-
-  /**
-   * The context of each context variable, by its declaration. The call stack finds the declaration
-   * that a name refers to where it is read, and that declaration is a context variable if it has a
-   * context here.
-   */
-  private final Map<Variable, Context> contextsOfVariables = new IdentityHashMap<>();
 
   EfxExpressionVisitor(final Translation translation) {
     this.translation = translation;
@@ -481,7 +472,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    */
   private Subexpression<?> variableReference(final VariableReferenceContext ctx,
       final Variable variable) {
-    final Context context = this.contextsOfVariables.get(variable);
+    final Context context = this.translation.efxContext().getContextFromVariable(variable);
     if (context == null) {
       return new Subexpression<>(variable.referenceExpression,
           new VariableOrigin(this, ctx, variable.describe()));
@@ -499,7 +490,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    */
   void declareContextVariable(final Variable variable, final Context context) {
     this.translation.stack().declareIdentifier(variable);
-    this.contextsOfVariables.put(variable, context);
+    this.translation.efxContext().declareContextVariable(variable, context);
   }
 
   @Override

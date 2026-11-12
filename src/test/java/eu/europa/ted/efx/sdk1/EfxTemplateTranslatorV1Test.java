@@ -6,6 +6,7 @@ import org.antlr.v4.runtime.misc.ParseCancellationException;
 import org.junit.jupiter.api.Test;
 import eu.europa.ted.efx.EfxTestsBase;
 import eu.europa.ted.efx.component.EfxTranslatorFactory;
+import eu.europa.ted.efx.exceptions.InvalidIdentifierException;
 import eu.europa.ted.efx.interfaces.EfxTemplateTranslator;
 import eu.europa.ted.efx.mock.DependencyFactoryMock;
 
@@ -443,5 +444,20 @@ class EfxTemplateTranslatorV1Test extends EfxTestsBase {
     assertEquals(
         "TEMPLATES:\nlet block01() -> { eval(efx:preferred-language-text(.)) }\nMAIN:\nfor-each(/*/PathNode/TextMultilingualField).call(block01())",
         translateTemplate("{BT-00-Text-Multilingual} $value"));
+  }
+
+  /**
+   * A name declared again, as a variable that holds a value, no longer names the context that an
+   * earlier declaration of it held.
+   */
+  @Test
+  void testContextVariableNameDeclaredAgain_AsAValue_IsNotAContextVariable() {
+    InvalidIdentifierException exception = assertThrows(InvalidIdentifierException.class,
+        () -> translateTemplate(lines(
+            "{ND-Root} ${for context:$x in BT-00-Text return $x::BT-00-Text}",
+            "{ND-Root} ${for text:$x in BT-00-Text return $x::BT-00-Text}")));
+    assertEquals(InvalidIdentifierException.ErrorCode.NOT_A_CONTEXT_VARIABLE,
+        exception.getErrorCode());
+    assertEquals("line 2:45 Variable '$x' is not a context variable.", exception.getMessage());
   }
 }

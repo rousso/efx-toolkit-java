@@ -782,13 +782,13 @@ public class EfxExpressionTranslatorV1 extends EfxBaseListener
     this.stack.push(this.script.composeIteratorExpression(variable.declarationExpression, path.asSequence()));
     if (ctx.fieldContext() != null) {
       final String contextFieldId = getFieldId(ctx.fieldContext());
-      this.efxContext.declareContextVariable(variable.name,
+      this.efxContext.declareContextVariable(variable,
           new FieldContext(contextFieldId, this.symbols.getAbsolutePathOfField(contextFieldId),
               this.symbols.getRelativePathOfField(contextFieldId, this.efxContext.symbol())));
     } else if (ctx.nodeContext() != null) {
       final String contextNodeId =
           getNodeId(ctx.nodeContext());
-      this.efxContext.declareContextVariable(variable.name,
+      this.efxContext.declareContextVariable(variable,
           new NodeContext(contextNodeId, this.symbols.getAbsolutePathOfNode(contextNodeId),
               this.symbols.getRelativePathOfNode(contextNodeId, this.efxContext.symbol())));
     }
@@ -1191,7 +1191,8 @@ public class EfxExpressionTranslatorV1 extends EfxBaseListener
   @Override
   public void exitContextVariableSpecifier(ContextVariableSpecifierContext ctx) {
     final String name = getVariableName(ctx.variableReference());
-    Context variableContext = this.efxContext.getContextFromVariable(name);
+    final Context variableContext =
+        this.stack.getVariable(name).map(this.efxContext::getContextFromVariable).orElse(null);
     if (variableContext == null) {
       throw InvalidIdentifierException.notAContextVariable(ctx.variableReference(),
           this.stack.getParameter(name).isPresent() ? ParsedParameter.describe(name)
