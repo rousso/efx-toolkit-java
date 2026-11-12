@@ -79,8 +79,8 @@ public interface Parameter {
      */
     @Override
     public boolean equals(final Object other) {
-      return other instanceof Impl && this.name.equals(((Impl<?>) other).name)
-          && this.type.equals(((Impl<?>) other).type);
+      return other instanceof Impl && Objects.equals(this.name, ((Impl<?>) other).name)
+          && Objects.equals(this.type, ((Impl<?>) other).type);
     }
 
     @Override

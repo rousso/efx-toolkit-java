@@ -15,6 +15,7 @@ package eu.europa.ted.efx.model.constructs;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 import eu.europa.ted.efx.interfaces.TypeChecker;
@@ -274,12 +275,12 @@ public interface ParameterType<E extends TypedExpression> {
     @Override
     public boolean equals(final Object other) {
       return other instanceof Concrete
-          && this.expressionType.equals(((Concrete<?>) other).expressionType);
+          && Objects.equals(this.expressionType, ((Concrete<?>) other).expressionType);
     }
 
     @Override
     public int hashCode() {
-      return this.expressionType.hashCode();
+      return Objects.hashCode(this.expressionType);
     }
 
     @Override

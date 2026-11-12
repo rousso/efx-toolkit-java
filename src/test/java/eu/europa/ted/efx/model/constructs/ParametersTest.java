@@ -55,4 +55,15 @@ class ParametersTest {
     assertNotEquals(x, parameter("y", ParameterType.TEXT));
     assertNotEquals(x, parameter("x", ParameterType.NUMBER));
   }
+
+  @Test
+  void testParameter_WithoutANameOrAType_IsEqualToItself() {
+    final Parameter unnamed = parameter(null, ParameterType.TEXT);
+    final Parameter untyped = parameter("x", ParameterType.of(null));
+    assertEquals(unnamed, unnamed);
+    assertEquals(unnamed.hashCode(), parameter(null, ParameterType.TEXT).hashCode());
+    assertEquals(untyped, parameter("x", ParameterType.of(null)));
+    assertEquals(untyped.hashCode(), parameter("x", ParameterType.of(null)).hashCode());
+    assertNotEquals(untyped, parameter("x", ParameterType.TEXT));
+  }
 }
