@@ -10,7 +10,9 @@ import eu.europa.ted.efx.component.EfxTranslatorFactory;
 import eu.europa.ted.efx.exceptions.InvalidIdentifierException;
 import eu.europa.ted.efx.interfaces.EfxTemplateTranslator;
 import eu.europa.ted.efx.mock.DependencyFactoryMock;
+import eu.europa.ted.efx.model.CallStack;
 import eu.europa.ted.efx.model.ContextStack;
+import eu.europa.ted.efx.model.templates.ViewTemplateSection;
 
 class EfxTemplateTranslatorV1Test extends EfxTestsBase {
 
@@ -56,6 +58,30 @@ class EfxTemplateTranslatorV1Test extends EfxTestsBase {
     final String template = lines("{ND-Root} foo", "\t{BT-00-Text} bar");
     assertEquals(translateTemplate(template),
         translator.renderTemplate(template + "\n", DEFAULT_OPTIONS));
+  }
+
+  @Test
+  void testTranslatorReused_AfterASyntaxError_KeepsNothingOfTheTemplateBefore()
+      throws InstantiationException {
+    final EfxTemplateTranslatorV1 translator = (EfxTemplateTranslatorV1) EfxTranslatorFactory
+        .getEfxTemplateTranslator(this.getSdkVersion(), DependencyFactoryMock.INSTANCE, DEFAULT_OPTIONS);
+    assertThrows(InvalidIdentifierException.class, () -> translator.renderTemplate(
+        "{ND-Root} ${for context:$c in BT-00-Text return $missing}\n", DEFAULT_OPTIONS));
+    final CallStack callStackOfTheFirst = translator.stack;
+    assertThrows(ParseCancellationException.class,
+        () -> translator.renderTemplate("{ND-Root} ${1 + }\n", DEFAULT_OPTIONS));
+    assertNotSame(callStackOfTheFirst, translator.stack);
+  }
+
+  @Test
+  void testTranslatorReused_ForAnExpression_KeepsNothingOfTheTemplateBefore()
+      throws InstantiationException {
+    final EfxTemplateTranslatorV1 translator = (EfxTemplateTranslatorV1) EfxTranslatorFactory
+        .getEfxTemplateTranslator(this.getSdkVersion(), DependencyFactoryMock.INSTANCE, DEFAULT_OPTIONS);
+    translator.renderTemplate(lines("{ND-Root} foo", "\t{BT-00-Text} bar") + "\n", DEFAULT_OPTIONS);
+    final ViewTemplateSection sectionOfTheTemplate = translator.section;
+    translator.translateExpression("{ND-Root} ${1}");
+    assertNotSame(sectionOfTheTemplate, translator.section);
   }
   @Override
   protected String getSdkVersion() {

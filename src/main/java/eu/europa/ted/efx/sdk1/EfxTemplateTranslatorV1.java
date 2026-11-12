@@ -158,6 +158,7 @@ public class EfxTemplateTranslatorV1 extends EfxExpressionTranslatorV1
       logger.warn("EFX profiling is not available for EFX-1 templates. No profiler output will be generated.");
     }
 
+    this.startTranslation();
     final EfxLexer lexer = new EfxLexer(charStream);
     final CommonTokenStream tokens = new CommonTokenStream(lexer);
     final EfxParser parser = new EfxParser(tokens);
@@ -171,7 +172,6 @@ public class EfxTemplateTranslatorV1 extends EfxExpressionTranslatorV1
 
     final ParseTree tree = parser.templateFile();
 
-    this.startTranslation();
     final ParseTreeWalker walker = new ParseTreeWalker();
     walker.walk(this, tree);
 
@@ -202,22 +202,19 @@ public class EfxTemplateTranslatorV1 extends EfxExpressionTranslatorV1
   }
 
   /**
-   * Starts a translation with no declarations, no context and no content blocks.
+   * Starts a translation with no declarations, no context, no parameter values, no content blocks,
+   * an empty section and no indentation yet.
    */
   @Override
   void startTranslation() {
     super.startTranslation();
     this.blockStack = new ContentBlockStack();
-  }
-
-  // #region Template File ----------------------------------------------------
-
-  @Override
-  public void enterTemplateFile(TemplateFileContext ctx) {
     this.section = new ViewTemplateSection(TemplateSection.DEFAULT, "block");
     this.indentWith = Indent.UNDETERMINED;
     this.indentSpaces = -1;
   }
+
+  // #region Template File ----------------------------------------------------
 
   @Override
   public void exitTemplateFile(TemplateFileContext ctx) {
