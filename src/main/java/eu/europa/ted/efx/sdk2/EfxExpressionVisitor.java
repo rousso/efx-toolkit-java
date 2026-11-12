@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.IntFunction;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import org.antlr.v4.runtime.ParserRuleContext;
@@ -655,8 +656,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
       final FieldFromContextExpressionContext ctx) {
     final Context context = this.contextBefore(ctx.expression());
     final String fieldId = this.fieldIdOf(ctx.linkedFieldReference());
-    final PathExpression field = this.translation.symbols().getRelativePathOfField(fieldId,
-        context.symbol());
+    final PathExpression field = this.resolve(ctx.linkedFieldReference(),
+        () -> this.translation.symbols().getRelativePathOfField(fieldId, context.symbol()));
     return new Subexpression<>(this.joinReference(context.relativePath(), field),
         new FieldOrigin(this, ctx, fieldId, this.translation.efxContext().symbol()));
   }
@@ -669,10 +670,29 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
       final NodeFromContextExpressionContext ctx) {
     final Context context = this.contextBefore(ctx.expression());
     final String nodeId = ctx.simpleNodeReference().NodeId().getText();
-    final PathExpression node = this.translation.symbols().getRelativePathOfNode(nodeId,
-        context.symbol());
+    final PathExpression node = this.resolve(ctx.simpleNodeReference(),
+        () -> this.translation.symbols().getRelativePathOfNode(nodeId, context.symbol()));
     return new Subexpression<>(this.joinReference(context.relativePath(), node),
         new NodeOrigin(this, nodeId));
+  }
+
+  /**
+   * Resolves a reference that is translated with the node it is part of, not visited on its own,
+   * such as the right side of a context override.
+   *
+   * @param reference the reference
+   * @param resolution its resolution by the symbol resolver
+   * @return the path that the resolution gives
+   * @throws EfxCompilationException the error of the resolution, placed at the reference rather
+   *         than at the node it is part of
+   */
+  private PathExpression resolve(final ParserRuleContext reference,
+      final Supplier<PathExpression> resolution) {
+    try {
+      return resolution.get();
+    } catch (final EfxCompilationException e) {
+      throw e.at(reference);
+    }
   }
 
   private Context contextBefore(final ExpressionContext left) {
@@ -1108,12 +1128,18 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
 
   /**
    * Declares the variables of the iterators in the current stack frame, each before the source of
-   * the next is translated.
+   * the next is translated. Each iterator is kept on the call stack while it is declared, which
+   * names it in the errors its declaration gives.
    */
   private IteratorListExpression iteratorsOf(final IteratorListContext ctx) {
     final List<IteratorExpression> iterators = new ArrayList<>(ctx.iteratorExpression().size());
     for (final IteratorExpressionContext iterator : ctx.iteratorExpression()) {
-      iterators.add(iterator.accept(this.iteratorDeclarations));
+      this.translation.stack().pushParserContext(iterator);
+      try {
+        iterators.add(iterator.accept(this.iteratorDeclarations));
+      } finally {
+        this.translation.stack().popParserContext();
+      }
     }
     return this.translation.script().composeIteratorList(iterators);
   }

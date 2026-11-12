@@ -2992,7 +2992,7 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
 
   @Test
   void testNameClash_ParameterThenIterator_NamesBoth() {
-    assertNameClash("line 1:24 Variable '$p' has the same name as Parameter '$p', already"
+    assertNameClash("line 1:28 Variable '$p' has the same name as Parameter '$p', already"
         + " declared in this scope.",
         "let text*:?f(text:$p) = for text:$p in BT-00-Text return $p;");
   }

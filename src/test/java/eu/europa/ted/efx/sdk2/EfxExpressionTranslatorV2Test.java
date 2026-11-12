@@ -5087,7 +5087,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
             "for number:$__index in [1, 2] return $__index"));
     assertEquals(InvalidIdentifierException.ErrorCode.IDENTIFIER_IS_RESERVED,
         exception.getErrorCode());
-    assertEquals("line 1:12 Variable '$__index' is reserved: the translator generates the names"
+    assertEquals("line 1:16 Variable '$__index' is reserved: the translator generates the names"
         + " that start with '__'.", exception.getMessage());
   }
 
@@ -5098,7 +5098,7 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
             "for text:$x in BT-00-Text, text:$x in BT-00-Text return $x"));
     assertEquals(InvalidIdentifierException.ErrorCode.IDENTIFIER_ALREADY_DECLARED,
         exception.getErrorCode());
-    assertEquals("line 1:12 Variable '$x' is already declared in this scope.",
+    assertEquals("line 1:39 Variable '$x' is already declared in this scope.",
         exception.getMessage());
   }
 
@@ -5285,6 +5285,35 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
     SymbolResolutionException ex = assertThrows(SymbolResolutionException.class,
         () -> translateExpression("WITH nonexistent COMPUTE 1"));
     assertEquals("line 1:0 Unknown symbol 'nonexistent'.", ex.getMessage());
+  }
+
+  @Test
+  void testUnknownFieldAfterContextOverride_IsPlacedAtTheField() {
+    SymbolResolutionException ex = assertThrows(SymbolResolutionException.class,
+        () -> translateComputeExpressionWithContext("ND-Root", "ND-Root::BT-NONEXISTENT == 'a'"));
+    assertEquals("line 1:30 Unknown symbol 'BT-NONEXISTENT'.", ex.getMessage());
+  }
+
+  @Test
+  void testUnknownFieldAfterContextOverride_OnTheNextLine_IsPlacedAtTheField() {
+    SymbolResolutionException ex = assertThrows(SymbolResolutionException.class,
+        () -> translateExpression("WITH ND-Root COMPUTE ND-Root::\nBT-NONEXISTENT == 'a'"));
+    assertEquals("line 2:0 Unknown symbol 'BT-NONEXISTENT'.", ex.getMessage());
+  }
+
+  @Test
+  void testUnknownNodeAfterContextOverride_IsPlacedAtTheNode() {
+    SymbolResolutionException ex = assertThrows(SymbolResolutionException.class,
+        () -> translateExpression("WITH ND-Root COMPUTE ND-Root::\nND-NONEXISTENT is present"));
+    assertEquals("line 2:0 Unknown symbol 'ND-NONEXISTENT'.", ex.getMessage());
+  }
+
+  @Test
+  void testIteratorDeclaredTwice_IsPlacedAtTheSecondIterator() {
+    InvalidIdentifierException ex = assertThrows(InvalidIdentifierException.class,
+        () -> translateExpression(
+            "WITH ND-Root COMPUTE for text:$x in ['a'],\n text:$x in ['b'] return $x"));
+    assertEquals("line 2:1 Variable '$x' is already declared in this scope.", ex.getMessage());
   }
 
   // #endregion: Errors raised with no position
