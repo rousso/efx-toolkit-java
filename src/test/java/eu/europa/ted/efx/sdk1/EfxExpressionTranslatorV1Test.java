@@ -5,8 +5,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import org.antlr.v4.runtime.misc.ParseCancellationException;
 import org.junit.jupiter.api.Test;
 import eu.europa.ted.efx.EfxTestsBase;
+import eu.europa.ted.efx.component.EfxTranslatorFactory;
 import eu.europa.ted.efx.exceptions.InvalidArgumentException;
 import eu.europa.ted.efx.exceptions.InvalidIdentifierException;
+import eu.europa.ted.efx.interfaces.EfxExpressionTranslator;
+import eu.europa.ted.efx.mock.DependencyFactoryMock;
 
 class EfxExpressionTranslatorV1Test extends EfxTestsBase {
   @Override
@@ -321,6 +324,24 @@ class EfxExpressionTranslatorV1Test extends EfxTestsBase {
   }
 
   @Test
+  void testQuantifiedExpressions_SideBySide_MayDeclareTheSameVariable() {
+    testExpressionTranslationWithContext(
+        "(every $x in PathNode/TextField/normalize-space(text()) satisfies $x = 'a') and (some $x in PathNode/TextField/normalize-space(text()) satisfies $x = 'b')",
+        "ND-Root",
+        "(every text:$x in BT-00-Text satisfies $x == 'a') and (some text:$x in BT-00-Text satisfies $x == 'b')");
+  }
+
+  @Test
+  void testQuantifiedExpressionVariable_ReadAfterTheCondition_Throws() {
+    InvalidIdentifierException exception = assertThrows(InvalidIdentifierException.class,
+        () -> translateExpressionWithContext("ND-Root",
+            "(every text:$x in BT-00-Text satisfies $x == 'a') and $x == 'b'"));
+    assertEquals(InvalidIdentifierException.ErrorCode.UNDECLARED_IDENTIFIER,
+        exception.getErrorCode());
+    assertEquals("line 1:66 Variable '$x' is not declared.", exception.getMessage());
+  }
+
+  @Test
   void testBooleanQuantifiedExpression_UsingLiterals() {
     testExpressionTranslationWithContext("every $x in (true(),false(),true()) satisfies $x",
         "ND-Root", "every indicator:$x in (TRUE, FALSE, ALWAYS) satisfies $x");
@@ -520,6 +541,33 @@ class EfxExpressionTranslatorV1Test extends EfxTestsBase {
     testExpressionTranslationWithContext(
         "'a' = (for $x in PathNode/TextField/normalize-space(text()) return concat($x, 'text'))", "ND-Root",
         "'a' in (for text:$x in BT-00-Text return concat($x, 'text'))");
+  }
+
+  @Test
+  void testIterations_SideBySide_MayDeclareTheSameVariable() {
+    testExpressionTranslationWithContext(
+        "count(for $x in PathNode/TextField/normalize-space(text()) return $x) = count(for $x in PathNode/TextField/normalize-space(text()) return $x)",
+        "ND-Root",
+        "count(for text:$x in BT-00-Text return $x) == count(for text:$x in BT-00-Text return $x)");
+  }
+
+  @Test
+  void testIterationVariable_ReadAfterTheIteration_Throws() {
+    InvalidIdentifierException exception = assertThrows(InvalidIdentifierException.class,
+        () -> translateExpressionWithContext("ND-Root",
+            "count(for text:$x in BT-00-Text return $x) == count(for text:$y in BT-00-Text return $x)"));
+    assertEquals(InvalidIdentifierException.ErrorCode.UNDECLARED_IDENTIFIER,
+        exception.getErrorCode());
+    assertEquals("line 1:97 Variable '$x' is not declared.", exception.getMessage());
+  }
+
+  @Test
+  void testTranslatorReused_TranslatesTheSameIterationAgain() throws InstantiationException {
+    final EfxExpressionTranslator translator = EfxTranslatorFactory
+        .getEfxExpressionTranslator(this.getSdkVersion(), DependencyFactoryMock.INSTANCE, DEFAULT_OPTIONS);
+    final String expression = "{ND-Root} ${for text:$x in BT-00-Text return $x}";
+    final String first = translator.translateExpression(expression);
+    assertEquals(first, translator.translateExpression(expression));
   }
 
 

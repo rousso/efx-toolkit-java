@@ -495,6 +495,14 @@ public class EfxExpressionTranslatorV1 extends EfxBaseListener
 
   // #region Quantified expressions -------------------------------------------
 
+  /**
+   * Opens the scope of the variables of the iterators, which closes after the condition.
+   */
+  @Override
+  public void enterQuantifiedExpression(QuantifiedExpressionContext ctx) {
+    this.stack.pushStackFrame();
+  }
+
   @Override
   public void exitQuantifiedExpression(QuantifiedExpressionContext ctx) {
     BooleanExpression booleanExpression = this.stack.pop(BooleanExpression.class);
@@ -505,6 +513,7 @@ public class EfxExpressionTranslatorV1 extends EfxBaseListener
       this.stack.push(this.script.composeAnySatisfies(this.stack.pop(IteratorListExpression.class),
           booleanExpression));
     }
+    this.stack.popStackFrame();
   }
 
   // #endregion Quantified expressions ----------------------------------------
@@ -842,8 +851,18 @@ public class EfxExpressionTranslatorV1 extends EfxBaseListener
   }
 
   @Override
+  public void enterStringSequenceFromIteration(StringSequenceFromIterationContext ctx) {
+    this.stack.pushStackFrame();
+  }
+
+  @Override
   public void exitStringSequenceFromIteration(StringSequenceFromIterationContext ctx) {
     this.exitIterationExpression(StringExpression.class, StringSequenceExpression.class);
+  }
+
+  @Override
+  public void enterNumericSequenceFromIteration(NumericSequenceFromIterationContext ctx) {
+    this.stack.pushStackFrame();
   }
 
   @Override
@@ -852,8 +871,18 @@ public class EfxExpressionTranslatorV1 extends EfxBaseListener
   }
 
   @Override
+  public void enterBooleanSequenceFromIteration(BooleanSequenceFromIterationContext ctx) {
+    this.stack.pushStackFrame();
+  }
+
+  @Override
   public void exitBooleanSequenceFromIteration(BooleanSequenceFromIterationContext ctx) {
     this.exitIterationExpression(BooleanExpression.class, BooleanSequenceExpression.class);
+  }
+
+  @Override
+  public void enterDateSequenceFromIteration(DateSequenceFromIterationContext ctx) {
+    this.stack.pushStackFrame();
   }
 
   @Override
@@ -862,8 +891,18 @@ public class EfxExpressionTranslatorV1 extends EfxBaseListener
   }
 
   @Override
+  public void enterTimeSequenceFromIteration(TimeSequenceFromIterationContext ctx) {
+    this.stack.pushStackFrame();
+  }
+
+  @Override
   public void exitTimeSequenceFromIteration(TimeSequenceFromIterationContext ctx) {
     this.exitIterationExpression(TimeExpression.class, TimeSequenceExpression.class);
+  }
+
+  @Override
+  public void enterDurationSequenceFromIteration(DurationSequenceFromIterationContext ctx) {
+    this.stack.pushStackFrame();
   }
 
   @Override
@@ -882,6 +921,10 @@ public class EfxExpressionTranslatorV1 extends EfxBaseListener
     this.stack.push(this.script.composeIteratorExpression(variable.declarationExpression, initialisationExpression));
   }
 
+  /**
+   * Composes an iteration, and closes the scope of the variables of its iterators, which the
+   * iteration opened when it was entered.
+   */
   public <T extends ScalarExpression> void exitIterationExpression(
       Class<T> expressionType,
       Class<? extends SequenceExpression> targetListType) {
@@ -889,6 +932,7 @@ public class EfxExpressionTranslatorV1 extends EfxBaseListener
     IteratorListExpression iterators = this.stack.pop(IteratorListExpression.class);
     this.stack
         .push(this.script.composeForExpression(iterators, expression, targetListType));
+    this.stack.popStackFrame();
   }
 
   // #endregion Iterators -----------------------------------------------------
