@@ -194,10 +194,12 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
       TranslatorOptions options) throws IOException {
     logger.debug("Parsing EFX rules");
 
-    // Parse the rules file, with the files it includes in place of their #include directives
-    ParseTree tree = this.parserOf(
-        new IncludeProcessor(options.getIncludedFileResolver()).resolve(this.lexerOf(input)))
-        .rulesFile();
+    // Resolve #include directives before parsing
+    final CharStream resolvedInput =
+        new IncludeProcessor(options.getIncludedFileResolver()).resolve(input);
+
+    // Parse the rules file
+    ParseTree tree = this.parserOf(resolvedInput).rulesFile();
 
     logger.debug("Walking parse tree to build intermediate model");
 

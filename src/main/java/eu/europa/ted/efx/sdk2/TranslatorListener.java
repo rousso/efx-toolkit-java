@@ -17,9 +17,9 @@ import org.antlr.v4.runtime.BaseErrorListener;
 import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.ParserRuleContext;
-import org.antlr.v4.runtime.TokenSource;
 import org.antlr.v4.runtime.tree.ParseTree;
 
+import eu.europa.ted.efx.exceptions.TranslatorConfigurationException;
 import eu.europa.ted.efx.interfaces.ScriptGenerator;
 import eu.europa.ted.efx.interfaces.SymbolResolver;
 import eu.europa.ted.efx.model.Context;
@@ -31,6 +31,7 @@ import eu.europa.ted.efx.model.identifiers.ParsedParameter;
 import eu.europa.ted.efx.model.identifiers.ParsedParameters;
 import eu.europa.ted.efx.model.identifiers.Variable;
 import eu.europa.ted.efx.sdk2.EfxParser.ContextVariableInitializerContext;
+import eu.europa.ted.efx.sdk2.EfxParser.IncludeDirectiveContext;
 import eu.europa.ted.efx.sdk2.EfxParser.ParameterDeclarationContext;
 import eu.europa.ted.efx.sdk2.EfxParser.StandardExpressionBlockContext;
 
@@ -78,26 +79,18 @@ abstract class TranslatorListener extends EfxBaseListener {
   abstract EfxExpressionVisitor visitorOf(Translation translation);
 
   /**
-   * @param input the text to read
-   * @return a lexer of the text, which reports its errors to the error listener
+   * @param input the text to parse
+   * @return a parser of the text, which reports its syntax errors, and those of its lexer, to the
+   *         error listener
    */
-  EfxLexer lexerOf(final CharStream input) {
+  EfxParser parserOf(final CharStream input) {
     final EfxLexer lexer = new EfxLexer(input);
+    final EfxParser parser = new EfxParser(new CommonTokenStream(lexer));
+    parser.setErrorHandler(new EfxErrorStrategy());
+
     if (this.errorListener != null) {
       lexer.removeErrorListeners();
       lexer.addErrorListener(this.errorListener);
-    }
-    return lexer;
-  }
-
-  /**
-   * @param tokens the tokens to parse
-   * @return a parser of the tokens, which reports its syntax errors to the error listener
-   */
-  EfxParser parserOf(final TokenSource tokens) {
-    final EfxParser parser = new EfxParser(new CommonTokenStream(tokens));
-    parser.setErrorHandler(new EfxErrorStrategy());
-    if (this.errorListener != null) {
       parser.removeErrorListeners();
       parser.addErrorListener(this.errorListener);
     }
@@ -125,6 +118,17 @@ abstract class TranslatorListener extends EfxBaseListener {
   @Override
   public void exitEveryRule(final ParserRuleContext ctx) {
     this.translation.stack().popParserContext();
+  }
+
+  /**
+   * Guard: throws if an {@code #include} directive survived into the parse tree, meaning the
+   * {@link IncludeProcessor} did not resolve it.
+   */
+  @Override
+  public void exitIncludeDirective(final IncludeDirectiveContext ctx) {
+    final String path =
+        ctx.IncludePath() != null ? ctx.IncludePath().getText().trim() : "<unknown>";
+    throw TranslatorConfigurationException.unresolvedIncludeDirective(path);
   }
 
   /**

@@ -13,7 +13,6 @@
  */
 package eu.europa.ted.efx.exceptions;
 
-import org.antlr.v4.runtime.IntStream;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.misc.ParseCancellationException;
@@ -25,15 +24,14 @@ import org.antlr.v4.runtime.misc.ParseCancellationException;
  *
  * <p>An error has a position in the EFX source when it is raised with the parse context it is
  * about, or when it is placed there afterwards with {@link #at}. Its message starts with that
- * position, as "line X:Y ", or as "line X:Y in 'file' " when the EFX source was read from a file
- * with a name, such as a file included with {@code #include}.
+ * position, as "line X:Y ".
  */
 @SuppressWarnings("squid:MaximumInheritanceDepth")
 public abstract class EfxCompilationException extends ParseCancellationException {
 
     /**
-     * Where the EFX source the error is about starts, as "line X:Y" or "line X:Y in 'file'"; null
-     * while the error has no position.
+     * Where the EFX source the error is about starts, as "line X:Y"; null while the error has no
+     * position.
      */
     private String position;
 
@@ -43,7 +41,7 @@ public abstract class EfxCompilationException extends ParseCancellationException
 
     protected EfxCompilationException(ParserRuleContext ctx, String template, Object... args) {
         super(String.format(template, args));
-        this.position = positionOf(ctx.getStart());
+        this.position = positionOf(ctx);
     }
 
     /**
@@ -54,25 +52,14 @@ public abstract class EfxCompilationException extends ParseCancellationException
      * @return this error
      */
     public EfxCompilationException at(final ParserRuleContext ctx) {
-        return this.at(ctx.getStart());
-    }
-
-    /**
-     * Places an error that has no position yet at the given token. An error that has a position
-     * keeps it.
-     *
-     * @param token the token the error is about
-     * @return this error
-     */
-    public EfxCompilationException at(final Token token) {
         if (this.position == null) {
-            this.position = positionOf(token);
+            this.position = positionOf(ctx);
         }
         return this;
     }
 
     /**
-     * @return the message, after the position of the error when it has one
+     * @return the message, after the position of the error as "line X:Y " when it has one
      */
     @Override
     public String getMessage() {
@@ -82,24 +69,8 @@ public abstract class EfxCompilationException extends ParseCancellationException
         return this.position + " " + super.getMessage();
     }
 
-    private static String positionOf(final Token token) {
-        return positionOf(token.getLine(), token.getCharPositionInLine(), token.getInputStream());
-    }
-
-    /**
-     * Writes a position in the EFX source, as an error message starts with it.
-     *
-     * @param line the line, counted from 1
-     * @param column the column, counted from 0
-     * @param source the text that holds the position
-     * @return the position as "line X:Y", followed by " in 'file'" when the text was read from a
-     *         file with a name
-     */
-    static String positionOf(final int line, final int column, final IntStream source) {
-        final String position = String.format("line %d:%d", line, column);
-        if (source == null || IntStream.UNKNOWN_SOURCE_NAME.equals(source.getSourceName())) {
-            return position;
-        }
-        return String.format("%s in '%s'", position, source.getSourceName());
+    private static String positionOf(final ParserRuleContext ctx) {
+        final Token start = ctx.getStart();
+        return String.format("line %d:%d", start.getLine(), start.getCharPositionInLine());
     }
 }

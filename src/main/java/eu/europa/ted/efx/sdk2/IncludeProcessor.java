@@ -5,28 +5,30 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CharStreams;
-import org.antlr.v4.runtime.ListTokenSource;
-import org.antlr.v4.runtime.Token;
-import org.antlr.v4.runtime.TokenSource;
 
 import eu.europa.ted.efx.exceptions.InvalidUsageException;
 import eu.europa.ted.efx.exceptions.TranslatorConfigurationException;
 import eu.europa.ted.efx.interfaces.IncludedFileResolver;
 
 /**
- * Processes the {@code #include} directives of an EFX file: puts the tokens of each included file
- * in place of the directive that includes it.
+ * Processes {@code #include} directives in EFX rules text by performing text substitution.
  *
  * <p>
- * The lexer reads the directive and its path. Each included file is read by a lexer of its own,
- * from its start, so that its tokens keep their lines and columns in that file and are named after
- * it, as an error message names them. Recursive includes are supported with circular dependency
- * detection.
+ * This processor runs before any ANTLR parsing. It scans the input text for {@code #include "path"}
+ * lines, resolves them using the provided {@link IncludedFileResolver}, and substitutes each directive
+ * with the resolved content. Recursive includes are supported with circular dependency detection.
  * </p>
  */
 public class IncludeProcessor {
+
+  private static final Pattern INCLUDE_PATTERN =
+      Pattern.compile("^[ \\t]*#include[ \\t]+\"([^\"]+)\"[ \\t]*(?://[^\\r\\n]*)?[ \\t]*$",
+          Pattern.MULTILINE);
 
   private final IncludedFileResolver resolver;
   /** The files being resolved, in the order in which they include each other. */
@@ -37,99 +39,61 @@ public class IncludeProcessor {
   }
 
   /**
-   * Reads the tokens of a file, with the tokens of each file it includes in place of the
-   * directive.
+   * Resolves all {@code #include} directives in the given CharStream.
    *
-   * @param lexer the lexer of the file
-   * @return the tokens of the file and of the files it includes, up to the end of the file
+   * @param input The CharStream potentially containing include directives.
+   * @return A CharStream with all includes substituted recursively.
    * @throws IOException If an included file cannot be resolved.
    */
-  public TokenSource resolve(final EfxLexer lexer) throws IOException {
-    final List<Token> tokens = new ArrayList<>();
-    tokens.add(this.read(lexer, tokens));
-    return new ListTokenSource(tokens);
+  public CharStream resolve(CharStream input) throws IOException {
+    String resolvedText = this.process(input.toString());
+    return CharStreams.fromString(resolvedText);
   }
 
   /**
-   * Adds the tokens of a file to a list, with the tokens of each file it includes in place of the
-   * directive.
+   * Resolves all {@code #include} directives in the given text.
    *
-   * @param lexer the lexer of the file
-   * @param tokens the list
-   * @return the end of the file, which is not added
+   * @param text The EFX rules text potentially containing include directives.
+   * @return The text with all includes substituted recursively.
    * @throws IOException If an included file cannot be resolved.
    */
-  private Token read(final EfxLexer lexer, final List<Token> tokens) throws IOException {
-    Token token = lexer.nextToken();
-    while (token.getType() != Token.EOF) {
-      if (token.getType() == EfxLexer.IncludeDirective) {
-        // The lexer reads the path right after the directive, unless the file ends there.
-        final Token path = lexer.nextToken();
-        if (path.getType() != EfxLexer.IncludePath) {
-          // The parser rejects a directive with no path.
-          tokens.add(token);
-          return path;
-        }
-        this.include(token, path, lexer, tokens);
-      } else {
-        tokens.add(token);
-      }
-      token = lexer.nextToken();
-    }
-    return token;
-  }
-
-  /**
-   * Adds the tokens of an included file to a list.
-   *
-   * @param directive the {@code #include} directive
-   * @param path the path that follows it
-   * @param including the lexer of the file that holds the directive, whose error listeners the
-   *        lexer of the included file reports to
-   * @param tokens the list
-   * @throws IOException If the included file cannot be resolved.
-   */
-  private void include(final Token directive, final Token path, final EfxLexer including,
-      final List<Token> tokens) throws IOException {
+  public String process(String text) throws IOException {
     if (this.resolver == null) {
-      throw TranslatorConfigurationException.includeResolverNotConfigured();
+      if (INCLUDE_PATTERN.matcher(text).find()) {
+        throw TranslatorConfigurationException.includeResolverNotConfigured();
+      }
+      return text;
     }
-    final String file = fileOf(path);
-    if (!this.resolving.add(file)) {
-      throw InvalidUsageException.circularInclude(this.cycleClosedBy(file)).at(directive);
-    }
-    try {
-      final EfxLexer lexer = new EfxLexer(CharStreams.fromString(this.textOf(file), file));
-      lexer.removeErrorListeners();
-      including.getErrorListeners().forEach(lexer::addErrorListener);
-      this.read(lexer, tokens);
-    } finally {
-      this.resolving.remove(file);
-    }
-  }
 
-  /**
-   * @param file an included file
-   * @return its text, which ends its last line, so that the line after the directive is a line of
-   *         its own
-   * @throws IOException If the file cannot be resolved.
-   */
-  private String textOf(final String file) throws IOException {
-    final String text = this.resolver.resolve(file);
-    if (!text.isEmpty() && !text.endsWith("\n")) {
-      return text + "\n";
-    }
-    return text;
-  }
+    StringBuilder result = new StringBuilder();
+    Matcher matcher = INCLUDE_PATTERN.matcher(text);
+    int lastEnd = 0;
 
-  /**
-   * @param path the path of a directive, as the lexer reads it: in quotes, and followed by the
-   *        rest of its line
-   * @return the file the path names
-   */
-  private static String fileOf(final Token path) {
-    final String text = path.getText();
-    return text.substring(1, text.indexOf('"', 1));
+    while (matcher.find()) {
+      result.append(text, lastEnd, matcher.start());
+
+      String path = matcher.group(1);
+
+      if (!this.resolving.add(path)) {
+        throw InvalidUsageException.circularInclude(this.cycleClosedBy(path));
+      }
+
+      try {
+        String included = this.resolver.resolve(path);
+        String processed = this.process(included);
+        result.append(processed);
+        if (!processed.isEmpty() && !processed.endsWith("\n")) {
+          result.append("\n");
+        }
+      } finally {
+        this.resolving.remove(path);
+      }
+
+      lastEnd = matcher.end();
+    }
+
+    result.append(text, lastEnd, text.length());
+    return result.toString();
   }
 
   /**

@@ -31,6 +31,7 @@ public class TranslatorConfigurationException extends IllegalStateException {
         UNHANDLED_LINKED_FIELD_PROPERTY,
         UNHANDLED_PREDICATE_CONTEXT,
         INCLUDE_RESOLVER_NOT_CONFIGURED,
+        UNRESOLVED_INCLUDE_DIRECTIVE,
         UNHANDLED_OPERATOR,
         RULES_STACK_ERROR,
         AMBIGUOUS_OVERLOADS
@@ -85,6 +86,10 @@ public class TranslatorConfigurationException extends IllegalStateException {
     private static final String INCLUDE_RESOLVER_NOT_CONFIGURED =
         "EFX rules contain #include directives but no IncludedFileResolver is configured. " +
         "Pass an IncludedFileResolver via TranslatorOptions to enable include resolution.";
+
+    private static final String UNRESOLVED_INCLUDE_DIRECTIVE =
+        "Unresolved #include directive '%s' found during preprocessing. " +
+        "Include resolution may have been skipped or failed silently.";
 
     private static final String UNHANDLED_OPERATOR =
         "Operator '%s' is not handled in %s. " +
@@ -153,6 +158,10 @@ public class TranslatorConfigurationException extends IllegalStateException {
 
     public static TranslatorConfigurationException includeResolverNotConfigured() {
         return new TranslatorConfigurationException(ErrorCode.INCLUDE_RESOLVER_NOT_CONFIGURED, INCLUDE_RESOLVER_NOT_CONFIGURED);
+    }
+
+    public static TranslatorConfigurationException unresolvedIncludeDirective(String path) {
+        return new TranslatorConfigurationException(ErrorCode.UNRESOLVED_INCLUDE_DIRECTIVE, UNRESOLVED_INCLUDE_DIRECTIVE, path);
     }
 
     public static TranslatorConfigurationException unhandledOperator(String operator, String handlerName) {
