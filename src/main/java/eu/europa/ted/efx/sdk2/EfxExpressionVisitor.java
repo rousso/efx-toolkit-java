@@ -156,6 +156,10 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    * side of a context override or an iterator, is translated here so that its errors are placed
    * at it rather than at the node it is part of.
    *
+   * <p>A parent reads a sub-expression, as a value, a path or a context, after the sub-expression
+   * is translated, so an error that the symbol resolver or the script generator raises with no
+   * position during that reading is placed at the parent.
+   *
    * @param node the node
    * @param translation its translation
    * @return what the translation gives
