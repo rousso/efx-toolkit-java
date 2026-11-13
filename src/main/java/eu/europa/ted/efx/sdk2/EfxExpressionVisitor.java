@@ -142,18 +142,30 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
     return this.translation;
   }
 
-  /**
-   * Keeps the node being translated on the call stack, which names it in the errors it gives. An
-   * error raised under the node with no position of its own, such as the symbol resolver's, is
-   * placed at the node.
-   */
   @Override
   public Subexpression<?> visit(final ParseTree tree) {
-    this.translation.stack().pushParserContext((ParserRuleContext) tree);
+    return this.translate((ParserRuleContext) tree, () -> super.visit(tree));
+  }
+
+  /**
+   * Translates a node: keeps it on the call stack while it is translated, which names it in the
+   * errors it gives. An error raised under the node with no position of its own, such as the
+   * symbol resolver's, is placed at the node.
+   *
+   * <p>A node that is translated as part of another, not visited on its own, such as the right
+   * side of a context override or an iterator, is translated here so that its errors are placed
+   * at it rather than at the node it is part of.
+   *
+   * @param node the node
+   * @param translation its translation
+   * @return what the translation gives
+   */
+  private <T> T translate(final ParserRuleContext node, final Supplier<T> translation) {
+    this.translation.stack().pushParserContext(node);
     try {
-      return super.visit(tree);
+      return translation.get();
     } catch (final EfxCompilationException e) {
-      throw e.at((ParserRuleContext) tree);
+      throw e.at(node);
     } finally {
       this.translation.stack().popParserContext();
     }
@@ -396,8 +408,9 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    */
   @Override
   public Subexpression<?> visitAbsoluteFieldReference(final AbsoluteFieldReferenceContext ctx) {
-    final String fieldId = this.fieldIdOf(ctx.linkedFieldReference());
-    return new Subexpression<>(this.absolutePathOfField(fieldId),
+    final LinkedFieldReferenceContext reference = ctx.linkedFieldReference();
+    final String fieldId = this.fieldIdOf(reference);
+    return new Subexpression<>(this.translate(reference, () -> this.absolutePathOfField(fieldId)),
         new FieldOrigin(this, ctx, fieldId, NO_CONTEXT));
   }
 
@@ -414,8 +427,10 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
 
   @Override
   public Subexpression<?> visitAbsoluteNodeReference(final AbsoluteNodeReferenceContext ctx) {
-    final String nodeId = ctx.simpleNodeReference().NodeId().getText();
-    return new Subexpression<>(this.absolutePathOfNode(nodeId), new NodeOrigin(this, nodeId));
+    final SimpleNodeReferenceContext reference = ctx.simpleNodeReference();
+    final String nodeId = reference.NodeId().getText();
+    return new Subexpression<>(this.translate(reference, () -> this.absolutePathOfNode(nodeId)),
+        new NodeOrigin(this, nodeId));
   }
 
   /**
@@ -530,7 +545,8 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
    */
   private String fieldIdOf(final ParserRuleContext reference, final String baseFieldId,
       final LinkedFieldPropertyContext property) {
-    return property == null ? baseFieldId : this.linkedFieldIdOf(reference, baseFieldId, property);
+    return property == null ? baseFieldId
+        : this.translate(reference, () -> this.linkedFieldIdOf(reference, baseFieldId, property));
   }
 
   /**
@@ -656,7 +672,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
       final FieldFromContextExpressionContext ctx) {
     final Context context = this.contextBefore(ctx.expression());
     final String fieldId = this.fieldIdOf(ctx.linkedFieldReference());
-    final PathExpression field = this.resolve(ctx.linkedFieldReference(),
+    final PathExpression field = this.translate(ctx.linkedFieldReference(),
         () -> this.translation.symbols().getRelativePathOfField(fieldId, context.symbol()));
     return new Subexpression<>(this.joinReference(context.relativePath(), field),
         new FieldOrigin(this, ctx, fieldId, this.translation.efxContext().symbol()));
@@ -670,29 +686,10 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
       final NodeFromContextExpressionContext ctx) {
     final Context context = this.contextBefore(ctx.expression());
     final String nodeId = ctx.simpleNodeReference().NodeId().getText();
-    final PathExpression node = this.resolve(ctx.simpleNodeReference(),
+    final PathExpression node = this.translate(ctx.simpleNodeReference(),
         () -> this.translation.symbols().getRelativePathOfNode(nodeId, context.symbol()));
     return new Subexpression<>(this.joinReference(context.relativePath(), node),
         new NodeOrigin(this, nodeId));
-  }
-
-  /**
-   * Resolves a reference that is translated with the node it is part of, not visited on its own,
-   * such as the right side of a context override.
-   *
-   * @param reference the reference
-   * @param resolution its resolution by the symbol resolver
-   * @return the path that the resolution gives
-   * @throws EfxCompilationException the error of the resolution, placed at the reference rather
-   *         than at the node it is part of
-   */
-  private PathExpression resolve(final ParserRuleContext reference,
-      final Supplier<PathExpression> resolution) {
-    try {
-      return resolution.get();
-    } catch (final EfxCompilationException e) {
-      throw e.at(reference);
-    }
   }
 
   private Context contextBefore(final ExpressionContext left) {
@@ -1134,12 +1131,7 @@ class EfxExpressionVisitor extends EfxBaseVisitor<Subexpression<?>> {
   private IteratorListExpression iteratorsOf(final IteratorListContext ctx) {
     final List<IteratorExpression> iterators = new ArrayList<>(ctx.iteratorExpression().size());
     for (final IteratorExpressionContext iterator : ctx.iteratorExpression()) {
-      this.translation.stack().pushParserContext(iterator);
-      try {
-        iterators.add(iterator.accept(this.iteratorDeclarations));
-      } finally {
-        this.translation.stack().popParserContext();
-      }
+      iterators.add(this.translate(iterator, () -> iterator.accept(this.iteratorDeclarations)));
     }
     return this.translation.script().composeIteratorList(iterators);
   }

@@ -16,14 +16,22 @@ package eu.europa.ted.efx.sdk2;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Proxy;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import eu.europa.ted.efx.EfxTestsBase;
+import eu.europa.ted.efx.exceptions.EfxCompilationException;
 import eu.europa.ted.efx.exceptions.InvalidArgumentException;
 import eu.europa.ted.efx.exceptions.InvalidIdentifierException;
 import eu.europa.ted.efx.exceptions.InvalidUsageException;
 import eu.europa.ted.efx.exceptions.SymbolResolutionException;
+import eu.europa.ted.efx.exceptions.ThrowingErrorListener;
 import eu.europa.ted.efx.exceptions.TypeMismatchException;
+import eu.europa.ted.efx.interfaces.ScriptGenerator;
+import eu.europa.ted.efx.mock.DependencyFactoryMock;
+import eu.europa.ted.efx.model.expressions.Expression;
+import eu.europa.ted.efx.xpath.XPathScriptGenerator;
 
 class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   @Override
@@ -5309,11 +5317,65 @@ class EfxExpressionTranslatorV2Test extends EfxTestsBase {
   }
 
   @Test
+  void testUnknownLinkedFieldAfterContextOverride_IsPlacedAtTheField() {
+    SymbolResolutionException ex = assertThrows(SymbolResolutionException.class,
+        () -> translateExpression(
+            "WITH ND-Root COMPUTE ND-Root::\nBT-NONEXISTENT:publicationDate is present"));
+    assertEquals("line 2:0 Unknown symbol 'BT-NONEXISTENT'.", ex.getMessage());
+  }
+
+  @Test
+  void testUnknownAbsoluteField_OnTheNextLine_IsPlacedAtTheField() {
+    SymbolResolutionException ex = assertThrows(SymbolResolutionException.class,
+        () -> translateExpression("WITH ND-Root COMPUTE /\nBT-NONEXISTENT is present"));
+    assertEquals("line 2:0 Unknown symbol 'BT-NONEXISTENT'.", ex.getMessage());
+  }
+
+  @Test
+  void testUnknownAbsoluteNode_OnTheNextLine_IsPlacedAtTheNode() {
+    SymbolResolutionException ex = assertThrows(SymbolResolutionException.class,
+        () -> translateExpression("WITH ND-Root COMPUTE /\nND-NONEXISTENT is present"));
+    assertEquals("line 2:0 Unknown symbol 'ND-NONEXISTENT'.", ex.getMessage());
+  }
+
+  @Test
   void testIteratorDeclaredTwice_IsPlacedAtTheSecondIterator() {
     InvalidIdentifierException ex = assertThrows(InvalidIdentifierException.class,
         () -> translateExpression(
             "WITH ND-Root COMPUTE for text:$x in ['a'],\n text:$x in ['b'] return $x"));
     assertEquals("line 2:1 Variable '$x' is already declared in this scope.", ex.getMessage());
+  }
+
+  @Test
+  void testIteratorThatCannotBeComposed_IsPlacedAtTheIterator() {
+    EfxCompilationException ex = assertThrows(EfxCompilationException.class,
+        () -> new EfxExpressionTranslatorV2(
+            DependencyFactoryMock.INSTANCE.createSymbolResolver(getSdkVersion(), ""),
+            scriptThatCannotComposeTheIteratorOf("$y"), ThrowingErrorListener.INSTANCE)
+                .translateExpression(
+                    "WITH ND-Root COMPUTE for text:$x in ['a'],\n text:$y in ['b'] return $x"));
+    assertEquals("line 2:1 The iterator cannot be composed.", ex.getMessage());
+  }
+
+  /**
+   * Gives the XPath script generator, except that it rejects the iterator of one variable with an
+   * error of no position. It is not a subclass of the XPath generator, which the component factory
+   * would find as a second script generator.
+   */
+  private static ScriptGenerator scriptThatCannotComposeTheIteratorOf(final String variable) {
+    final ScriptGenerator xpath = new XPathScriptGenerator(DEFAULT_OPTIONS);
+    return (ScriptGenerator) Proxy.newProxyInstance(ScriptGenerator.class.getClassLoader(),
+        new Class<?>[] {ScriptGenerator.class}, (proxy, method, arguments) -> {
+          if (method.getName().equals("composeIteratorExpression")
+              && ((Expression) arguments[0]).getScript().equals(variable)) {
+            throw new EfxCompilationException("The iterator cannot be composed.") {};
+          }
+          try {
+            return method.invoke(xpath, arguments);
+          } catch (final InvocationTargetException e) {
+            throw e.getCause();
+          }
+        });
   }
 
   // #endregion: Errors raised with no position

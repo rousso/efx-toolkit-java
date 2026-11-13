@@ -391,6 +391,36 @@ class EfxRulesTranslatorV2Test extends EfxTestsBase {
     assertEquals("line 3:5 Unknown symbol 'BT-NONEXISTENT'.", exception.getMessage());
   }
 
+  @Test
+  void testUnknownFieldInFor_OnTheNextLine_IsPlacedAtTheField() {
+    String rules = lines(
+        "---- STAGE 1a ----",
+        "",
+        "WITH ND-Root",
+        "    ASSERT TRUE",
+        "    AS ERROR R-K7P-M2Q",
+        "    FOR",
+        "        BT-999-Unknown IN 1");
+    SymbolResolutionException exception = assertThrows(SymbolResolutionException.class,
+        () -> translator.translateRules(rules));
+    assertEquals("line 7:8 Unknown symbol 'BT-999-Unknown'.", exception.getMessage());
+  }
+
+  @Test
+  void testUnknownNodeInFor_OnTheNextLine_IsPlacedAtTheNode() {
+    String rules = lines(
+        "---- STAGE 1a ----",
+        "",
+        "WITH ND-Root",
+        "    ASSERT TRUE",
+        "    AS ERROR R-K7P-M2Q",
+        "    FOR",
+        "        ND-NONEXISTENT IN 1");
+    SymbolResolutionException exception = assertThrows(SymbolResolutionException.class,
+        () -> translator.translateRules(rules));
+    assertEquals("line 7:8 Unknown symbol 'ND-NONEXISTENT'.", exception.getMessage());
+  }
+
   private void assertUnknownNoticeSubtype(final String message, final String range) {
     String rules = lines(
         "---- STAGE 1a ----",

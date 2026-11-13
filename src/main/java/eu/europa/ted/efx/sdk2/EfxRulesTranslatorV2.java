@@ -41,6 +41,7 @@ import eu.europa.ted.efx.interfaces.ScriptGenerator;
 import eu.europa.ted.efx.interfaces.SymbolResolver;
 import eu.europa.ted.efx.interfaces.TranslatorOptions;
 import eu.europa.ted.efx.interfaces.ValidatorGenerator;
+import eu.europa.ted.efx.exceptions.EfxCompilationException;
 import eu.europa.ted.efx.exceptions.InvalidIdentifierException;
 import eu.europa.ted.efx.exceptions.InvalidUsageException;
 import eu.europa.ted.efx.model.Context;
@@ -482,19 +483,23 @@ public class EfxRulesTranslatorV2 extends TranslatorListener
   /**
    * Called when exiting a FOR clause.
    * The FOR clause specifies the subject (field or node) that the rule validates.
-   * Pushes the subject Context to the stack.
+   * Pushes the subject Context to the stack. An error in the subject is placed at it.
    */
   @Override
   public void exitForClause(ForClauseContext ctx) {
-
-    if (ctx.simpleFieldReference() != null) {
-      var fieldId = ctx.simpleFieldReference().FieldId().getText();
-      this.ruleStack.peek(ValidationRule.class).setSubject(new FieldContext(fieldId, this.translation.symbols().getAbsolutePathOfField(fieldId)));
-    } else if (ctx.simpleNodeReference() != null) {
-      var nodeId = ctx.simpleNodeReference().NodeId().getText();
-      this.ruleStack.peek(ValidationRule.class).setSubject(new NodeContext(nodeId, this.translation.symbols().getAbsolutePathOfNode(nodeId)));
-    } else {
-      assert false : "The grammar should prevent reaching this point without a field or node reference";
+    final ParserRuleContext subject = ctx.simpleFieldReference() != null ? ctx.simpleFieldReference() : ctx.simpleNodeReference();
+    try {
+      if (ctx.simpleFieldReference() != null) {
+        var fieldId = ctx.simpleFieldReference().FieldId().getText();
+        this.ruleStack.peek(ValidationRule.class).setSubject(new FieldContext(fieldId, this.translation.symbols().getAbsolutePathOfField(fieldId)));
+      } else if (ctx.simpleNodeReference() != null) {
+        var nodeId = ctx.simpleNodeReference().NodeId().getText();
+        this.ruleStack.peek(ValidationRule.class).setSubject(new NodeContext(nodeId, this.translation.symbols().getAbsolutePathOfNode(nodeId)));
+      } else {
+        assert false : "The grammar should prevent reaching this point without a field or node reference";
+      }
+    } catch (final EfxCompilationException e) {
+      throw e.at(subject);
     }
   }
 
