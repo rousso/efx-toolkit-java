@@ -33,6 +33,7 @@ import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
 import org.antlr.v4.runtime.BaseErrorListener;
+import org.antlr.v4.runtime.misc.ParseCancellationException;
 import org.xml.sax.InputSource;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -791,6 +792,131 @@ class EfxRulesTranslatorV2Test extends EfxTestsBase {
     UncheckedIOException thrown = assertThrows(UncheckedIOException.class,
         () -> translator.translateRules(input, options));
     assertTrue(thrown.getMessage().contains("Include resolution failed"));
+  }
+
+  @Test
+  void testUnknownFieldInIncludedFile_IsPlacedInThatFile() {
+    String rules = lines(
+        "---- STAGE 1a ----",
+        "",
+        "WITH ND-Root",
+        "    ASSERT TRUE",
+        "    AS ERROR R-K7P-M2Q",
+        "    FOR BT-00-Text IN 1",
+        "#include \"extra.efx\"");
+    String extra = lines(
+        "---- STAGE 1b ----",
+        "",
+        "WITH ND-Root",
+        "    ASSERT BT-999-Unknown == 'a'",
+        "    AS ERROR R-X3F-N8W",
+        "    FOR BT-00-Text IN 1");
+    SymbolResolutionException exception = assertThrows(SymbolResolutionException.class,
+        () -> translator.translateRules(rules, including(Map.of("extra.efx", extra))));
+    assertEquals("line 4:11 in 'extra.efx' Unknown symbol 'BT-999-Unknown'.",
+        exception.getMessage());
+  }
+
+  @Test
+  void testUnknownFieldAfterInclude_IsPlacedOnItsOwnLine() {
+    String rules = lines(
+        "#include \"extra.efx\"",
+        "---- STAGE 1b ----",
+        "",
+        "WITH ND-Root",
+        "    ASSERT BT-999-Unknown == 'a'",
+        "    AS ERROR R-X3F-N8W",
+        "    FOR BT-00-Text IN 1");
+    String extra = lines(
+        "---- STAGE 1a ----",
+        "",
+        "WITH ND-Root",
+        "    ASSERT TRUE",
+        "    AS ERROR R-K7P-M2Q",
+        "    FOR BT-00-Text IN 1");
+    SymbolResolutionException exception = assertThrows(SymbolResolutionException.class,
+        () -> translator.translateRules(rules, including(Map.of("extra.efx", extra))));
+    assertEquals("line 5:11 Unknown symbol 'BT-999-Unknown'.", exception.getMessage());
+  }
+
+  @Test
+  void testSyntaxErrorInIncludedFile_IsPlacedInThatFile() {
+    String rules = lines(
+        "#include \"extra.efx\"");
+    String extra = lines(
+        "---- STAGE 1a ----",
+        "",
+        "WITH ND-Root",
+        "    ASSERT == 'a'",
+        "    AS ERROR R-K7P-M2Q",
+        "    FOR BT-00-Text IN 1");
+    ParseCancellationException exception = assertThrows(ParseCancellationException.class,
+        () -> translator.translateRules(rules, including(Map.of("extra.efx", extra))));
+    assertTrue(exception.getMessage().startsWith("line 4:11 in 'extra.efx' "),
+        exception::getMessage);
+  }
+
+  @Test
+  void testLexerErrorInIncludedFile_IsPlacedInThatFile() {
+    String rules = lines(
+        "#include \"extra.efx\"");
+    String extra = lines(
+        "---- STAGE 1a ----",
+        "",
+        "WITH ND-Root",
+        "    ASSERT TRUE ¤",
+        "    AS ERROR R-K7P-M2Q",
+        "    FOR BT-00-Text IN 1");
+    ParseCancellationException exception = assertThrows(ParseCancellationException.class,
+        () -> translator.translateRules(rules, including(Map.of("extra.efx", extra))));
+    assertEquals("line 4:16 in 'extra.efx' token recognition error at: '¤'",
+        exception.getMessage());
+  }
+
+  @Test
+  void testIncludeWithNoPath_IsASyntaxError() {
+    String rules = lines(
+        "---- STAGE 1a ----",
+        "",
+        "WITH ND-Root",
+        "    ASSERT TRUE",
+        "    AS ERROR R-K7P-M2Q",
+        "    FOR BT-00-Text IN 1",
+        "#include ");
+    assertSyntaxError(() -> translator.translateRules(rules, including(Map.of())));
+  }
+
+  @Test
+  void testUnknownFieldInFileReadFromPath_NamesTheFile(@TempDir Path tempDir)
+      throws IOException {
+    Path file = tempDir.resolve("rules.efx");
+    Files.writeString(file, lines(
+        "---- STAGE 1a ----",
+        "",
+        "WITH ND-Root",
+        "    ASSERT BT-999-Unknown == 'a'",
+        "    AS ERROR R-K7P-M2Q",
+        "    FOR BT-00-Text IN 1"));
+    SymbolResolutionException exception = assertThrows(SymbolResolutionException.class,
+        () -> translator.translateRules(file, EfxTranslatorOptions.DEFAULT));
+    assertEquals("line 4:11 in '" + file + "' Unknown symbol 'BT-999-Unknown'.",
+        exception.getMessage());
+  }
+
+  /**
+   * @param files the text of each file that a rules file may include, by its path
+   * @return the options of a translation that reads the included files from the map
+   */
+  private static TranslatorOptions including(final Map<String, String> files) {
+    IncludedFileResolver resolver = path -> {
+      String content = files.get(path);
+      if (content == null) {
+        throw new IOException("File not found: " + path);
+      }
+      return content;
+    };
+    return new EfxTranslatorOptions(false, null, EfxTranslatorOptions.DEFAULT_UDF_NAMESPACE,
+        DecimalFormat.XSL_DEFAULT, resolver, java.util.Locale.ENGLISH);
   }
 
   //#endregion Include directive tests

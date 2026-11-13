@@ -7,6 +7,7 @@ import org.antlr.v4.runtime.BaseErrorListener;
 import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
+import org.antlr.v4.runtime.TokenSource;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.ParseTreeWalker;
 import eu.europa.ted.efx.interfaces.IncludedFileResolver;
@@ -49,35 +50,39 @@ public class EfxValidationDependencyExtractor extends EfxComputeDependencyExtrac
 
   @Override
   public DependencyGraph extractDependencyGraph(final String rules) {
-    return this.extractFromCharStream(CharStreams.fromString(rules));
+    return this.extractFrom(this.lexerOf(CharStreams.fromString(rules)));
   }
 
   @Override
   public DependencyGraph extractDependencyGraph(final Path pathname) throws IOException {
     final Path baseDir = pathname.toAbsolutePath().getParent();
     final IncludedFileResolver resolver = new FileSystemIncludedFileResolver(baseDir);
-    final CharStream raw = CharStreams.fromPath(pathname);
-    final CharStream resolved = new IncludeProcessor(resolver).resolve(raw);
-    return this.extractFromCharStream(resolved);
+    return this.extractFrom(
+        new IncludeProcessor(resolver).resolve(this.lexerOf(CharStreams.fromPath(pathname))));
   }
 
   // #endregion Public API
 
   // #region Parsing -----------------------------------------------------------
 
-  private DependencyGraph extractFromCharStream(final CharStream input) {
+  private EfxLexer lexerOf(final CharStream input) {
+    final EfxLexer lexer = new EfxLexer(input);
+    if (this.errorListener != null) {
+      lexer.removeErrorListeners();
+      lexer.addErrorListener(this.errorListener);
+    }
+    return lexer;
+  }
+
+  private DependencyGraph extractFrom(final TokenSource tokens) {
     this.graph = new DependencyGraph();
     this.stack.clear();
     this.stack.push(new DependencySet());
 
-    final EfxLexer lexer = new EfxLexer(input);
-    final CommonTokenStream tokens = new CommonTokenStream(lexer);
-    final EfxParser parser = new EfxParser(tokens);
+    final EfxParser parser = new EfxParser(new CommonTokenStream(tokens));
     parser.setErrorHandler(new EfxErrorStrategy());
 
     if (this.errorListener != null) {
-      lexer.removeErrorListeners();
-      lexer.addErrorListener(this.errorListener);
       parser.removeErrorListeners();
       parser.addErrorListener(this.errorListener);
     }

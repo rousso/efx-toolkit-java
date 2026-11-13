@@ -7,6 +7,9 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.antlr.v4.runtime.CharStreams;
+import org.antlr.v4.runtime.Token;
+import org.antlr.v4.runtime.TokenSource;
 import org.junit.jupiter.api.Test;
 
 import eu.europa.ted.efx.exceptions.InvalidUsageException;
@@ -28,18 +31,45 @@ class IncludeProcessorTest {
     };
   }
 
+  /**
+   * @return the text of the tokens of the input, and of the files it includes
+   */
+  private static String process(IncludedFileResolver resolver, String input) throws IOException {
+    TokenSource tokens = new IncludeProcessor(resolver)
+        .resolve(new EfxLexer(CharStreams.fromString(input)));
+    StringBuilder text = new StringBuilder();
+    for (Token token = tokens.nextToken(); token.getType() != Token.EOF;
+        token = tokens.nextToken()) {
+      text.append(token.getText());
+    }
+    return text.toString();
+  }
+
+  /**
+   * @return the first token of the input, or of the files it includes, that the parser reads and
+   *         that has the given text
+   */
+  private static Token tokenOf(IncludedFileResolver resolver, String input, String text)
+      throws IOException {
+    TokenSource tokens = new IncludeProcessor(resolver)
+        .resolve(new EfxLexer(CharStreams.fromString(input)));
+    Token token = tokens.nextToken();
+    while (token.getChannel() != Token.DEFAULT_CHANNEL || !token.getText().equals(text)) {
+      token = tokens.nextToken();
+    }
+    return token;
+  }
+
   @Test
   void testNoIncludes_PassesThrough() throws IOException {
     String input = "---- STAGE 1a ----\nWITH ND-Root\n";
-    IncludeProcessor processor = new IncludeProcessor(null);
-    assertEquals(input, processor.process(input));
+    assertEquals(input, process(null, input));
   }
 
   @Test
   void testNoResolver_WithInclude_ThrowsError() {
     String input = "#include \"extra-rules.efx\"\n---- STAGE 1a ----\n";
-    IncludeProcessor processor = new IncludeProcessor(null);
-    assertThrows(TranslatorConfigurationException.class, () -> processor.process(input));
+    assertThrows(TranslatorConfigurationException.class, () -> process(null, input));
   }
 
   @Test
@@ -48,10 +78,8 @@ class IncludeProcessorTest {
     files.put("extra.efx", "---- STAGE 2a ----\n");
 
     String input = "---- STAGE 1a ----\n#include \"extra.efx\"\n";
-    IncludeProcessor processor = new IncludeProcessor(mapResolver(files));
-    String result = processor.process(input);
 
-    assertEquals("---- STAGE 1a ----\n---- STAGE 2a ----\n\n", result);
+    assertEquals("---- STAGE 1a ----\n---- STAGE 2a ----\n", process(mapResolver(files), input));
   }
 
   @Test
@@ -61,10 +89,8 @@ class IncludeProcessorTest {
     files.put("b.efx", "// content B\n");
 
     String input = "#include \"a.efx\"\n#include \"b.efx\"\n";
-    IncludeProcessor processor = new IncludeProcessor(mapResolver(files));
-    String result = processor.process(input);
 
-    assertEquals("// content A\n\n// content B\n\n", result);
+    assertEquals("// content A\n// content B\n", process(mapResolver(files), input));
   }
 
   @Test
@@ -74,10 +100,20 @@ class IncludeProcessorTest {
     files.put("b.efx", "// from B\n");
 
     String input = "#include \"a.efx\"\n";
-    IncludeProcessor processor = new IncludeProcessor(mapResolver(files));
-    String result = processor.process(input);
 
-    assertEquals("// from B\n\n// from A\n\n", result);
+    assertEquals("// from B\n// from A\n", process(mapResolver(files), input));
+  }
+
+  @Test
+  void testIncludeAfterRule_IsRecognized() throws IOException {
+    Map<String, String> files = new HashMap<>();
+    files.put("extra.efx", "---- STAGE 2a ----\n");
+
+    String input = "WITH ND-Root ASSERT TRUE AS ERROR R-K7P-M2Q FOR BT-00-Text IN 1\n"
+        + "#include \"extra.efx\"\n";
+
+    assertEquals("WITH ND-Root ASSERT TRUE AS ERROR R-K7P-M2Q FOR BT-00-Text IN 1\n"
+        + "---- STAGE 2a ----\n", process(mapResolver(files), input));
   }
 
   @Test
@@ -87,11 +123,10 @@ class IncludeProcessorTest {
     files.put("b.efx", "#include \"a.efx\"\n");
 
     String input = "#include \"a.efx\"\n";
-    IncludeProcessor processor = new IncludeProcessor(mapResolver(files));
     InvalidUsageException exception =
-        assertThrows(InvalidUsageException.class, () -> processor.process(input));
-    assertEquals("Circular #include: 'a.efx' includes 'b.efx', which includes 'a.efx'.",
-        exception.getMessage());
+        assertThrows(InvalidUsageException.class, () -> process(mapResolver(files), input));
+    assertEquals("line 1:0 in 'b.efx' Circular #include: 'a.efx' includes 'b.efx',"
+        + " which includes 'a.efx'.", exception.getMessage());
   }
 
   @Test
@@ -100,14 +135,13 @@ class IncludeProcessorTest {
     files.put("main.efx", "#include \"a.efx\"\n");
     files.put("a.efx", "#include \"b.efx\"\n");
     files.put("b.efx", "#include \"c.efx\"\n");
-    files.put("c.efx", "#include \"a.efx\"\n");
+    files.put("c.efx", "// c includes a\n#include \"a.efx\"\n");
 
     String input = "#include \"main.efx\"\n";
-    IncludeProcessor processor = new IncludeProcessor(mapResolver(files));
     InvalidUsageException exception =
-        assertThrows(InvalidUsageException.class, () -> processor.process(input));
-    assertEquals("Circular #include: 'a.efx' includes 'b.efx', which includes 'c.efx',"
-        + " which includes 'a.efx'.", exception.getMessage());
+        assertThrows(InvalidUsageException.class, () -> process(mapResolver(files), input));
+    assertEquals("line 2:0 in 'c.efx' Circular #include: 'a.efx' includes 'b.efx',"
+        + " which includes 'c.efx', which includes 'a.efx'.", exception.getMessage());
   }
 
   @Test
@@ -116,10 +150,10 @@ class IncludeProcessorTest {
     files.put("self.efx", "#include \"self.efx\"\n");
 
     String input = "#include \"self.efx\"\n";
-    IncludeProcessor processor = new IncludeProcessor(mapResolver(files));
     InvalidUsageException exception =
-        assertThrows(InvalidUsageException.class, () -> processor.process(input));
-    assertEquals("Circular #include: 'self.efx' includes 'self.efx'.", exception.getMessage());
+        assertThrows(InvalidUsageException.class, () -> process(mapResolver(files), input));
+    assertEquals("line 1:0 in 'self.efx' Circular #include: 'self.efx' includes 'self.efx'.",
+        exception.getMessage());
   }
 
   @Test
@@ -128,10 +162,8 @@ class IncludeProcessorTest {
     files.put("extra.efx", "// included\n");
 
     String input = "#include \"extra.efx\" // hand-written rules\n";
-    IncludeProcessor processor = new IncludeProcessor(mapResolver(files));
-    String result = processor.process(input);
 
-    assertEquals("// included\n\n", result);
+    assertEquals("// included\n", process(mapResolver(files), input));
   }
 
   @Test
@@ -140,10 +172,8 @@ class IncludeProcessorTest {
     files.put("extra.efx", "// included\n");
 
     String input = "  #include \"extra.efx\"\n";
-    IncludeProcessor processor = new IncludeProcessor(mapResolver(files));
-    String result = processor.process(input);
 
-    assertEquals("// included\n\n", result);
+    assertEquals("// included\n", process(mapResolver(files), input));
   }
 
   @Test
@@ -152,10 +182,35 @@ class IncludeProcessorTest {
     files.put("middle.efx", "// middle\n");
 
     String input = "// before\n#include \"middle.efx\"\n// after\n";
-    IncludeProcessor processor = new IncludeProcessor(mapResolver(files));
-    String result = processor.process(input);
 
-    assertEquals("// before\n// middle\n\n// after\n", result);
+    assertEquals("// before\n// middle\n// after\n", process(mapResolver(files), input));
+  }
+
+  @Test
+  void testIncludedFileWithoutLineEnd_EndsItsLastLine() throws IOException {
+    Map<String, String> files = new HashMap<>();
+    files.put("extra.efx", "// included");
+
+    String input = "#include \"extra.efx\"\n// after\n";
+
+    assertEquals("// included\n// after\n", process(mapResolver(files), input));
+  }
+
+  @Test
+  void testIncludedTokens_KeepTheirPositionInTheirFile() throws IOException {
+    Map<String, String> files = new HashMap<>();
+    files.put("extra.efx", "// extra\n\n---- STAGE 2a ----\n");
+
+    String input = "// main\n#include \"extra.efx\"\n---- STAGE 3a ----\n";
+
+    Token included = tokenOf(mapResolver(files), input, "2a");
+    assertEquals("extra.efx", included.getInputStream().getSourceName());
+    assertEquals(3, included.getLine());
+    assertEquals(11, included.getCharPositionInLine());
+
+    Token after = tokenOf(mapResolver(files), input, "3a");
+    assertEquals(3, after.getLine());
+    assertEquals(11, after.getCharPositionInLine());
   }
 
   @Test
@@ -165,7 +220,6 @@ class IncludeProcessorTest {
     };
 
     String input = "#include \"missing.efx\"\n";
-    IncludeProcessor processor = new IncludeProcessor(resolver);
-    assertThrows(IOException.class, () -> processor.process(input));
+    assertThrows(IOException.class, () -> process(resolver, input));
   }
 }

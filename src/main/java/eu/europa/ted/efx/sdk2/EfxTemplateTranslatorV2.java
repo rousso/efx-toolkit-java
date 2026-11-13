@@ -256,11 +256,9 @@ public class EfxTemplateTranslatorV2 extends TranslatorListener
     logger.debug("Rendering template");
     final long startTime = System.currentTimeMillis();
 
-    // Resolve #include directives before parsing
-    final CharStream resolvedInput =
-        new IncludeProcessor(options.getIncludedFileResolver()).resolve(charStream);
-
-    final EfxParser parser = this.parserOf(resolvedInput);
+    // Parse the template file, with the files it includes in place of their #include directives
+    final EfxParser parser = this.parserOf(
+        new IncludeProcessor(options.getIncludedFileResolver()).resolve(this.lexerOf(charStream)));
 
     // Enable profiling if requested
     if (options != null && options.isProfilerEnabled()) {

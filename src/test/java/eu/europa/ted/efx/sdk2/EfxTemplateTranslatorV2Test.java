@@ -3491,6 +3491,63 @@ class EfxTemplateTranslatorV2Test extends EfxTestsBase {
         "Template with #include should produce the same output as the equivalent inlined template");
   }
 
+  @Test
+  void testInclude_FileWithoutLastLineEnd_SameOutputAsInlined() throws Exception {
+    String includedContent = "{BT-00-Code} Code: ${BT-00-Code}";
+
+    String templateWithInclude = lines(
+        "{BT-00-Text} Text: ${BT-00-Text}",
+        "#include \"extra-lines.efx\"",
+        "{BT-00-Number} Number: ${BT-00-Number}") + "\n";
+
+    IncludedFileResolver resolver = path -> {
+      if ("extra-lines.efx".equals(path)) {
+        return includedContent;
+      }
+      throw new java.io.IOException("Unknown include: " + path);
+    };
+
+    EfxTranslatorOptions options = new EfxTranslatorOptions(
+        false, null, "udf", DecimalFormat.EFX_DEFAULT, resolver, Locale.ENGLISH);
+
+    String withInclude = EfxTranslator.translateTemplate(
+        DependencyFactoryMock.INSTANCE, getSdkVersion(), templateWithInclude, options);
+    String inlined = translateTemplate(lines(
+        "{BT-00-Text} Text: ${BT-00-Text}",
+        "{BT-00-Code} Code: ${BT-00-Code}",
+        "{BT-00-Number} Number: ${BT-00-Number}"));
+
+    assertEquals(inlined, withInclude);
+  }
+
+  @Test
+  void testUnknownFieldInIncludedFile_IsPlacedInThatFile() {
+    String includedContent = lines(
+        "{BT-00-Code} Code: ${BT-00-Code}",
+        "{BT-999-Unknown} Text: ${BT-00-Text}") + "\n";
+
+    String templateWithInclude = lines(
+        "{BT-00-Text} Text: ${BT-00-Text}",
+        "#include \"extra-lines.efx\"",
+        "{BT-00-Number} Number: ${BT-00-Number}") + "\n";
+
+    IncludedFileResolver resolver = path -> {
+      if ("extra-lines.efx".equals(path)) {
+        return includedContent;
+      }
+      throw new java.io.IOException("Unknown include: " + path);
+    };
+
+    EfxTranslatorOptions options = new EfxTranslatorOptions(
+        false, null, "udf", DecimalFormat.EFX_DEFAULT, resolver, Locale.ENGLISH);
+
+    SymbolResolutionException exception = assertThrows(SymbolResolutionException.class,
+        () -> EfxTranslator.translateTemplate(
+            DependencyFactoryMock.INSTANCE, getSdkVersion(), templateWithInclude, options));
+    assertEquals("line 2:1 in 'extra-lines.efx' Unknown symbol 'BT-999-Unknown'.",
+        exception.getMessage());
+  }
+
   // #endregion Include directive ------------------------------------------------
 
   // #region: fieldContext structural variations in template context declarations

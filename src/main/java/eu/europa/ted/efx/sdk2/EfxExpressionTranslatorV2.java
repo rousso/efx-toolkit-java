@@ -110,7 +110,7 @@ public class EfxExpressionTranslatorV2 extends TranslatorListener
   @Override
   public String translateExpression(final String expression, final String... arguments) {
     final SingleExpressionContext tree =
-        this.parserOf(CharStreams.fromString(expression)).singleExpression();
+        this.parserOf(this.lexerOf(CharStreams.fromString(expression))).singleExpression();
 
     this.expressionArguments = new LinkedList<>(Arrays.asList(arguments));
     this.translate(tree);
@@ -129,8 +129,8 @@ public class EfxExpressionTranslatorV2 extends TranslatorListener
    */
   private <T extends Expression> T translateArgument(final String parameterValue,
       final Class<T> parameterType) {
-    final EfxParser parser = this.parserOf(
-        CharStreams.fromString(BEGIN_EXPRESSION_BLOCK + parameterValue + END_EXPRESSION_BLOCK));
+    final EfxParser parser = this.parserOf(this.lexerOf(
+        CharStreams.fromString(BEGIN_EXPRESSION_BLOCK + parameterValue + END_EXPRESSION_BLOCK)));
     final EfxExpressionVisitor visitor =
         new EfxExpressionVisitor(this.translation.next());
     return Expression.instantiate(visitor.visit(parser.parameterValue()).value().getScript(),
