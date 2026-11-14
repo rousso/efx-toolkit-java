@@ -52,7 +52,7 @@ public class NoticeSubtypeRange implements ParsedEntity, Iterable<String> {
                 case 1: {
                     int idx = validNoticeSubtypesInAscendingOrder.indexOf(parts[0]);
                     if (idx < 0) {
-                        throw SymbolResolutionException.unknownNoticeSubtype(parts[0], rangeString);
+                        throw SymbolResolutionException.unknownNoticeSubtype(parts[0]);
                     }
                     this.noticeSubtypes.add(validNoticeSubtypesInAscendingOrder.get(idx));
                     break;

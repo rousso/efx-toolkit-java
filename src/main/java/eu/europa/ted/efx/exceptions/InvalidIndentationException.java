@@ -25,7 +25,6 @@ public class InvalidIndentationException extends EfxCompilationException {
         INDENTATION_LEVEL_SKIPPED,
         START_INDENT_AT_ZERO,
         MIXED_INDENTATION,
-        NO_NESTING_ON_INVOCATIONS,
         NO_INDENT_ON_TEMPLATE_DECLARATIONS
     }
 
@@ -33,7 +32,6 @@ public class InvalidIndentationException extends EfxCompilationException {
     private static final String INDENTATION_LEVEL_SKIPPED = "Indentation level skipped.";
     private static final String START_INDENT_AT_ZERO = "Incorrect indentation. Please do not indent the first level in your template.";
     private static final String MIXED_INDENTATION = "Do not mix indentation methods. Stick with either tabs or spaces.";
-    private static final String NO_NESTING_ON_INVOCATIONS = "Nesting content under a template invocation is not allowed.";
     private static final String NO_INDENT_ON_TEMPLATE_DECLARATIONS = "Indentation is not allowed on template declaration lines.";
 
     private final ErrorCode errorCode;
@@ -61,10 +59,6 @@ public class InvalidIndentationException extends EfxCompilationException {
 
     public static InvalidIndentationException mixedIndentation(ParserRuleContext ctx) {
         return new InvalidIndentationException(ErrorCode.MIXED_INDENTATION, ctx, MIXED_INDENTATION);
-    }
-
-    public static InvalidIndentationException noNestingOnInvocations(ParserRuleContext ctx) {
-        return new InvalidIndentationException(ErrorCode.NO_NESTING_ON_INVOCATIONS, ctx, NO_NESTING_ON_INVOCATIONS);
     }
 
     public static InvalidIndentationException noIndentOnTemplateDeclarations(ParserRuleContext ctx) {

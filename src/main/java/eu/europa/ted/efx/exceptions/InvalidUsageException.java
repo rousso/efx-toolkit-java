@@ -13,7 +13,10 @@
  */
 package eu.europa.ted.efx.exceptions;
 
+import java.util.List;
 import org.antlr.v4.runtime.ParserRuleContext;
+
+import eu.europa.ted.efx.model.identifiers.DynamicFunction;
 
 /**
  * Exception thrown when an EFX construct is used incorrectly, such as referencing
@@ -32,7 +35,6 @@ public class InvalidUsageException extends EfxCompilationException {
         UNSUPPORTED_REGEX_CONSTRUCT,
         CIRCULAR_INCLUDE,
         EMPTY_RULES_FILE,
-        NOT_A_DYNAMIC_FUNCTION,
         DYNAMIC_FUNCTION_OUTSIDE_RULE,
         INVALID_ENDPOINT_NAME,
         INVALID_FORMAT_OPTIONS,
@@ -45,12 +47,11 @@ public class InvalidUsageException extends EfxCompilationException {
     private static final String INVALID_NOTICE_SUBTYPE_RANGE_ORDER = "Notice subtype range '%s-%s' is not in ascending order.";
     private static final String INVALID_NOTICE_SUBTYPE_TOKEN = "Invalid notice subtype token '%s'. Expected format: 'X' or 'X-Y'.";
     private static final String FIELD_NOT_WITHHOLDABLE = "Field '%s' is always published and cannot be withheld from publication.";
-    private static final String TEMPLATE_ONLY_FUNCTION = "Function '%s' can only be used in templates, not in expressions or validation rules.";
+    private static final String TEMPLATE_ONLY_FUNCTION = "%s can only be used in templates, not in expressions or validation rules.";
     private static final String UNSUPPORTED_REGEX_CONSTRUCT = "Invalid regex pattern %s at position %d: %s";
-    private static final String CIRCULAR_INCLUDE = "Circular #include detected: '%s'.";
+    private static final String CIRCULAR_INCLUDE = "Circular #include: %s.";
     private static final String EMPTY_RULES_FILE = "Rules file must contain at least one validation stage.";
-    private static final String NOT_A_DYNAMIC_FUNCTION = "Function '%s' is not declared as a dynamic function. Only functions declared with CALL API can be used in a dynamic variable initializer.";
-    private static final String DYNAMIC_FUNCTION_OUTSIDE_RULE = "Dynamic function '%s' can only be called inline within a rule expression (ASSERT/REPORT). Use 'LET dynamic : $var = ?%s(...)' to declare a dynamic variable at this scope.";
+    private static final String DYNAMIC_FUNCTION_OUTSIDE_RULE = "%s can only be called inline within a rule expression (ASSERT/REPORT). Use 'LET dynamic : $var = ?%s(...)' to declare a dynamic variable at this scope.";
     private static final String INVALID_ENDPOINT_NAME = "Endpoint name '%s' is not valid. Endpoint names must start with a letter and contain only letters, digits, hyphens, and underscores.";
     private static final String INVALID_FORMAT_OPTIONS = "A number of decimals can only format a number, and short, medium or long only a date or a time.";
     private static final String UNIT_FOR_LIST = "A unit can only be displayed with a single value. Add no-unit to display the values without their unit.";
@@ -92,28 +93,51 @@ public class InvalidUsageException extends EfxCompilationException {
         return new InvalidUsageException(ErrorCode.FIELD_NOT_WITHHOLDABLE, ctx, FIELD_NOT_WITHHOLDABLE, fieldId);
     }
 
-    public static InvalidUsageException templateOnlyFunction(ParserRuleContext ctx, String functionName) {
-        return new InvalidUsageException(ErrorCode.TEMPLATE_ONLY_FUNCTION, ctx, TEMPLATE_ONLY_FUNCTION, functionName);
+    /**
+     * A call, outside a template, of a built-in that only templates can call.
+     *
+     * @param ctx the call
+     * @param call how the error names the call, as a type error does: "Function 'format-short'",
+     *        or "Operator ':preferredLanguage'" after a field
+     * @return the exception
+     */
+    public static InvalidUsageException templateOnlyFunction(ParserRuleContext ctx, String call) {
+        return new InvalidUsageException(ErrorCode.TEMPLATE_ONLY_FUNCTION, ctx, TEMPLATE_ONLY_FUNCTION, call);
     }
 
     public static InvalidUsageException unsupportedRegexConstruct(String pattern, int position, String reason) {
         return new InvalidUsageException(ErrorCode.UNSUPPORTED_REGEX_CONSTRUCT, UNSUPPORTED_REGEX_CONSTRUCT, pattern, position, reason);
     }
 
-    public static InvalidUsageException circularInclude(String path) {
-        return new InvalidUsageException(ErrorCode.CIRCULAR_INCLUDE, CIRCULAR_INCLUDE, path);
+    /**
+     * @param cycle the files that include each other in a circle, from the first one back to it
+     * @return the error, which names each file of the circle
+     */
+    public static InvalidUsageException circularInclude(List<String> cycle) {
+        final StringBuilder includes = new StringBuilder("'").append(cycle.get(0))
+            .append("' includes '").append(cycle.get(1)).append('\'');
+        for (final String path : cycle.subList(2, cycle.size())) {
+            includes.append(", which includes '").append(path).append('\'');
+        }
+        return new InvalidUsageException(ErrorCode.CIRCULAR_INCLUDE, CIRCULAR_INCLUDE, includes);
     }
 
     public static InvalidUsageException emptyRulesFile() {
         return new InvalidUsageException(ErrorCode.EMPTY_RULES_FILE, EMPTY_RULES_FILE);
     }
 
-    public static InvalidUsageException notADynamicFunction(ParserRuleContext ctx, String functionName) {
-        return new InvalidUsageException(ErrorCode.NOT_A_DYNAMIC_FUNCTION, ctx, NOT_A_DYNAMIC_FUNCTION, functionName);
-    }
-
-    public static InvalidUsageException dynamicFunctionOutsideRule(ParserRuleContext ctx, String functionName) {
-        return new InvalidUsageException(ErrorCode.DYNAMIC_FUNCTION_OUTSIDE_RULE, ctx, DYNAMIC_FUNCTION_OUTSIDE_RULE, functionName, functionName);
+    /**
+     * A dynamic function called outside the expression of a rule. The message names the function
+     * as an error names it, such as "Function '?check'", and shows how to call it there.
+     *
+     * @param ctx the call
+     * @param function the function called
+     * @return the exception
+     */
+    public static InvalidUsageException dynamicFunctionOutsideRule(ParserRuleContext ctx,
+            DynamicFunction function) {
+        return new InvalidUsageException(ErrorCode.DYNAMIC_FUNCTION_OUTSIDE_RULE, ctx,
+                DYNAMIC_FUNCTION_OUTSIDE_RULE, function.describe(), function.name);
     }
 
     public static InvalidUsageException invalidEndpointName(ParserRuleContext ctx, String endpointName) {

@@ -582,89 +582,22 @@ public abstract class XPathSymbolResolver implements SymbolResolver {
   }
 
   private boolean isFieldRepeatableFromContext(final SdkField sdkField, final SdkField context) {
-    // If the field itself is repeatable, it returns multiple values UNLESS it IS the context
+    // A field that IS the context returns a single value, even if it is repeatable or multilingual
     // (e.g., inside a predicate on this field: BT-Repeatable[BT-Repeatable != ''])
-    if (sdkField.isRepeatable()) {
-      return !sdkField.equals(context);
+    if (sdkField.equals(context)) {
+      return false;
     }
 
-    // Multilingual fields have multiple XML elements (one per language)
-    if (FieldTypes.TEXT_MULTILINGUAL.getName().equals(sdkField.getType())) {
-      return true;
-    }
-
-    // Use cached ancestry from node
-    List<String> contextAncestry = context != null
-        ? this.ancestryOf(this.parentNodeOf(context))
-        : Collections.emptyList();
-
-    // Walk up from the field's parent node toward root, looking for a repeatable
-    // node
-    String currentNodeId = sdkField.getParentNodeId();
-    while (currentNodeId != null) {
-      // Context boundary reached - the context node (even if repeatable) doesn't
-      // count because we're positioned inside one instance of it. No repeatable node exists
-      // between the field and context, so the field doesn't repeat from this context.
-      if (contextAncestry.contains(currentNodeId)) {
-        return false;
-      }
-
-      SdkNode node = this.nodeById(currentNodeId);
-      if (node == null) {
-        break;
-      }
-
-      // If this node is repeatable, the field returns multiple values from context
-      if (node.isRepeatable()) {
-        return true;
-      }
-
-      currentNodeId = node.getParentId();
-    }
-
-    return false;
+    // Any other field repeats from a field context as it does from the parent node of that field
+    return this.isFieldRepeatableFromContext(sdkField, this.parentNodeOf(context));
   }
 
   private boolean isFieldRepeatableFromContext(final SdkField sdkField, final SdkNode context) {
-    // If the field itself is repeatable, it returns multiple values
-    if (sdkField.isRepeatable()) {
-      return true;
-    }
-
-    // Multilingual fields have multiple XML elements (one per language)
-    if (FieldTypes.TEXT_MULTILINGUAL.getName().equals(sdkField.getType())) {
-      return true;
-    }
-
-    // Use cached ancestry from node
-    List<String> contextAncestry = this.ancestryOf(context);
-
-    // Walk up from the field's parent node toward root, looking for a repeatable
-    // node
-    String currentNodeId = sdkField.getParentNodeId();
-    while (currentNodeId != null) {
-      // Context boundary reached - the context node (even if repeatable) doesn't
-      // count
-      // because we're positioned inside one instance of it. No repeatable node exists
-      // between the field and context, so the field doesn't repeat from this context.
-      if (contextAncestry.contains(currentNodeId)) {
-        return false;
-      }
-
-      SdkNode node = this.nodeById(currentNodeId);
-      if (node == null) {
-        break;
-      }
-
-      // If this node is repeatable, the field returns multiple values from context
-      if (node.isRepeatable()) {
-        return true;
-      }
-
-      currentNodeId = node.getParentId();
-    }
-
-    return false;
+    // A repeatable field returns multiple values, and so does a multilingual one (one XML element
+    // per language). Any other field repeats from the context exactly as its parent node does.
+    return sdkField.isRepeatable()
+        || FieldTypes.TEXT_MULTILINGUAL.getName().equals(sdkField.getType())
+        || this.isNodeRepeatableFromContext(this.parentNodeOf(sdkField), context);
   }
 
   @Override
@@ -685,6 +618,11 @@ public abstract class XPathSymbolResolver implements SymbolResolver {
   }
 
   private boolean isNodeRepeatableFromContext(final SdkNode sdkNode, final SdkNode contextNode) {
+    // A node that is not there (the parent of a field whose parent node is unknown) cannot repeat
+    if (sdkNode == null) {
+      return false;
+    }
+
     // Use cached ancestry from node
     List<String> contextAncestry = this.ancestryOf(contextNode);
 

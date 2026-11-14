@@ -63,8 +63,8 @@ import eu.europa.ted.efx.model.templates.LabelFromKeyContentTemplateFragment;
 import eu.europa.ted.efx.model.templates.TextContentTemplateFragment;
 import eu.europa.ted.efx.model.templates.ViewTemplateSection;
 import eu.europa.ted.efx.model.types.EfxDataType;
-import eu.europa.ted.efx.model.variables.Variable;
-import eu.europa.ted.efx.model.variables.Variables;
+import eu.europa.ted.efx.model.identifiers.Variable;
+import eu.europa.ted.efx.model.identifiers.Variables;
 import eu.europa.ted.efx.sdk1.EfxParser.*;
 
 /**
@@ -200,14 +200,32 @@ public class EfxTemplateTranslatorV1 extends EfxExpressionTranslatorV1
     return sb.toString().trim();
   }
 
-  // #region Template File ----------------------------------------------------
-
+  /**
+   * Starts a translation with no declarations, no context, no parameter values, no content blocks,
+   * an empty section and no indentation yet.
+   */
   @Override
-  public void enterTemplateFile(TemplateFileContext ctx) {
-    assert blockStack.isEmpty() : UNEXPECTED_INDENTATION;
+  void startTranslation() {
+    super.startTranslation();
+    this.blockStack = new ContentBlockStack();
     this.section = new ViewTemplateSection(TemplateSection.DEFAULT, "block");
     this.indentWith = Indent.UNDETERMINED;
     this.indentSpaces = -1;
+  }
+
+  // #region Template File ----------------------------------------------------
+
+  /**
+   * Starts the translation where the walk enters the template file, before the file is recorded as
+   * the first parser context of the call stack: every walk of a template file is a translation of
+   * its own, whether {@code renderTemplate} or another caller walks it.
+   */
+  @Override
+  public void enterEveryRule(final ParserRuleContext ctx) {
+    if (ctx instanceof TemplateFileContext) {
+      this.startTranslation();
+    }
+    super.enterEveryRule(ctx);
   }
 
   @Override
