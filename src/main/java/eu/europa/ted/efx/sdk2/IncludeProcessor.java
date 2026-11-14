@@ -9,11 +9,12 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.antlr.v4.runtime.CharStream;
-import org.antlr.v4.runtime.CharStreams;
 
 import eu.europa.ted.efx.exceptions.InvalidUsageException;
 import eu.europa.ted.efx.exceptions.TranslatorConfigurationException;
 import eu.europa.ted.efx.interfaces.IncludedFileResolver;
+import eu.europa.ted.efx.model.CombinedText;
+import eu.europa.ted.efx.model.LineMap;
 
 /**
  * Processes {@code #include} directives in EFX rules text by performing text substitution.
@@ -22,6 +23,11 @@ import eu.europa.ted.efx.interfaces.IncludedFileResolver;
  * This processor runs before any ANTLR parsing. It scans the input text for {@code #include "path"}
  * lines, resolves them using the provided {@link IncludedFileResolver}, and substitutes each directive
  * with the resolved content. Recursive includes are supported with circular dependency detection.
+ * </p>
+ *
+ * <p>
+ * The text it gives, the combined text, keeps the {@link LineMap} of the file, so that an error in
+ * the combined text can give the file and the line it was written on.
  * </p>
  */
 public class IncludeProcessor {
@@ -42,12 +48,12 @@ public class IncludeProcessor {
    * Resolves all {@code #include} directives in the given CharStream.
    *
    * @param input The CharStream potentially containing include directives.
-   * @return A CharStream with all includes substituted recursively.
+   * @return The combined text, with all includes substituted recursively, and its line map.
    * @throws IOException If an included file cannot be resolved.
    */
-  public CharStream resolve(CharStream input) throws IOException {
-    String resolvedText = this.process(input.toString());
-    return CharStreams.fromString(resolvedText);
+  public CombinedText resolve(CharStream input) throws IOException {
+    final LineMap lineMap = new LineMap();
+    return new CombinedText(this.process(input.toString(), lineMap), lineMap);
   }
 
   /**
@@ -58,6 +64,19 @@ public class IncludeProcessor {
    * @throws IOException If an included file cannot be resolved.
    */
   public String process(String text) throws IOException {
+    return this.process(text, new LineMap());
+  }
+
+  /**
+   * Resolves all {@code #include} directives in the given text, and adds an insert to its line map
+   * for each.
+   *
+   * @param text The EFX rules text potentially containing include directives.
+   * @param lineMap The line map of the text, empty.
+   * @return The text with all includes substituted recursively.
+   * @throws IOException If an included file cannot be resolved.
+   */
+  private String process(final String text, final LineMap lineMap) throws IOException {
     if (this.resolver == null) {
       if (INCLUDE_PATTERN.matcher(text).find()) {
         throw TranslatorConfigurationException.includeResolverNotConfigured();
@@ -68,9 +87,12 @@ public class IncludeProcessor {
     StringBuilder result = new StringBuilder();
     Matcher matcher = INCLUDE_PATTERN.matcher(text);
     int lastEnd = 0;
+    // the line of the result that the text appended next starts on
+    int line = 1;
 
     while (matcher.find()) {
       result.append(text, lastEnd, matcher.start());
+      line += lineEndsIn(text, lastEnd, matcher.start());
 
       String path = matcher.group(1);
 
@@ -80,11 +102,14 @@ public class IncludeProcessor {
 
       try {
         String included = this.resolver.resolve(path);
-        String processed = this.process(included);
-        result.append(processed);
-        if (!processed.isEmpty() && !processed.endsWith("\n")) {
-          result.append("\n");
-        }
+        LineMap includedLineMap = new LineMap();
+        String processed = this.process(included, includedLineMap);
+        String inserted =
+            processed.isEmpty() || processed.endsWith("\n") ? processed : processed + "\n";
+        result.append(inserted);
+        int lineCount = lineEndsIn(inserted, 0, inserted.length());
+        lineMap.addInsert(line, path, lineCount, includedLineMap);
+        line += lineCount;
       } finally {
         this.resolving.remove(path);
       }
@@ -94,6 +119,23 @@ public class IncludeProcessor {
 
     result.append(text, lastEnd, text.length());
     return result.toString();
+  }
+
+  /**
+   * @param text a text
+   * @param start where to start counting, included
+   * @param end where to stop counting, excluded
+   * @return how many line ends ('\n', the only line end the lexer counts) the text has between the
+   *         two
+   */
+  private static int lineEndsIn(final String text, final int start, final int end) {
+    int count = 0;
+    for (int i = start; i < end; i++) {
+      if (text.charAt(i) == '\n') {
+        count++;
+      }
+    }
+    return count;
   }
 
   /**
